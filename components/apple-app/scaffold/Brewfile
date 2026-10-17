@@ -1,0 +1,9 @@
+# The tools the apple-app component's lanes and targets use. The armcknight/tools
+# cask has prepare-release, vrsn and read-changelog, for `make deploy-beta`, and
+# ota-publish, for staging builds. Homebrew loads it only from a trusted tap:
+# run `brew trust armcknight/tools` before `brew bundle`.
+tap "armcknight/tools"
+
+brew "xcbeautify"
+brew "xcodegen"
+cask "armcknight/tools/tools"

@@ -1,0 +1,25 @@
+name: CI
+
+# Runs the shared `test` lane on each pull request, through armcknight/workflows.
+
+on:
+  pull_request:
+
+permissions:
+  # write: ios-ci.yml has a ui-screenshots job that asks for it, and GitHub
+  # checks every job's permissions when the run starts.
+  contents: write
+  checks: write
+  pull-requests: write
+  id-token: write
+
+jobs:
+  ci:
+    uses: armcknight/workflows/.github/workflows/ios-ci.yml@4
+    with:
+      # The shared `stage` lane's output: <app name>-staging.ipa.
+      ipa-name: "{{inputs.app_name}}-staging"
+      # The Arkana keys to write to .env. Each value comes from the repository
+      # secret of the same name, through `secrets: inherit`.
+      arkana-keys: "{{inputs.arkana_keys}}"
+    secrets: inherit

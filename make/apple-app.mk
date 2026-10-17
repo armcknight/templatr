@@ -1,0 +1,60 @@
+# The apple-app component's Makefile targets. A project's Makefile fetches
+# this file at its pinned tag and includes it; see the apple-app scaffold's
+# Makefile. The targets are namespaced so that the project's own `test`,
+# `stage` and `deploy-beta` can depend on them, or do more.
+#
+# Set these before the include, as make reads a rule's prerequisites when it
+# reads the rule:
+#
+#   APPLE_APP_XCCONFIG              the xcconfig with MARKETING_VERSION and CURRENT_PROJECT_VERSION
+#   APPLE_APP_BUILD_PREREQUISITES   targets each build runs first, such as one that runs XcodeGen
+#   APPLE_APP_DEPLOY_PREREQUISITES  targets apple-app-deploy-beta also runs first, such as a schema check
+#
+# prepare-release and vrsn come from the armcknight/tools cask.
+
+APPLE_APP_PLATFORM ?= ios
+APPLE_APP_XCCONFIG ?=
+APPLE_APP_BUILD_PREREQUISITES ?=
+APPLE_APP_DEPLOY_PREREQUISITES ?=
+FASTLANE ?= bundle exec fastlane
+
+.PHONY: apple-app-test apple-app-stage apple-app-deploy-beta apple-app-patch apple-app-minor apple-app-major apple-app-xcconfig
+
+## apple-app-test: run the tests through the shared fastlane lane
+apple-app-test: $(APPLE_APP_BUILD_PREREQUISITES)
+	$(FASTLANE) $(APPLE_APP_PLATFORM) test
+
+## apple-app-stage: build an ad-hoc staging IPA through the shared fastlane lane (iOS only)
+apple-app-stage: $(APPLE_APP_BUILD_PREREQUISITES)
+	$(FASTLANE) ios stage
+
+# prepare-release moves CHANGELOG.md's Unreleased entries under the release
+# candidate's version, raises CURRENT_PROJECT_VERSION in the xcconfig, commits,
+# tags, pushes and makes a GitHub prerelease. The beta lane then uploads that
+# commit to TestFlight, with the new entry as "What to Test". The log is named
+# with the build number.
+## apple-app-deploy-beta: cut a release candidate and upload it to TestFlight; only the owner runs it
+apple-app-deploy-beta: apple-app-xcconfig $(APPLE_APP_BUILD_PREREQUISITES) $(APPLE_APP_DEPLOY_PREREQUISITES)
+	@set -o pipefail; { \
+	  prepare-release rc --file $(APPLE_APP_XCCONFIG) --key MARKETING_VERSION --build-number-key CURRENT_PROJECT_VERSION --push --github-release --prerelease && \
+	  $(FASTLANE) $(APPLE_APP_PLATFORM) beta; \
+	} 2>&1 | tee deploy-beta.log; \
+	status=$$?; \
+	BUILD=$$(grep -Eo 'CURRENT_PROJECT_VERSION[[:space:]]*=[[:space:]]*[0-9]+' $(APPLE_APP_XCCONFIG) | grep -Eo '[0-9]+$$'); \
+	mv -f deploy-beta.log "deploy-beta-$$BUILD.log"; \
+	exit $$status
+
+## apple-app-patch: raise MARKETING_VERSION's patch number and commit
+apple-app-patch: apple-app-xcconfig
+	@vrsn patch -f $(APPLE_APP_XCCONFIG) -k MARKETING_VERSION --commit
+
+## apple-app-minor: raise MARKETING_VERSION's minor number and commit
+apple-app-minor: apple-app-xcconfig
+	@vrsn minor -f $(APPLE_APP_XCCONFIG) -k MARKETING_VERSION --commit
+
+## apple-app-major: raise MARKETING_VERSION's major number and commit
+apple-app-major: apple-app-xcconfig
+	@vrsn major -f $(APPLE_APP_XCCONFIG) -k MARKETING_VERSION --commit
+
+apple-app-xcconfig:
+	@test -n "$(APPLE_APP_XCCONFIG)" || { echo "Set APPLE_APP_XCCONFIG to the xcconfig with MARKETING_VERSION." >&2; exit 1; }

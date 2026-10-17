@@ -1,0 +1,31 @@
+name: Staging build
+
+# Comment `/build-staging` on a pull request to build its newest commit and post
+# an install link. A push to a pull request does not make a staging build by
+# itself.
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  # write: ios-ci.yml has a ui-screenshots job that asks for it. That job runs
+  # only under pull_request, but GitHub checks every job's permissions when the
+  # run starts.
+  contents: write
+  checks: write
+  pull-requests: write
+  id-token: write
+
+jobs:
+  stage:
+    # No `if:` here: ios-ci.yml skips every job unless the comment is
+    # `/build-staging` on a pull request, and checks that the commenter can
+    # write to the repository.
+    uses: armcknight/workflows/.github/workflows/ios-ci.yml@4
+    with:
+      # Keep these inputs in step with ci.yml.
+      ipa-name: "{{inputs.app_name}}-staging"
+      arkana-keys: "{{inputs.arkana_keys}}"
+      pr-number: ${{ github.event.issue.number }}
+    secrets: inherit

@@ -1,0 +1,15 @@
+name: Stage cleanup
+
+# Deletes a pull request's staging builds from the bucket when it closes.
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  id-token: write
+
+jobs:
+  cleanup:
+    uses: armcknight/workflows/.github/workflows/ota-cleanup.yml@4
+    secrets: inherit

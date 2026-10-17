@@ -1,0 +1,5 @@
+source "https://rubygems.org"
+
+gem "fastlane"
+# armcknight/workflows' ios-ci.yml runs `bundle exec arkana` before each build.
+gem "arkana"

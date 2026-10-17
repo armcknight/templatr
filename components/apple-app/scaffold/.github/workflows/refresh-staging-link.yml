@@ -1,0 +1,55 @@
+name: Refresh staging link
+
+# Comment `/refresh-staging` on a pull request, or run this by hand, to sign the
+# staging install link again without a new build. If the staging bucket has
+# already deleted the build for its age, the `rebuild` job makes a new one.
+
+on:
+  issue_comment:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "The pull request whose staging install link to refresh"
+        required: true
+        type: string
+      run_id:
+        description: "A stage run ID (optional; defaults to the pull request's latest build)"
+        required: false
+        type: string
+
+permissions:
+  # write: the rebuild job calls ios-ci.yml, which has a ui-screenshots job
+  # that asks for it.
+  contents: write
+  checks: write
+  pull-requests: write
+  id-token: write
+
+jobs:
+  # No `if:` here: ota-refresh.yml skips its job unless the comment is
+  # `/refresh-staging` on a pull request.
+  refresh:
+    uses: armcknight/workflows/.github/workflows/ota-refresh.yml@4
+    with:
+      pr-number: ${{ github.event.issue.number || inputs.pr_number }}
+      run-id: ${{ inputs.run_id }}
+      comment-id: ${{ github.event.comment.id }}
+      rebuild-expired: true
+    secrets: inherit
+
+  # Runs only when the refresh found the build deleted by the bucket's
+  # lifecycle rule. Keep these inputs in step with ci.yml.
+  rebuild:
+    needs: refresh
+    if: needs.refresh.outputs.rebuild == 'true'
+    uses: armcknight/workflows/.github/workflows/ios-ci.yml@4
+    with:
+      ipa-name: "{{inputs.app_name}}-staging"
+      arkana-keys: "{{inputs.arkana_keys}}"
+      # The pull request's code ran its tests when it was first built.
+      run-tests: false
+      # Lets the `/refresh-staging` comment start the build.
+      rebuild: true
+      pr-number: ${{ github.event.issue.number || inputs.pr_number }}
+    secrets: inherit
