@@ -62,7 +62,7 @@ anchor = "builds.md#ci"
 """
 
 README = """\
-# templates
+# templatr
 
 * [demo](components/demo/)
 * [the workflow](.github/workflows/demo.yml)
@@ -78,7 +78,7 @@ SCAFFOLD_README = """\
 WORKFLOW = """\
 jobs:
   deploy:
-    uses: armcknight/templates/.github/workflows/demo.yml@{{templates.tag}}
+    uses: armcknight/templatr/.github/workflows/demo.yml@{{templates.tag}}
     with:
       force: ${{ github.event_name == 'workflow_dispatch' }}
 """
@@ -240,7 +240,7 @@ class ValidateTests(unittest.TestCase):
         self.assertEqual(self.problems(), [])
 
     def test_readme_links_each_component_and_shared_piece(self):
-        self.write("README.md", "# templates\n")
+        self.write("README.md", "# templatr\n")
         self.assertProblem("does not link to components/demo")
         self.assertProblem("does not link to the shared workflow .github/workflows/demo.yml")
 

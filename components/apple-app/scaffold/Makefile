@@ -1,4 +1,4 @@
-# The apple-app component's targets come from armcknight/templates at
+# The apple-app component's targets come from armcknight/templatr at
 # TEMPLATES_TAG. The fragment is downloaded on first use; `make templates-update`
 # downloads it again, as after changing the tag.
 #
@@ -22,7 +22,7 @@ include $(TEMPLATES_MAKE)/apple-app.mk
 
 $(TEMPLATES_MAKE)/%.mk:
 	mkdir -p $(@D)
-	curl -fsSL https://raw.githubusercontent.com/armcknight/templates/$(TEMPLATES_TAG)/make/$*.mk -o $@
+	curl -fsSL https://raw.githubusercontent.com/armcknight/templatr/$(TEMPLATES_TAG)/make/$*.mk -o $@
 
 ## templates-update: download the Makefile fragments again at TEMPLATES_TAG
 templates-update:
