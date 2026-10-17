@@ -2,7 +2,7 @@
 #
 #   ENV["APPLE_APP_SCHEME"] ||= "Babysittr"
 #   ...
-#   import_from_git(url: "https://github.com/armcknight/templates.git", branch: "v1", path: "fastlane/Fastfile")
+#   import_from_git(url: "https://github.com/armcknight/templatr.git", branch: "v1", path: "fastlane/Fastfile")
 #
 # and runs `fastlane ios test`, `fastlane ios stage` and `fastlane ios beta`.
 # tvos and mac have test and beta. Each setting is read from a lane option

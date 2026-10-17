@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/armcknight/templates/schema/component.schema.json",
+  "$id": "https://github.com/armcknight/templatr/schema/component.schema.json",
   "title": "Component manifest",
   "description": "The format of components/<name>/component.toml. See README.md#the-manifest for the meaning of each field.",
   "type": "object",

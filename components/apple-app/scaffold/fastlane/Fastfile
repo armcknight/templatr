@@ -1,4 +1,4 @@
-# The apple-app component's lanes come from armcknight/templates at the tag
+# The apple-app component's lanes come from armcknight/templatr at the tag
 # below: `fastlane {{inputs.platform}} test`, `fastlane ios stage` and
 # `fastlane {{inputs.platform}} beta`. Do not define lanes named test, stage or
 # beta here. Add this project's own lanes below the import.
@@ -16,7 +16,7 @@ ENV["APPLE_APP_TEST_DEVICE"] ||= "{{inputs.test_device}}"
 ENV["APPLE_APP_STAGE_XCARGS"] ||= "{{inputs.stage_xcargs}}"
 
 import_from_git(
-  url: "https://github.com/armcknight/templates.git",
+  url: "https://github.com/armcknight/templatr.git",
   branch: "{{templates.tag}}",
   path: "fastlane/Fastfile"
 )

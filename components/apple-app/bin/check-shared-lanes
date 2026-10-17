@@ -19,8 +19,8 @@ if [ ! -f "$fastfile" ]; then
 fi
 
 # The call usually spans lines, so they are joined first.
-if ! tr '\n' ' ' < "$fastfile" | grep -Eq "import_from_git[[:space:]]*\([^)]*armcknight/templates[^)]*branch:[[:space:]]*[\"']$tag[\"']"; then
-  echo "$fastfile does not import armcknight/templates at $tag." >&2
+if ! tr '\n' ' ' < "$fastfile" | grep -Eq "import_from_git[[:space:]]*\([^)]*armcknight/templatr[^)]*branch:[[:space:]]*[\"']$tag[\"']"; then
+  echo "$fastfile does not import armcknight/templatr at $tag." >&2
   exit 1
 fi
 
