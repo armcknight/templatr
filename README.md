@@ -24,8 +24,11 @@ components/<name>/bin/             scripts the manifest's steps run
 .github/workflows/ci.yml           this repository's own CI
 fastlane/                          shared lanes, imported with import_from_git
 make/                              Makefile fragments
-schema/component.schema.json       the manifest's JSON Schema
-scripts/validate.py                the manifest validator
+schema/component.schema.json       the manifest's JSON Schema, for editors
+Package.swift                      the ComponentManifest library and the validator
+Sources/ComponentManifest/         the manifest's types and the checks
+Sources/validate-components/       the validator command
+Tests/ComponentManifestTests/      the validator's tests
 ```
 
 ## Releases
@@ -47,7 +50,7 @@ Releases are tags: `v1`, `v1.1`, `v2`. Projects refer to a tag — in `import_fr
 
 ## The manifest
 
-`component.toml` has these parts. [schema/component.schema.json](schema/component.schema.json) is the full format.
+`component.toml` has these parts. The `ComponentManifest` library's types, in [Sources/ComponentManifest/Manifest.swift](Sources/ComponentManifest/Manifest.swift), are the format. [schema/component.schema.json](schema/component.schema.json) says the same for editors, and a test keeps the two the same.
 
 ### `name`, `description`
 
@@ -130,14 +133,45 @@ Each component's `scaffold/README.md` has a section between these markers:
 3. Add any new guide section to superlinear's `docs/`, with its anchor listed in `docs/anchors.md`, first.
 4. Run the checks below, then tag a release.
 
+## The package
+
+[Package.swift](Package.swift) has two products:
+
+* `ComponentManifest`, a library: `Manifest` and its `Codable` types for `component.toml`, and `Validator`, the checks below. Decoding is strict: an unknown key, an empty text, a value that does not match its pattern, or an empty list is an error with its path in the file, such as `secrets/0/source`. The library does not run `detect` rules or `infer` rules; superlinear does that on these types.
+* `validate-components`, a command: `validate-components [--root DIR] [--anchors PATH_OR_URL|none]`. The root is the current directory by default. The anchors come from superlinear's `docs/anchors.md` on `main` by default; a path or a URL replaces that, and `none` skips the check. It prints each problem to stderr and exits 1 when there are any.
+
+The package builds on macOS and Linux. [TOMLKit](https://github.com/LebJe/TOMLKit) parses the TOML.
+
+superlinear uses the library at a release tag. The tags are not three-part versions, so a `Package.swift` pins one as a revision:
+
+```swift
+.package(url: "https://github.com/armcknight/templatr", revision: "v1")
+```
+
+### What the validator checks
+
+For each `components/<name>/component.toml`:
+
+* the manifest decodes;
+* `name` is the directory's name;
+* input names, secret names and step IDs are unique;
+* a `local` secret's source is a Keychain item;
+* `CLAUDE.md` and `scaffold/README.md` exist, and the README has the generated section's markers, one time each and in order;
+* each `{{placeholder}}` in the scaffold, the steps and the human texts names a declared input, `templates` or `templates.tag`;
+* each regular expression compiles, and each `regex` infer rule has a capture group;
+* each shared path in this repository exists; a path in another `repo` is not checked;
+* each docs anchor is listed in superlinear's `docs/anchors.md`.
+
+And `README.md` links to each component and each shared piece: a path in this repository, or `https://github.com/<repo>/blob/<version>/<path>`.
+
 ## Checks
 
-CI runs these on each pull request and push:
+CI runs these on each pull request and push, in the `swift` Docker image on Linux:
 
 ```sh
-pip install -r scripts/requirements.txt
-python3 scripts/validate.py                   # the manifests, against the schema and the guide's docs/anchors.md
-python3 -m unittest discover -s scripts       # the validator's tests
+swift build
+swift test                                    # the validator's tests
+swift run validate-components                 # the manifests, and the guide's docs/anchors.md
 ```
 
 and checks every link in the Markdown files with [lychee](https://github.com/lycheeverse/lychee).
