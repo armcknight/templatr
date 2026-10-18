@@ -3,3 +3,6 @@
 .DS_Store
 .envrc
 /worktrees/
+__pycache__/
+*.pyc
+*.orig
