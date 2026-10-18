@@ -12,20 +12,20 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    # superlinear's bootstrap uses the ComponentManifest library on macOS; the
+    # Linux build here keeps the package portable.
+    container: swift:6.2
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-
-      - run: pip install -r scripts/requirements.txt
-
-      - name: Validate the manifests
-        run: python3 scripts/validate.py
+      - name: Build
+        run: swift build
 
       - name: Test the validator
-        run: python3 -m unittest discover -s scripts
+        run: swift test
+
+      - name: Validate the manifests
+        run: swift run validate-components
 
   links:
     runs-on: ubuntu-latest

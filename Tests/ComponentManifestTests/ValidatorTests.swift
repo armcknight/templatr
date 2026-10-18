@@ -1,0 +1,218 @@
+import Foundation
+import Testing
+@testable import ComponentManifest
+
+@Suite("Validator")
+struct ValidatorTests {
+    let repository: Repository
+
+    init() throws {
+        repository = try Repository()
+    }
+
+    /// Fails unless one problem contains `fragment`.
+    func expectProblem(_ fragment: String) {
+        let problems = repository.problems()
+        #expect(
+            problems.contains { $0.contains(fragment) },
+            "no problem with '\(fragment)' in \(problems)"
+        )
+    }
+
+    @Test func validComponent() {
+        #expect(repository.problems() == [])
+    }
+
+    @Test func thisRepositoryIsValid() {
+        #expect(Validator(root: repositoryRoot, anchors: nil).problems() == [])
+    }
+
+    @Test func formatErrorNamesTheField() throws {
+        try repository.editManifest(#"source = "keychain:demo.fly-token""#, #"source = "vault:demo""#)
+        expectProblem("secrets/0/source")
+    }
+
+    @Test func unknownField() throws {
+        try repository.editManifest(
+            #"description = "A demonstration component.""#,
+            "description = \"A demonstration component.\"\ncolor = \"red\""
+        )
+        expectProblem("'color' was unexpected")
+    }
+
+    @Test func inferRuleFieldsDependOnFrom() throws {
+        try repository.editManifest(
+            #"{ from = "toml", file = "fly.toml", key = "app" }"#,
+            #"{ from = "build-setting", file = "fly.toml", key = "app" }"#
+        )
+        expectProblem("inputs/0/infer/0")
+    }
+
+    @Test func nameMustMatchDirectory() throws {
+        try repository.editManifest(#"name = "demo""#, #"name = "other""#)
+        expectProblem("is not the directory's name")
+    }
+
+    @Test func duplicateStep() throws {
+        try repository.editManifest(#"id = "domain""#, #"id = "app-exists""#)
+        expectProblem("step 'app-exists' is declared more than one time")
+    }
+
+    @Test func regexInferNeedsAGroup() throws {
+        try repository.editManifest(#"pattern = "primary_region = \"([a-z]+)\"""#, #"pattern = "primary_region""#)
+        expectProblem("has no capture group")
+    }
+
+    @Test func invalidDetectRegex() throws {
+        try repository.editManifest(#"contains = "vapor""#, #"contains = "vapor(""#)
+        expectProblem("invalid regular expression")
+    }
+
+    @Test func unknownPlaceholderInScaffold() throws {
+        try repository.write(
+            "components/demo/scaffold/README.md", scaffoldReadme.replacingOccurrences(of: "inputs.app", with: "inputs.name")
+        )
+        expectProblem("scaffold/README.md: unknown placeholder {{inputs.name}}")
+    }
+
+    @Test func unknownPlaceholderInHumanText() throws {
+        try repository.editManifest("Point the domain at {{inputs.app}}.", "Point {{inputs.domain}} at the app.")
+        expectProblem("step domain fix: unknown placeholder {{inputs.domain}}")
+    }
+
+    @Test func githubExpressionsAreNotPlaceholders() {
+        #expect(Placeholders.names(in: "${{ github.sha }} {{templates.tag}}") == ["templates.tag"])
+    }
+
+    @Test func scaffoldReadmeNeedsMarkers() throws {
+        try repository.write("components/demo/scaffold/README.md", "# {{inputs.app}}\n<!-- superlinear:end -->\n")
+        expectProblem("one time each")
+    }
+
+    @Test func markersInOrder() throws {
+        try repository.write(
+            "components/demo/scaffold/README.md",
+            "<!-- superlinear:end -->\n<!-- superlinear:begin how-this-is-built -->\n"
+        )
+        expectProblem("one time each")
+    }
+
+    @Test func missingClaudeMd() throws {
+        try repository.delete("components/demo/CLAUDE.md")
+        expectProblem("CLAUDE.md is missing")
+    }
+
+    @Test func missingSharedPath() throws {
+        try repository.delete(".github/workflows/demo.yml")
+        expectProblem("shared path '.github/workflows/demo.yml' does not exist")
+    }
+
+    @Test func sharedPieceInAnotherRepoNeedNotExistHere() throws {
+        try repository.editManifest("version = \"v1\"\ndescription = \"Deploys the app.\"", externalShared)
+        try repository.write(
+            "README.md",
+            readme + "* [ios-ci](https://github.com/armcknight/workflows/blob/4/.github/workflows/ios-ci.yml)\n"
+        )
+        #expect(repository.problems() == [])
+    }
+
+    @Test func readmeLinksASharedPieceInAnotherRepoAtItsVersion() throws {
+        try repository.editManifest("version = \"v1\"\ndescription = \"Deploys the app.\"", externalShared)
+        try repository.write(
+            "README.md",
+            readme + "* [ios-ci](https://github.com/armcknight/workflows/blob/main/.github/workflows/ios-ci.yml)\n"
+        )
+        expectProblem(
+            "does not link to the shared workflow https://github.com/armcknight/workflows/blob/4/.github/workflows/ios-ci.yml"
+        )
+    }
+
+    @Test func versionOfAPieceInThisRepoIsAVTag() throws {
+        try repository.editManifest(#"version = "v1""#, #"version = "4""#)
+        expectProblem("shared/0/version")
+    }
+
+    @Test func localSecret() throws {
+        try repository.editManifest(#"scope = "app""#, #"scope = "local""#)
+        #expect(repository.problems() == [])
+    }
+
+    @Test func localSecretComesFromTheKeychain() throws {
+        try repository.editManifest(#"scope = "app""#, #"scope = "local""#)
+        try repository.editManifest(#"source = "keychain:demo.fly-token""#, #"source = "generate:password""#)
+        expectProblem("secret FLY_API_TOKEN is local")
+    }
+
+    @Test func unknownSecretScope() throws {
+        try repository.editManifest(#"scope = "app""#, #"scope = "github""#)
+        expectProblem("secrets/0/scope")
+    }
+
+    @Test func yamlInferRule() throws {
+        try repository.editManifest(
+            #"{ from = "toml", file = "fly.toml", key = "app" }"#,
+            #"{ from = "yaml", file = ".arkana.yml", key = "global_secrets", separator = " " }"#
+        )
+        #expect(repository.problems() == [])
+    }
+
+    @Test func globInferRuleContainsMustCompile() throws {
+        try repository.editManifest(
+            #"{ from = "toml", file = "fly.toml", key = "app" }"#,
+            #"{ from = "glob", glob = "**/*.xcconfig", contains = "MARKETING_VERSION(" }"#
+        )
+        expectProblem("invalid regular expression")
+    }
+
+    @Test func unknownAnchor() {
+        repository.anchors = ["bootstrap.md#components"]
+        expectProblem("docs anchor 'builds.md#ci'")
+    }
+
+    @Test func anchorCheckCanBeSkipped() {
+        repository.anchors = nil
+        #expect(repository.problems() == [])
+    }
+
+    @Test func readmeLinksEachComponentAndSharedPiece() throws {
+        try repository.write("README.md", "# templates\n")
+        expectProblem("does not link to components/demo")
+        expectProblem("does not link to the shared workflow .github/workflows/demo.yml")
+    }
+
+    @Test func anchorMustNameAPage() throws {
+        try repository.editManifest(#"anchor = "builds.md#ci""#, #"anchor = "ci""#)
+        expectProblem("docs/0/anchor")
+    }
+
+    @Test func anchorsAreReadFromTheTables() async throws {
+        try repository.write("anchors.md", """
+            # Anchors
+
+            Each section has an explicit anchor, `<a id="…"></a>`.
+
+            ## [Builds](builds.md)
+
+            | Anchor | Section |
+            | --- | --- |
+            | [`builds.md#ci`](builds.md#ci) | CI. |
+            | [`builds.md#build-numbers`](builds.md#build-numbers) | Build numbers. |
+
+            """)
+        let anchors = try await Anchors.read(from: repository.root.appending(path: "anchors.md").path)
+        #expect(anchors == ["builds.md#ci", "builds.md#build-numbers"])
+    }
+
+    @Test func missingManifestAndEmptyComponents() throws {
+        try repository.delete("components/demo/component.toml")
+        expectProblem("components/demo: component.toml is missing")
+        try repository.delete("components/demo")
+        expectProblem("components/: there are no components")
+    }
+
+    @Test func manifestThatIsNotToml() throws {
+        try repository.write("components/demo/component.toml", "name = \n")
+        expectProblem("components/demo/component.toml: ")
+        #expect(repository.problems().count == 1)
+    }
+}
