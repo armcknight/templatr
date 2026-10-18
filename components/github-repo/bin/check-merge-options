@@ -1,0 +1,25 @@
+#!/bin/sh
+# Usage: check-merge-options
+#
+# Exits 0 when the GitHub repository of the current directory merges pull
+# requests only by squashing, titles the squashed commit with the pull
+# request's title, offers to update a pull request's branch, and deletes the
+# branch after a merge. It reads the settings with gh, as the logged-in user,
+# who must be able to administer the repository to see them.
+
+if ! settings=$(gh api 'repos/{owner}/{repo}' --jq '[
+  (if .allow_squash_merge == true then empty else "squash merging is not allowed" end),
+  (if .allow_merge_commit == false then empty else "merge commits are allowed" end),
+  (if .allow_rebase_merge == false then empty else "rebase merging is allowed" end),
+  (if .squash_merge_commit_title == "PR_TITLE" then empty else "the squashed commit is not titled with the pull request title" end),
+  (if .allow_update_branch == true then empty else "updating a pull request branch is not offered" end),
+  (if .delete_branch_on_merge == true then empty else "branches are not deleted after a merge" end)
+] | .[]'); then
+  echo "Could not read the repository settings." >&2
+  exit 1
+fi
+
+if [ -n "$settings" ]; then
+  printf '%s\n' "$settings" >&2
+  exit 1
+fi
