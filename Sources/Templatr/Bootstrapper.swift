@@ -280,7 +280,10 @@ public struct Bootstrapper: Sendable {
         for resolved in components {
             let name = resolved.component.name
             let values = PlaceholderValues(inputs: resolved.values, templates: templates.root, tag: resolved.tag)
-            for secret in resolved.component.manifest.secrets where seen.insert(secret.name).inserted {
+            for declared in resolved.component.manifest.secrets where seen.insert(declared.name).inserted {
+                // A source with a placeholder that has no value is not read:
+                // the input is reported as missing.
+                let (secret, unfilled) = declared.filled(values)
                 let missing = MissingSecret(component: name, name: secret.name, scope: secret.scope.rawValue, source: secret.source.rawValue)
                 let human = secret.human.map {
                     HumanStep(
@@ -291,7 +294,7 @@ public struct Bootstrapper: Sendable {
                 }
 
                 if secret.scope == .local {
-                    let item = (try? secret.keychainItem.map { try services.keychain.lookup($0) }) ?? nil
+                    let item = unfilled.isEmpty ? (try? secret.keychainItem.map { try services.keychain.lookup($0) }) ?? nil : nil
                     if let item {
                         expiry(of: secret, in: name, lastSet: item.modified, report: &report)
                     } else {
@@ -306,7 +309,7 @@ public struct Bootstrapper: Sendable {
                     expiry(of: secret, in: name, lastSet: updated, report: &report)
                     continue
                 }
-                if let setting, setting(secret) {
+                if unfilled.isEmpty, let setting, setting(secret) {
                     do {
                         let (value, generated) = try value(of: secret)
                         if let value {

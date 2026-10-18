@@ -75,7 +75,7 @@ let demoManifest = #"""
     [[secrets]]
     name = "DEPLOY_TOKEN"
     description = "A deploy token."
-    source = "keychain:demo.deploy-token"
+    source = "keychain:demo.{{inputs.app}}.deploy-token"
     scope = "app"
 
     [[secrets]]

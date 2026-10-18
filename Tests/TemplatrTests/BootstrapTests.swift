@@ -11,7 +11,7 @@ import Testing
     init() throws {
         templates = try makeTemplates()
         project = try makeProject()
-        stubs.setKeychain("demo.deploy-token", "deploy-token-value", modified: stubs.now)
+        stubs.setKeychain("demo.demo-api.deploy-token", "deploy-token-value", modified: stubs.now)
         stubs.setKeychain("demo.local-token", "local-token-value", modified: stubs.now)
         stubs.onePassword["op://Vault/Signing/key"] = "signing-key-value"
     }
@@ -137,6 +137,7 @@ import Testing
         #expect(section.contains("[demo](https://github.com/armcknight/templatr/tree/v1/components/demo) at `v1`"))
         #expect(section.contains("[make/demo.mk](https://github.com/armcknight/templatr/blob/v1/make/demo.mk)"))
         #expect(section.contains("`DEPLOY_TOKEN` (app)"))
+        #expect(section.contains("From the Keychain item `demo.demo-api.deploy-token`."))
         #expect(section.contains("Point the domain at demo-api in sjc."))
         #expect(section.contains("[Linear](https://linear.app/demo)"))
         #expect(section.contains("https://github.com/armcknight/superlinear/blob/main/docs/lifecycle.md#overview"))
@@ -223,6 +224,16 @@ import Testing
         )
         #expect(answered.report.missingInputs.isEmpty)
         #expect(try Record.read(in: project.root)?.components["demo"]?.inputs["region"] == "ams")
+    }
+
+    @Test func aSecretWhoseSourceNeedsAMissingInputIsNotRead() async throws {
+        try project.write("fly.toml", "primary_region = \"sjc\"\n")
+        stubs.setKeychain("demo.{{inputs.app}}.deploy-token", "wrong-value", modified: stubs.now)
+        let result = try await bootstrap(setSecret: setEverySecret)
+        #expect(result.report.missingInputs.map(\.name) == ["app"])
+        #expect(stubs.github["DEPLOY_TOKEN"] == nil)
+        let missing = try #require(result.report.missingSecrets.first { $0.name == "DEPLOY_TOKEN" })
+        #expect(missing.source == "keychain:demo.{{inputs.app}}.deploy-token")
     }
 
     @Test func aRepositoryWithNoComponentIsReported() async throws {

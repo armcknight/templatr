@@ -63,10 +63,12 @@ enum Markdown {
         var secrets: [String] = []
         var seenSecrets: Set<String> = []
         for resolved in components {
-            for secret in resolved.component.manifest.secrets where seenSecrets.insert(secret.name).inserted {
+            let values = PlaceholderValues(inputs: resolved.values, templates: URL(fileURLWithPath: "/"), tag: resolved.tag)
+            for declared in resolved.component.manifest.secrets where seenSecrets.insert(declared.name).inserted {
+                let secret = declared.filled(values).secret
                 var line = "* `\(secret.name)` (\(secret.scope.rawValue)): \(secret.description) \(origin(of: secret))"
                 if let human = secret.human {
-                    line += " To get it: \(human.text)"
+                    line += " To get it: \(values.render(human.text, quoted: false).text)"
                 }
                 secrets.append(line)
             }
