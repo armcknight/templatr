@@ -42,7 +42,17 @@ extension CommandRunner {
 
 /// Runs commands as child processes.
 public struct ProcessRunner: CommandRunner {
-    public init() {}
+    /// Variables added to the commands' environment, over this process's own,
+    /// such as a Linear API key for the steps when no `.envrc` gives one.
+    public var environment: [String: String]
+
+    public init() {
+        self.init(environment: [:])
+    }
+
+    public init(environment: [String: String]) {
+        self.environment = environment
+    }
 
     public func run(_ arguments: [String], input: Data?, in directory: URL?) throws -> CommandResult {
         let process = Process()
@@ -50,6 +60,9 @@ public struct ProcessRunner: CommandRunner {
         process.arguments = arguments
         if let directory {
             process.currentDirectoryURL = directory
+        }
+        if !environment.isEmpty {
+            process.environment = ProcessInfo.processInfo.environment.merging(environment) { $1 }
         }
         let output = Pipe()
         let error = Pipe()

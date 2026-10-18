@@ -14,6 +14,7 @@ This repository holds no secrets: only their names and where to get them.
 | --- | --- |
 | [apple-app](components/apple-app) | An iOS (with an optional embedded watch app), tvOS or macOS app, tested on each pull request, with staging builds on demand, and uploaded to TestFlight by hand with `make deploy-beta`. |
 | [github-repo](components/github-repo) | A repository on GitHub whose pull requests are squashed when they merge, with their branches deleted, and whose default branch cannot be deleted or force-pushed except by the owner. |
+| [linear-workspace](components/linear-workspace) | A Linear workspace that superlinear works from: each team has an In Review state after In Progress, a Todo state, Triage, and superlinear's labels; the owner has a "superlinear proposals" view in their favorites; and no onboarding issue is open. See [The linear-workspace component](#the-linear-workspace-component). |
 | [vapor-fly](components/vapor-fly) | A Swift server built with Vapor and run on Fly.io, built and tested on Linux on each pull request, and deployed by the owner, by hand with `make server deploy` or on a merge. |
 
 ## Layout
@@ -62,6 +63,29 @@ Releases are tags: `v1`, `v1.1`, `v2`. Projects refer to a tag — in `import_fr
 | [components/github-repo/bin/check-merge-options](components/github-repo/bin/check-merge-options) | script | github-repo | Checks that pull requests merge only by squashing, titled with the pull request's title, that GitHub offers to update their branches, and that it deletes them after a merge. |
 | [components/github-repo/bin/check-default-branch-protection](components/github-repo/bin/check-default-branch-protection) | script | github-repo | Checks that a ruleset that the owner can bypass stops the default branch from being deleted or force-pushed. |
 | [components/github-repo/bin/protect-default-branch](components/github-repo/bin/protect-default-branch) | script | github-repo | Makes or updates the `Default branch` ruleset, which stops the default branch from being deleted or force-pushed, with a bypass for the repository's admins. |
+| [components/linear-workspace/bin/linear-workspace](components/linear-workspace/bin/linear-workspace) | script | linear-workspace | Checks, and sets up, the Linear workspace's teams' states, Triage and labels, the proposals view, the onboarding issues and the initiatives, with Linear's API. |
+
+## The linear-workspace component
+
+Its steps check, and `bootstrap` sets up, the Linear workspace that superlinear works from. They run like any other component's steps, and their results are in the same report.
+
+It is detected by an `.envrc` (or `.envrc.example`) that sets `LINEAR_API_KEY` or `LINCTL_API_KEY`. A project without one can add `linear-workspace` to `.templatr.toml` by hand. Its input `linear_teams` has the keys of the teams to check, separated by spaces, such as `STA`; empty, the default, means every team in the workspace. superlinear gives the teams of its `teamIds`. Set `linear_initiatives` to `true` when the project's spec should be under an initiative.
+
+| Step | Check | Fix |
+| --- | --- | --- |
+| `linear-key` | `LINEAR_API_KEY`, else `LINCTL_API_KEY`, is set, Linear accepts it, and its user is an admin of the workspace or of each team, which the fixes need. | Human: make a personal API key in Linear's settings, as the workspace's owner, and export it in the project's `.envrc`. |
+| `envrc-ignored` | An `.envrc` that holds a key is ignored by git. | Adds `.envrc` to `.gitignore`. |
+| `in-review-state` | Each team has an "In Review" state of type `started`, after "In Progress": superlinear sets it after it opens a pull request. | Makes the state, or moves it, after the team's last `started` state and before its first `completed` one. |
+| `todo-state` | Each team has a state of type `unstarted`, which superlinear's `ready` mode starts from. | Human. |
+| `triage` | Triage is on in each team: superlinear puts its proposals there. | Turns it on. |
+| `labels` | Each team has the labels `Needs human`, `superlinear`, `superlinear: proposed`, `superlinear: spec` and `superlinear: hands off`, as team or workspace labels. | Makes the missing ones as team labels. |
+| `proposals-view` | A custom view named "superlinear proposals" shows the open issues labeled `superlinear: proposed`, and is in the key's user's favorites. superlinear's comments are written with the owner's own key, so they do not reach the owner's inbox; this view is where pending proposals are found. | Makes the view, or corrects its filter, and adds it to the favorites. |
+| `onboarding-issues` | None of the issues Linear makes in a new workspace ("Get familiar with Linear", "Set up your teams", "Connect your tools", "Import your data") is open: in `ready` mode, superlinear would start agents on them. | Cancels the open issues with exactly those titles. |
+| `initiatives` | Only when `linear_initiatives` is `true`: the workspace has an initiative. The API cannot tell whether initiatives are on, but there are initiatives only when they are. | Human: turn initiatives on in the workspace's settings. The API cannot. |
+
+The steps read the key from their environment: `LINEAR_API_KEY`, else `LINCTL_API_KEY`. A project's `.envrc` already exports `LINCTL_API_KEY` for `linctl`, and direnv loads it in the shell; a script runs `direnv exec <repository> swift run templatr check <repository>`. superlinear's daemon has no `.envrc`, so it gives each workspace's key from its own config to the steps, with `Services.system(environment:)`.
+
+The script calls Linear's GraphQL API with `curl`, and reads its JSON with JavaScript for Automation, which every Mac has; the steps that use it run only on macOS. It never prints the key, and gives it to `curl` in a header file that only the user can read, never on a command line. Each fix is safe to run again.
 
 ## The manifest
 
@@ -196,7 +220,7 @@ The exit status is 0 when nothing is left to do, 1 when the report lists somethi
 
 * `ComponentManifest`, a library: `Manifest` and its `Codable` types for `component.toml`, and `Validator`, the checks below. Decoding is strict: an unknown key, an empty text, a value that does not match its pattern, or an empty list is an error with its path in the file, such as `secrets/0/source`. The library does not run `detect` rules or `infer` rules; the `Templatr` library below does that on these types. The validator's tests have their own reference that runs them, `Tests/ComponentManifestTests/Detection.swift`, to test each component's rules against fixtures taken from the projects it comes from; set `MTG_REPOSITORY` to a checkout of mtg to also test `vapor-fly` against it.
 * `validate-components`, a command: `validate-components [--root DIR] [--anchors PATH_OR_URL|none]`. The root is the current directory by default. The anchors come from superlinear's `docs/anchors.md` on `main` by default; a path or a URL replaces that, and `none` skips the check. It prints each problem to stderr and exits 1 when there are any.
-* `Templatr`, a library on the `ComponentManifest` types: `Bootstrapper`'s `resolve`, `bootstrap` and `check` do what [Setting up a project](#setting-up-a-project) says, and return a `Report`, the same values that `check --json` prints. It knows nothing of Linear: superlinear turns the report into issues. The programs it runs, the Keychain, 1Password and GitHub are behind the protocols in `Services`, which the tests replace.
+* `Templatr`, a library on the `ComponentManifest` types: `Bootstrapper`'s `resolve`, `bootstrap` and `check` do what [Setting up a project](#setting-up-a-project) says, and return a `Report`, the same values that `check --json` prints. Only the `linear-workspace` component's steps use Linear, with a key from the environment: superlinear turns the report into issues. The programs it runs, the Keychain, 1Password and GitHub are behind the protocols in `Services`, which the tests replace. `ProcessRunner(environment:)` adds environment variables to the commands it runs, such as a Linear API key for the steps.
 * `templatr`, a command: a thin layer on the library, which asks the questions.
 
 The package builds on macOS and Linux. [TOMLKit](https://github.com/LebJe/TOMLKit) parses the TOML, and [Yams](https://github.com/jpsim/Yams) the YAML.
@@ -233,4 +257,4 @@ swift test                                    # the validator's and the Templatr
 swift run validate-components                 # the manifests, and the guide's docs/anchors.md
 ```
 
-and checks every link in the Markdown files with [lychee](https://github.com/lycheeverse/lychee).
+and checks every link in the Markdown files with [lychee](https://github.com/lycheeverse/lychee). It also runs `swift test` on macOS, where the tests also run the `linear-workspace` component's script against a fake Linear API.
