@@ -206,6 +206,9 @@ struct TemplatrCommand: AsyncParsableCommand {
         section("Secrets due for a new value:", report.expiries.map {
             "\($0.secret): every \($0.rotateEvery), last set \(dates.string(from: $0.lastSet)), due \(dates.string(from: $0.due))"
         })
+        section("Certificates that expire within 30 days, or have expired:", report.certificateExpiries.map {
+            "\($0.component)/\($0.id): \($0.name), expires \(dates.string(from: $0.expires))\($0.twoFactor ? " (renewing needs two-factor)" : "")\n    \($0.text)"
+        })
         section("Components behind the newest tag:", report.oldTags.map { "\($0.component) at \($0.tag); the newest is \($0.newest)" })
         section("Broken links:", report.brokenLinks.map { "\($0.file): \($0.link)" })
         section("Errors:", report.errors)

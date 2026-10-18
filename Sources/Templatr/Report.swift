@@ -30,6 +30,9 @@ public struct Report: Codable, Equatable, Sendable {
     public var missingSecrets: [MissingSecret] = []
     /// Secrets due for a new value within 30 days, or past due.
     public var expiries: [Expiry] = []
+    /// Certificates, profiles and other files that expire within 30 days, or
+    /// have expired, from the manifests' `certificates`.
+    public var certificateExpiries: [CertificateExpiry] = []
     /// Components pinned to a tag older than the newest one.
     public var oldTags: [OldTag] = []
     /// Links in README.md that no longer resolve.
@@ -43,7 +46,7 @@ public struct Report: Codable, Equatable, Sendable {
     public var isClean: Bool {
         newComponents.isEmpty && unknownComponents.isEmpty && missingInputs.isEmpty && failedSteps.isEmpty
             && blockedSteps.isEmpty && humanSteps.isEmpty && missingSecrets.isEmpty && expiries.isEmpty
-            && oldTags.isEmpty && brokenLinks.isEmpty && errors.isEmpty
+            && certificateExpiries.isEmpty && oldTags.isEmpty && brokenLinks.isEmpty && errors.isEmpty
     }
 
     /// The report as JSON, with sorted keys and ISO 8601 dates.
@@ -120,6 +123,19 @@ public struct Expiry: Codable, Equatable, Sendable {
     public var rotateEvery: String
     public var lastSet: Date
     public var due: Date
+}
+
+public struct CertificateExpiry: Codable, Equatable, Sendable {
+    public var component: String
+    /// The ID of the manifest's `certificates` entry that lists it.
+    public var id: String
+    /// The name its `list` command prints, such as a certificate's common name
+    /// or a profile's name.
+    public var name: String
+    public var expires: Date
+    /// What to do to replace it, with the inputs filled in.
+    public var text: String
+    public var twoFactor: Bool
 }
 
 public struct OldTag: Codable, Equatable, Sendable {

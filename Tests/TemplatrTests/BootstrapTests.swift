@@ -191,6 +191,50 @@ import Testing
         #expect(report.brokenLinks == [BrokenLink(file: "README.md", link: "docs/gone.md")])
     }
 
+    @Test func checkReportsCertificatesThatExpireWithin30Days() async throws {
+        let formatter = ISO8601DateFormatter()
+        func date(days: Double) -> String { formatter.string(from: stubs.now.addingTimeInterval(days * 86_400)) }
+        try project.write("certs.tsv", """
+            \(date(days: 90))\tApple Distribution: Demo (TEAM)
+            \(date(days: 29))\tmatch AppStore io.demo.app
+
+            \(date(days: -1))\tmatch AdHoc io.demo.app.adhoc
+            """)
+        let report = try await bootstrapper(tags: ["v1"]).check(repository: project.root)
+        #expect(report.certificateExpiries.map(\.name) == ["match AppStore io.demo.app", "match AdHoc io.demo.app.adhoc"])
+        let expiry = try #require(report.certificateExpiries.first)
+        #expect(expiry.component == "demo")
+        #expect(expiry.id == "signing")
+        #expect(formatter.string(from: expiry.expires) == date(days: 29))
+        #expect(expiry.text == "Renew the signing certificates of demo-api.")
+        #expect(expiry.twoFactor)
+        #expect(report.errors.isEmpty)
+    }
+
+    @Test func certificatesThatCannotBeListedAreAnError() async throws {
+        try project.write("certs.fail", "")
+        let report = try await bootstrapper(tags: ["v1"]).check(repository: project.root)
+        #expect(report.certificateExpiries.isEmpty)
+        #expect(report.errors == ["Could not list demo/signing: Could not read the certificates of demo-api."])
+
+        try project.delete("certs.fail")
+        try project.write("certs.tsv", "next week\tA certificate\n")
+        let unreadable = try await bootstrapper(tags: ["v1"]).check(repository: project.root)
+        #expect(unreadable.errors == [
+            "demo/signing printed a line that is not <ISO 8601 date>\t<name>: next week\tA certificate",
+        ])
+    }
+
+    @Test func certificatesThatNeedAMissingInputAreNotListed() async throws {
+        try project.write("fly.toml", "primary_region = \"sjc\"\n")
+        try project.write("certs.fail", "")
+        let report = try await bootstrapper(tags: ["v1"]).check(repository: project.root)
+        #expect(report.errors.isEmpty)
+        #expect(report.blockedSteps.contains(BlockedStep(
+            component: "demo", id: "certificates:signing", description: "The signing certificates.", missingInputs: ["app"]
+        )))
+    }
+
     @Test func aHandWrittenRecordWinsAndNewComponentsAreOnlyReported() async throws {
         try project.write(Record.fileName, """
             [components.demo]

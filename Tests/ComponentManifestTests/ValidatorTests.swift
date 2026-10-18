@@ -131,6 +131,26 @@ struct ValidatorTests {
         expectProblem("step domain fix: unknown placeholder {{inputs.domain}}")
     }
 
+    @Test func unknownPlaceholderInCertificates() throws {
+        try repository.editManifest("fly certs list --app {{inputs.app}}", "fly certs list --app {{inputs.name}}")
+        try repository.editManifest("Renew the TLS certificate of {{inputs.app}}.", "Renew {{inputs.host}}.")
+        expectProblem("certificates tls list: unknown placeholder {{inputs.name}}")
+        expectProblem("certificates tls renew: unknown placeholder {{inputs.host}}")
+    }
+
+    @Test func duplicateCertificates() throws {
+        try repository.editManifest("[[certificates]]", """
+            [[certificates]]
+            id = "tls"
+            description = "Again."
+            list = "true"
+            renew = { text = "Renew it." }
+
+            [[certificates]]
+            """)
+        expectProblem("certificates 'tls' is declared more than one time")
+    }
+
     @Test func placeholderInSecretSource() throws {
         try repository.editManifest(#"source = "keychain:demo.fly-token""#, #"source = "keychain:demo.{{inputs.app}}.fly-token""#)
         #expect(repository.problems() == [])

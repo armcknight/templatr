@@ -22,6 +22,9 @@ import Testing
         )]
         report.missingSecrets = [MissingSecret(component: "demo", name: "TOKEN", scope: "app", source: "keychain:x")]
         report.expiries = [Expiry(component: "demo", secret: "TOKEN", rotateEvery: "90d", lastSet: date, due: date)]
+        report.certificateExpiries = [CertificateExpiry(
+            component: "demo", id: "signing", name: "Apple Distribution", expires: date, text: "Renew it.", twoFactor: true
+        )]
         report.oldTags = [OldTag(component: "demo", tag: "v1", newest: "v2")]
         report.brokenLinks = [BrokenLink(file: "README.md", link: "gone.md")]
         report.errors = ["gh failed"]

@@ -67,6 +67,12 @@
       "type": "array",
       "minItems": 1,
       "items": { "$ref": "#/$defs/doc" }
+    },
+    "certificates": {
+      "description": "Signing certificates, provisioning profiles and other files that expire. templatr check reports those within 30 days of their expiry.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/certificate" }
     }
   },
   "$defs": {
@@ -279,6 +285,24 @@
               "properties": { "human": { "$ref": "#/$defs/human" } }
             }
           ]
+        }
+      }
+    },
+    "certificate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "description", "list", "renew"],
+      "properties": {
+        "id": { "$ref": "#/$defs/slug" },
+        "description": { "type": "string", "minLength": 1 },
+        "list": {
+          "description": "A shell command, run in the component's directory, or at the repository root when it has none, that prints one line for each certificate: its expiry as an ISO 8601 date and time, a tab, and its name. An exit status other than 0 means it could not list them.",
+          "type": "string",
+          "minLength": 1
+        },
+        "renew": {
+          "description": "What a person must do to replace one that expires soon.",
+          "$ref": "#/$defs/human"
         }
       }
     },

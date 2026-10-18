@@ -86,6 +86,7 @@ public struct Validator: Sendable {
             ("input", manifest.inputs.map(\.name)),
             ("secret", manifest.secrets.map(\.name)),
             ("step", manifest.steps.map(\.id)),
+            ("certificates", manifest.certificates.map(\.id)),
         ] {
             for value in Self.duplicates(in: values) {
                 problems.append("\(`where`): \(kind) '\(value)' is declared more than one time")
@@ -198,6 +199,10 @@ public struct Validator: Sendable {
         }
         if let blurb = manifest.blurb {
             sources.append(("\(`where`): blurb", blurb))
+        }
+        for certificates in manifest.certificates {
+            sources.append(("\(`where`): certificates \(certificates.id) list", certificates.list))
+            sources.append(("\(`where`): certificates \(certificates.id) renew", certificates.renew.text))
         }
         for (label, text) in sources {
             for name in Placeholders.names(in: text).subtracting(allowed).sorted() {

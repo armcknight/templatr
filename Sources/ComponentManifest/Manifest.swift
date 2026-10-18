@@ -30,14 +30,18 @@ public struct Manifest: Codable, Equatable, Sendable {
     public var steps: [Step]
     public var shared: [Shared]
     public var docs: [Doc]
+    /// Signing certificates, profiles and other files that expire. Optional:
+    /// most components have none.
+    public var certificates: [Certificate]
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case name, description, base, directory, blurb, detect, inputs, secrets, steps, shared, docs
+        case name, description, base, directory, blurb, detect, inputs, secrets, steps, shared, docs, certificates
     }
 
     public init(
         name: String, description: String, base: Bool = false, directory: String? = nil, blurb: String? = nil,
-        detect: Detect?, inputs: [Input], secrets: [Secret], steps: [Step], shared: [Shared], docs: [Doc]
+        detect: Detect?, inputs: [Input], secrets: [Secret], steps: [Step], shared: [Shared], docs: [Doc],
+        certificates: [Certificate] = []
     ) {
         self.name = name
         self.description = description
@@ -50,6 +54,7 @@ public struct Manifest: Codable, Equatable, Sendable {
         self.steps = steps
         self.shared = shared
         self.docs = docs
+        self.certificates = certificates
     }
 
     public init(from decoder: Decoder) throws {
@@ -74,6 +79,27 @@ public struct Manifest: Codable, Equatable, Sendable {
         steps = try container.decode([Step].self, forKey: .steps)
         shared = try container.decode([Shared].self, forKey: .shared)
         docs = try container.some(.docs, Doc.self)
+        certificates = try container.someIfPresent(.certificates, Certificate.self) ?? []
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(name, forKey: .name)
+        try container.encode(description, forKey: .description)
+        try container.encode(base, forKey: .base)
+        try container.encodeIfPresent(directory, forKey: .directory)
+        try container.encodeIfPresent(blurb, forKey: .blurb)
+        try container.encodeIfPresent(detect, forKey: .detect)
+        try container.encode(inputs, forKey: .inputs)
+        try container.encode(secrets, forKey: .secrets)
+        try container.encode(steps, forKey: .steps)
+        try container.encode(shared, forKey: .shared)
+        try container.encode(docs, forKey: .docs)
+        // An empty list does not decode, so a manifest without certificates
+        // has no key.
+        if !certificates.isEmpty {
+            try container.encode(certificates, forKey: .certificates)
+        }
     }
 
     /// Decodes a manifest from TOML text.
@@ -611,6 +637,40 @@ public struct Step: Codable, Equatable, Sendable {
         scope = try container.valueIfPresent(.scope, Scope.self) ?? .repo
         check = try container.text(.check)
         fix = try container.decode(Fix.self, forKey: .fix)
+    }
+}
+
+/// Certificates, provisioning profiles or other files that stop working on a
+/// date, and the command that lists them with that date.
+public struct Certificate: Codable, Equatable, Sendable {
+    public var id: String
+    public var description: String
+    /// A shell command, run in the component's directory, or at the repository
+    /// root when it has none, that prints one line for each certificate: its
+    /// expiry as an ISO 8601 date and time, a tab, and its name. A status other
+    /// than 0 means it could not list them.
+    public var list: String
+    /// What a person must do to replace one that expires soon.
+    public var renew: Human
+
+    enum CodingKeys: String, CodingKey, CaseIterable {
+        case id, description, list, renew
+    }
+
+    public init(id: String, description: String, list: String, renew: Human) {
+        self.id = id
+        self.description = description
+        self.list = list
+        self.renew = renew
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectKeys(unknownTo: CodingKeys.self)
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.text(.id, .slug)
+        description = try container.text(.description)
+        list = try container.text(.list)
+        renew = try container.decode(Human.self, forKey: .renew)
     }
 }
 

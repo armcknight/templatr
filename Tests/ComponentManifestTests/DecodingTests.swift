@@ -34,6 +34,31 @@ struct DecodingTests {
         #expect(decoded.steps[1].fix == .human(Human(text: "Point the domain at {{inputs.app}}.", twoFactor: false)))
         #expect(decoded.shared[0].link == ".github/workflows/demo.yml")
         #expect(decoded.docs == [Doc(title: "Builds", anchor: "builds.md#ci")])
+        #expect(decoded.certificates == [Certificate(
+            id: "tls", description: "The app's TLS certificate.", list: "fly certs list --app {{inputs.app}}",
+            renew: Human(text: "Renew the TLS certificate of {{inputs.app}}.", twoFactor: false)
+        )])
+    }
+
+    @Test func certificatesAreOptional() throws {
+        let start = try #require(manifest.range(of: "[[certificates]]"))
+        let decoded = try Manifest(toml: String(manifest[..<start.lowerBound]))
+        #expect(decoded.certificates.isEmpty)
+        #expect(try decoded.toml().contains("certificates") == false)
+        #expect(try Manifest(toml: decoded.toml()) == decoded)
+    }
+
+    @Test func certificatesNeedAnElement() {
+        let start = manifest.range(of: "[[certificates]]")!
+        #expect(error(decoding: "certificates = []\n" + manifest[..<start.lowerBound])?.path == "certificates")
+    }
+
+    @Test func certificatesNeedRenewText() {
+        let error = error(decoding: manifest.replacingOccurrences(
+            of: #"renew = { text = "Renew the TLS certificate of {{inputs.app}}." }"#, with: ""
+        ))
+        #expect(error?.path == "certificates/0")
+        #expect(error?.message == "'renew' is required")
     }
 
     @Test func theManifestRoundTripsThroughToml() throws {
@@ -70,6 +95,7 @@ struct DecodingTests {
         #expect(decoded.shared.contains {
             $0.link == "https://github.com/armcknight/workflows/blob/4/.github/workflows/ios-ci.yml"
         })
+        #expect(decoded.certificates.map(\.id) == ["match"])
         #expect(try Manifest(toml: decoded.toml()) == decoded)
     }
 

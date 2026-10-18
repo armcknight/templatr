@@ -30,9 +30,10 @@ help:
 build:
 	swift build -c release
 
-## test: run the unit tests
+## test: run the unit tests, and the apple-app component's match-certificates package's
 test:
 	swift test
+	swift test --package-path components/apple-app/match-certificates
 
 ## validate: check the component manifests
 validate:

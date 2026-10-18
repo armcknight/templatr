@@ -30,6 +30,10 @@ final class Directory {
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: root.appending(path: path).path)
     }
 
+    func delete(_ path: String) throws {
+        try FileManager.default.removeItem(at: root.appending(path: path))
+    }
+
     func read(_ path: String) -> String? {
         try? String(contentsOf: root.appending(path: path), encoding: .utf8)
     }
@@ -120,6 +124,12 @@ let demoManifest = #"""
     [[docs]]
     title = "Builds"
     anchor = "builds.md#ci"
+
+    [[certificates]]
+    id = "signing"
+    description = "The signing certificates."
+    list = "test ! -e certs.fail || { echo 'Could not read the certificates of {{inputs.app}}.' >&2; exit 2; }; cat certs.tsv 2>/dev/null || true"
+    renew = { text = "Renew the signing certificates of {{inputs.app}}.", twoFactor = true }
     """#
 
 let otherManifest = """

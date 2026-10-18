@@ -7,7 +7,7 @@
   "additionalProperties": false,
   "required": [
     "version", "components", "newComponents", "unknownComponents", "missingInputs", "failedSteps", "blockedSteps",
-    "humanSteps", "missingSecrets", "expiries", "oldTags", "brokenLinks", "errors"
+    "humanSteps", "missingSecrets", "expiries", "certificateExpiries", "oldTags", "brokenLinks", "errors"
   ],
   "properties": {
     "version": { "const": 1 },
@@ -137,6 +137,23 @@
           "rotateEvery": { "type": "string" },
           "lastSet": { "type": "string", "format": "date-time" },
           "due": { "type": "string", "format": "date-time" }
+        }
+      }
+    },
+    "certificateExpiries": {
+      "description": "Certificates, profiles and other files that a component's certificates list says expire within 30 days, or have expired.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["component", "id", "name", "expires", "text", "twoFactor"],
+        "properties": {
+          "component": { "type": "string" },
+          "id": { "type": "string", "description": "The ID of the manifest's certificates entry that lists it." },
+          "name": { "type": "string", "description": "Its name, such as a certificate's common name or a profile's name." },
+          "expires": { "type": "string", "format": "date-time" },
+          "text": { "type": "string", "description": "What to do to replace it, with the inputs filled in." },
+          "twoFactor": { "type": "boolean" }
         }
       }
     },
