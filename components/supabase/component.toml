@@ -1,0 +1,219 @@
+name = "supabase"
+description = "A Postgres database on Supabase for a Vapor server on Fly.io, with local and test databases, the Supabase root CA in the server's image, a local and remote parity check, and migrations that run before each deploy or when the server starts."
+
+# A Supabase CLI project, Supabase's root CA certificate kept for TLS (as mtg
+# keeps it in deploy/), or a Supabase host in an example environment file. A
+# project that has none of them yet gets the component by name.
+[detect]
+any = [
+  { glob = "supabase/config.toml" },
+  { glob = "**/supabase-root-*.crt" },
+  { glob = ".env*.example", contains = "supabase\\.co" },
+]
+
+# The reference ID of the Supabase project: the subdomain of its API URL, and
+# part of its database hosts. The CLI's config.toml has a project_id, but that
+# is only the local stack's name unless it is a reference ID, so only a value
+# of that form is read.
+[[inputs]]
+name = "project_ref"
+description = "The Supabase project's reference ID, as in https://<project_ref>.supabase.co."
+example = "abcdefghijklmnopqrst"
+infer = [
+  { from = "regex", glob = "supabase/.temp/project-ref", pattern = "^([a-z0-9]{20})\\b" },
+  { from = "regex", glob = ".env*.example", pattern = "db\\.([a-z0-9]{20})\\.supabase\\.co" },
+  { from = "regex", glob = ".env*.example", pattern = "postgres\\.([a-z0-9]{20})[:@]" },
+  { from = "regex", glob = "supabase/config.toml", pattern = "(?m)^\\s*project_id\\s*=\\s*\"([a-z0-9]{20})\"" },
+]
+
+# cli: SQL in supabase/migrations, which `supabase db push` applies before each
+# deploy. fluent: Fluent migrations in the server, which it applies when it
+# starts, as mtg does.
+[[inputs]]
+name = "migration_style"
+description = "How the schema changes: cli, SQL migrations in supabase/migrations that `supabase db push` applies before each deploy; or fluent, Fluent migrations that the server applies when it starts."
+example = "cli"
+infer = [
+  { from = "glob", glob = "supabase/config.toml", exists = true, map = { "true" = "cli" } },
+  { from = "glob", glob = "Package.swift", contains = "github\\.com/vapor/fluent", map = { "Package.swift" = "fluent" } },
+]
+
+[[inputs]]
+name = "product"
+description = "The executable product in Package.swift that runs the server. In the fluent style, `make local-db migrate` runs it with `migrate`."
+example = "mtg-server"
+infer = [
+  { from = "regex", glob = "Dockerfile", pattern = "swift build[^\\n]*--product[ =]+\"?([A-Za-z0-9_.-]+)" },
+  { from = "regex", glob = "Package.swift", pattern = "\\.executable\\(\\s*name:\\s*\"([^\"]+)\"" },
+]
+
+[[inputs]]
+name = "fly_app"
+description = "The Fly app that runs the server and has DATABASE_URL as a secret."
+example = "mtg-server"
+infer = [{ from = "toml", file = "fly.toml", key = "app" }]
+
+# The Supabase CLI's local stack has one database, postgres.
+[[inputs]]
+name = "database_name"
+description = "The name of the local development database. The Supabase CLI's local stack uses postgres."
+example = "mtg_collection"
+infer = [
+  { from = "glob", glob = "supabase/config.toml", exists = true, map = { "true" = "postgres" } },
+  { from = "regex", glob = "docker-compose.yml", pattern = "POSTGRES_DB:\\s*[\"']?([A-Za-z0-9_]+)" },
+  { from = "regex", glob = ".env*.example", pattern = "(?m)^\\s*(?:export\\s+)?DATABASE_URL=\\S*localhost[^/\\s]*/([A-Za-z0-9_]+)" },
+]
+
+[[inputs]]
+name = "pg_version"
+description = "The major version of Postgres: the Homebrew postgresql@<version> whose tools the local and test databases use. Keep it the same as the Supabase project's."
+example = "17"
+default = "17"
+infer = [
+  { from = "toml", file = "supabase/config.toml", key = "db.major_version" },
+  { from = "regex", glob = "docker-compose.yml", pattern = "image:\\s*[\"']?postgres:([0-9]+)" },
+]
+
+[[inputs]]
+name = "ca_cert_path"
+description = "Where the repository keeps Supabase's root CA certificate, which the Docker image copies in."
+example = "deploy/supabase-root-2021-ca.crt"
+default = "deploy/supabase-root-2021-ca.crt"
+infer = [{ from = "glob", glob = "**/supabase-root-*.crt" }]
+
+[[inputs]]
+name = "ca_cert_env"
+description = "The environment variable, set in fly.toml's [env], that has the path of the CA certificate in the image. The server verifies the database's TLS certificate against it."
+example = "MTG_DB_CA_CERT"
+default = "DATABASE_CA_CERT"
+infer = [{ from = "regex", glob = "fly.toml", pattern = "(?m)^\\s*([A-Z][A-Z0-9_]*)\\s*=\\s*[\"'][^\"']*\\.crt[\"']" }]
+
+# DATABASE_URL is a Fly secret, set by the owner with `fly secrets import`.
+# It stays in the owner's Keychain for that, and for `make local-db
+# status-diff`, which reads the remote database; it is never a GitHub secret.
+[[secrets]]
+name = "DATABASE_URL"
+description = "The Supabase database's pooled connection string (session mode, port 5432) with ?sslmode=require. The server reads it as a Fly secret."
+source = "keychain:superlinear.supabase.{{inputs.project_ref}}.database-url"
+scope = "local"
+human = { text = "Sign in to https://supabase.com/dashboard (with two-factor authentication) and make a project for {{inputs.fly_app}}, in the region nearest the Fly app's primary_region in fly.toml. Store its database password in the Keychain item superlinear.supabase.{{inputs.project_ref}}.db-password. From Connect, copy the session pooler's connection string (port 5432), put the password in it, add ?sslmode=require, and store it in the Keychain item superlinear.supabase.{{inputs.project_ref}}.database-url. Project settings that are not in supabase/config.toml, such as Auth providers, are the project's own Needs human steps.", twoFactor = true }
+
+[[secrets]]
+name = "SUPABASE_DB_PASSWORD"
+description = "The Supabase database's password, for `supabase db push` in the deploy workflow. Only the cli style uses it."
+source = "keychain:superlinear.supabase.{{inputs.project_ref}}.db-password"
+scope = "repo"
+
+[[secrets]]
+name = "SUPABASE_ACCESS_TOKEN"
+description = "A Supabase personal access token, for `supabase link` and `supabase db push` in the deploy workflow. Only the cli style uses it."
+source = "keychain:superlinear.supabase.access-token"
+scope = "team"
+human = { text = "In https://supabase.com/dashboard/account/tokens (with two-factor authentication), generate a token named superlinear, and store it in the Keychain item superlinear.supabase.access-token. It is shown only one time.", twoFactor = true }
+rotateEvery = "1y"
+
+[[steps]]
+id = "tools"
+description = "The Supabase CLI, the Postgres tools at pg_version, OpenSSL 3 and jq are installed."
+check = "command -v supabase >/dev/null && command -v jq >/dev/null && test -x \"$(brew --prefix)/opt/postgresql@\"{{inputs.pg_version}}\"/bin/psql\" && test -x \"$(brew --prefix)/opt/openssl@3/bin/openssl\""
+fix = "brew install supabase/tap/supabase postgresql@{{inputs.pg_version}} openssl@3 jq"
+
+[[steps]]
+id = "supabase-project"
+description = "The Supabase project exists, and the Supabase CLI can see it."
+check = "{{templates}}/components/supabase/bin/check-supabase-project {{inputs.project_ref}}"
+fix = { human = { text = "Make the Supabase project as the DATABASE_URL secret says, then run `supabase login` on this Mac, so that the CLI can see the project {{inputs.project_ref}}." } }
+
+[[steps]]
+id = "gitignore"
+description = ".gitignore has .envrc, the test database's directory, the parity snapshots and the Supabase CLI's local state."
+check = "for p in .envrc .test-pgdata/ status/local.json supabase/.temp/x; do git check-ignore -q --no-index \"$p\" || exit 1; done"
+fix = "for p in .envrc .test-pgdata/ status/ supabase/.temp/ supabase/.branches/; do grep -qxF \"$p\" .gitignore 2>/dev/null || printf '%s\\n' \"$p\" >> .gitignore; done"
+
+[[steps]]
+id = "envrc-example"
+description = ".envrc.example names DATABASE_URL, which direnv exports from the real, ignored .envrc."
+check = "grep -qs 'DATABASE_URL' .envrc.example"
+fix = { human = { text = "Copy .envrc.example from the supabase scaffold, or add an `export DATABASE_URL=` line, with a placeholder and never a value, to the existing one." } }
+
+[[steps]]
+id = "make-fragment"
+description = "The Makefile includes make/local-db.mk, from the scaffold, which includes make/supabase.mk at the pinned tag and has the local-db commands."
+check = "grep -Eqs '^-?include[[:space:]]+make/local-db\\.mk' Makefile"
+fix = "test -f make/local-db.mk && ! grep -Eqs '^(local-db-[a-z-]+|server-status-diff|server-refresh-ca):' Makefile && printf '\\ninclude make/local-db.mk\\n' >> Makefile"
+
+[[steps]]
+id = "ca-certificate"
+description = "The repository has Supabase's root CA certificate."
+check = "openssl x509 -in {{inputs.ca_cert_path}} -noout"
+fix = { human = { text = "With DATABASE_URL in the environment, run `make server refresh-ca`. It downloads Supabase's root CA to {{inputs.ca_cert_path}} and verifies the database's TLS certificate against it. Commit the certificate: it is public." } }
+
+[[steps]]
+id = "ca-in-image"
+description = "The Docker image has the CA certificate, and fly.toml's [env] gives the server its path."
+check = "grep -qsF -- {{inputs.ca_cert_path}} Dockerfile && grep -Eqs \"^[[:space:]]*\"{{inputs.ca_cert_env}}\"[[:space:]]*=\" fly.toml"
+fix = { human = { text = "In the Dockerfile's runtime stage, add `COPY {{inputs.ca_cert_path}} /app/supabase-root-ca.crt`. In fly.toml's [env], set {{inputs.ca_cert_env}} = \"/app/supabase-root-ca.crt\". The server must read {{inputs.ca_cert_env}} and, when it is set, require TLS and verify the database's certificate against that file, as mtg's PostgresConnection.swift does; see the supabase component's CLAUDE.md." } }
+
+[[steps]]
+id = "fly-secret"
+description = "The Fly app has DATABASE_URL as a secret."
+check = "{{templates}}/components/vapor-fly/bin/check-fly-secrets {{inputs.fly_app}} DATABASE_URL"
+fix = { human = { text = "Set DATABASE_URL on {{inputs.fly_app}} from the Keychain item superlinear.supabase.{{inputs.project_ref}}.database-url, so that the value is in no shell history or log: `printf 'DATABASE_URL=%s\\n' \"$(security find-generic-password -s superlinear.supabase.{{inputs.project_ref}}.database-url -w)\" | fly secrets import --stage --app {{inputs.fly_app}}`. --stage keeps the machines as they are until the next deploy." } }
+
+[[steps]]
+id = "deploy-migrations"
+description = "In the cli style, the deploy workflow applies the migrations with `supabase db push` before it deploys, and a failed migration stops the deploy. The fluent style needs nothing here."
+check = "[ {{inputs.migration_style}} != cli ] || { grep -qs 'supabase-migrate\\.yml' .github/workflows/deploy.yml && grep -Eqs 'needs:.*migrate' .github/workflows/deploy.yml; }"
+fix = { human = { text = "Copy .github/workflows/supabase-migrate.yml from the supabase scaffold. In .github/workflows/deploy.yml, add a job before the deploy job: `migrate:` with `uses: ./.github/workflows/supabase-migrate.yml`, `with: { project-ref: {{inputs.project_ref}}, deploy-on: <the deploy job's deploy-on> }` and `secrets: { SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}, SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }} }`; then add `needs: migrate` to the deploy job. Keep the two deploy-on values the same." } }
+
+[[shared]]
+kind = "make"
+path = "make/supabase.mk"
+version = "v1"
+description = "The supabase-db-init, supabase-db-reset, supabase-db-migrate, supabase-db-test-start, supabase-db-test-stop, supabase-db-status, supabase-status-diff and supabase-refresh-ca targets."
+
+[[shared]]
+kind = "script"
+path = "components/supabase/bin/check-supabase-project"
+version = "v1"
+description = "Checks that the Supabase CLI can see the project."
+
+[[shared]]
+kind = "script"
+path = "components/supabase/bin/supabase-ca"
+version = "v1"
+description = "Downloads the database's root CA certificate and verifies the database's TLS certificate against it."
+
+[[shared]]
+kind = "script"
+path = "components/supabase/bin/db-snapshot"
+version = "v1"
+description = "Writes a database's tables, columns, row counts and applied migrations as JSON."
+
+[[shared]]
+kind = "script"
+path = "components/supabase/bin/db-snapshot-diff"
+version = "v1"
+description = "Compares two snapshots, and exits 1 when the databases differ."
+
+[[shared]]
+kind = "script"
+path = "components/vapor-fly/bin/check-fly-secrets"
+version = "v1"
+description = "Checks that the Fly app has DATABASE_URL, by name."
+
+[[docs]]
+title = "Components"
+anchor = "bootstrap.md#components"
+
+[[docs]]
+title = "Secrets"
+anchor = "bootstrap.md#secrets"
+
+[[docs]]
+title = "Steps that need a person"
+anchor = "bootstrap.md#needs-human-steps"
+
+[[docs]]
+title = "The release rule"
+anchor = "builds.md#release-rule"

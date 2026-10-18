@@ -14,6 +14,7 @@ This repository holds no secrets: only their names and where to get them.
 | --- | --- |
 | [apple-app](components/apple-app) | An iOS (with an optional embedded watch app), tvOS or macOS app, tested on each pull request, with staging builds on demand, and uploaded to TestFlight by hand with `make deploy-beta`. |
 | [vapor-fly](components/vapor-fly) | A Swift server built with Vapor and run on Fly.io, built and tested on Linux on each pull request, and deployed by the owner, by hand with `make server deploy` or on a merge. |
+| [supabase](components/supabase) | A Postgres database on Supabase for a Vapor server on Fly.io, with local and test databases, Supabase's root CA in the server's image, a local and remote parity check, and migrations with the Supabase CLI before each deploy or with Fluent when the server starts. |
 
 ## Layout
 
@@ -53,7 +54,12 @@ Releases are tags: `v1`, `v1.1`, `v2`. Projects refer to a tag — in `import_fr
 | [make/vapor-fly.mk](make/vapor-fly.mk) | make | vapor-fly | The `vapor-fly-build`, `vapor-fly-serve`, `vapor-fly-serve-docker`, `vapor-fly-deploy` and `vapor-fly-status` targets, which the scaffold's Makefile runs as `make server <command>`. |
 | [components/vapor-fly/scaffold/Brewfile](components/vapor-fly/scaffold/Brewfile) | brewfile | vapor-fly | The tools the Makefile targets use. |
 | [components/vapor-fly/bin/check-fly-config](components/vapor-fly/bin/check-fly-config) | script | vapor-fly | Checks that `fly.toml` names the app, forces HTTPS, scales to zero and has the health check. |
-| [components/vapor-fly/bin/check-fly-secrets](components/vapor-fly/bin/check-fly-secrets) | script | vapor-fly | Checks that the Fly app has each runtime secret, by name. |
+| [components/vapor-fly/bin/check-fly-secrets](components/vapor-fly/bin/check-fly-secrets) | script | vapor-fly, supabase | Checks that the Fly app has each runtime secret, by name. |
+| [make/supabase.mk](make/supabase.mk) | make | supabase | The `supabase-db-init`, `supabase-db-reset`, `supabase-db-migrate`, `supabase-db-test-start`, `supabase-db-test-stop`, `supabase-db-status`, `supabase-status-diff` and `supabase-refresh-ca` targets, which the scaffold's `make/local-db.mk` runs as `make local-db <command>` and `make server <command>`. |
+| [components/supabase/bin/check-supabase-project](components/supabase/bin/check-supabase-project) | script | supabase | Checks that the Supabase CLI can see the project. |
+| [components/supabase/bin/supabase-ca](components/supabase/bin/supabase-ca) | script | supabase | Downloads the database's root CA certificate and verifies the database's TLS certificate against it. |
+| [components/supabase/bin/db-snapshot](components/supabase/bin/db-snapshot) | script | supabase | Writes a database's tables, columns, row counts and applied migrations as JSON. |
+| [components/supabase/bin/db-snapshot-diff](components/supabase/bin/db-snapshot-diff) | script | supabase | Compares two snapshots, and exits 1 when the databases differ. |
 
 ## The manifest
 
@@ -144,7 +150,7 @@ Each component's `scaffold/README.md` has a section between these markers:
 
 [Package.swift](Package.swift) has two products:
 
-* `ComponentManifest`, a library: `Manifest` and its `Codable` types for `component.toml`, and `Validator`, the checks below. Decoding is strict: an unknown key, an empty text, a value that does not match its pattern, or an empty list is an error with its path in the file, such as `secrets/0/source`. The library does not run `detect` rules or `infer` rules; superlinear does that on these types. The tests have a reference that runs them, `Tests/ComponentManifestTests/Detection.swift`, to test each component's rules against fixtures taken from the projects it comes from; set `MTG_REPOSITORY` to a checkout of mtg to also test `vapor-fly` against it.
+* `ComponentManifest`, a library: `Manifest` and its `Codable` types for `component.toml`, and `Validator`, the checks below. Decoding is strict: an unknown key, an empty text, a value that does not match its pattern, or an empty list is an error with its path in the file, such as `secrets/0/source`. The library does not run `detect` rules or `infer` rules; superlinear does that on these types. The tests have a reference that runs them, `Tests/ComponentManifestTests/Detection.swift`, to test each component's rules against fixtures taken from the projects it comes from; set `MTG_REPOSITORY` to a checkout of mtg to also test `vapor-fly` and `supabase` against it.
 * `validate-components`, a command: `validate-components [--root DIR] [--anchors PATH_OR_URL|none]`. The root is the current directory by default. The anchors come from superlinear's `docs/anchors.md` on `main` by default; a path or a URL replaces that, and `none` skips the check. It prints each problem to stderr and exits 1 when there are any.
 
 The package builds on macOS and Linux. [TOMLKit](https://github.com/LebJe/TOMLKit) parses the TOML.

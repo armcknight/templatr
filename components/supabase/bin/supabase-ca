@@ -1,0 +1,58 @@
+#!/bin/bash
+# Usage: supabase-ca <host> <certificate>
+#
+# Downloads the root CA certificate of the Postgres server at <host>, port
+# 5432, to <certificate>, then verifies the server's TLS certificate against
+# it. Supabase's databases chain to Supabase's own root CA, which the system's
+# trust store does not have, so the server's image carries it.
+#
+# OPENSSL is an OpenSSL 3 openssl, which can start TLS in the Postgres protocol:
+# Homebrew's openssl@3 by default. macOS's openssl cannot.
+
+set -euo pipefail
+
+host="${1:?usage: supabase-ca <host> <certificate>}"
+certificate="${2:?usage: supabase-ca <host> <certificate>}"
+openssl="${OPENSSL:-$(brew --prefix 2>/dev/null)/opt/openssl@3/bin/openssl}"
+
+if ! "$openssl" version 2>/dev/null | grep -q '^OpenSSL 3'; then
+  echo "$openssl is not OpenSSL 3. Run brew install openssl@3, or set OPENSSL." >&2
+  exit 1
+fi
+
+connect() {
+  "$openssl" s_client -starttls postgres -connect "$host:5432" -servername "$host" "$@" </dev/null 2>/dev/null
+}
+
+echo "Downloading the root CA of $host..."
+mkdir -p "$(dirname "$certificate")"
+temporary=$(mktemp)
+trap 'rm -f "$temporary"' EXIT
+
+# The last certificate in the chain the server sends is the root.
+connect -showcerts \
+  | awk '/BEGIN CERTIFICATE/ { n++; block = "" } { block = block $0 ORS } /END CERTIFICATE/ { last = block } END { printf "%s", last }' \
+  | "$openssl" x509 >"$temporary" 2>/dev/null || true
+
+if [ ! -s "$temporary" ]; then
+  echo "No certificate came from $host:5432. Is the host right, and can this Mac reach it?" >&2
+  exit 1
+fi
+
+subject=$("$openssl" x509 -in "$temporary" -noout -subject)
+issuer=$("$openssl" x509 -in "$temporary" -noout -issuer)
+if [ "${subject#subject=}" != "${issuer#issuer=}" ]; then
+  echo "The last certificate from $host is not self-signed, so it is not a root: $subject, $issuer." >&2
+  exit 1
+fi
+
+echo "Verifying $host's TLS certificate against it..."
+if ! connect -CAfile "$temporary" -verify_return_error -brief >/dev/null; then
+  echo "$host's TLS certificate does not verify against the downloaded root." >&2
+  exit 1
+fi
+
+mv "$temporary" "$certificate"
+trap - EXIT
+echo "Saved $certificate:"
+"$openssl" x509 -in "$certificate" -noout -subject -issuer -dates

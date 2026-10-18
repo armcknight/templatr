@@ -1,0 +1,10 @@
+# Copy to .envrc, fill in the values, and run `direnv allow`. .envrc is ignored
+# by git; never commit a value. Each value is in the owner's Keychain, under the
+# item named after it.
+
+# The Supabase database's pooled connection string (session mode, port 5432),
+# with ?sslmode=require. `make server status-diff` and `make server refresh-ca`
+# read it. The server reads it as a Fly secret, not from here; local runs use
+# the local database.
+# Keychain: superlinear.supabase.{{inputs.project_ref}}.database-url
+export DATABASE_URL='postgres://postgres.{{inputs.project_ref}}:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres?sslmode=require'
