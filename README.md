@@ -31,6 +31,8 @@ make/                              Makefile fragments
 schema/component.schema.json       the manifest's JSON Schema, for editors
 schema/check-report.schema.json    the format of `templatr check --json`
 Package.swift                      the libraries and the commands
+Makefile                           the templatr command's builds and releases
+CHANGELOG.md                       the templatr command's changes
 Sources/ComponentManifest/         the manifest's types and the checks
 Sources/validate-components/       the validator command
 Sources/Templatr/                  the library that sets projects up
@@ -42,6 +44,8 @@ Tests/TemplatrTests/               the Templatr library's tests
 ## Releases
 
 Releases are tags: `v1`, `v1.1`, `v2`. Projects refer to a tag — in `import_from_git(branch: "v1")` and `TEMPLATES_TAG = v1` — never to `main`. The workflows from armcknight/workflows are called at its major tag, such as `@4`, never `@main`. A change that a project must act on, such as a renamed input, a new required secret or a lane that behaves differently, takes a new major version.
+
+The `templatr` command has releases of its own, with three-part tags such as `0.1.0`, and its changes are in [CHANGELOG.md](CHANGELOG.md). `make patch`, `make minor` or `make major` bumps the version in `Sources/TemplatrCLI/Version.swift` and commits it. `make deploy` moves the changelog's `[Unreleased]` section into a section for the version, tags the commit, pushes, and makes a GitHub release; `make deploy-beta` does the same for a release candidate, such as `0.1.0-RC1`. `make help` lists the targets. vrsn and prepare-release come from the armcknight/tools cask. A component is never pinned to one of these tags, as `templatr` reads only the `v*` tags.
 
 ## Shared pieces
 
@@ -243,7 +247,7 @@ The exit status is 0 when nothing is left to do, 1 when the report lists somethi
 
 The package builds on macOS and Linux. [TOMLKit](https://github.com/LebJe/TOMLKit) parses the TOML, and [Yams](https://github.com/jpsim/Yams) the YAML.
 
-superlinear uses the library at a release tag. The tags are not three-part versions, so a `Package.swift` pins one as a revision:
+superlinear uses the library at a component release tag. The `v*` tags are not three-part versions, so a `Package.swift` pins one as a revision:
 
 ```swift
 .package(url: "https://github.com/armcknight/templatr", revision: "v1")
