@@ -29,7 +29,8 @@ jobs:
 
   # The linear-workspace component's script is JavaScript for Automation, and
   # its tests run it against a fake Linear API: they run only on macOS, as
-  # superlinear does.
+  # superlinear does. The apple-app component's match-certificates package
+  # reads certificates with the Security framework, so it builds only on macOS.
   test-macos:
     runs-on: macos-15
     steps:
@@ -37,6 +38,9 @@ jobs:
 
       - name: Test
         run: swift test
+
+      - name: Test the match-certificates package
+        run: swift test --package-path components/apple-app/match-certificates
 
   links:
     runs-on: ubuntu-latest

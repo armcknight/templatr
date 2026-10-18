@@ -25,6 +25,7 @@ components/<name>/component.toml   the manifest
 components/<name>/scaffold/        files copied one time into a project, at the paths they have there
 components/<name>/CLAUDE.md        conventions for agents, included by projects
 components/<name>/bin/             scripts the manifest's steps run
+components/apple-app/match-certificates/  the Swift package that bin/list-match-certificates builds and runs
 .github/workflows/ci.yml           this repository's own CI
 fastlane/                          shared lanes, imported with import_from_git
 make/                              Makefile fragments
@@ -58,7 +59,7 @@ The `templatr` command has releases of its own, with three-part tags such as `0.
 | [make/apple-app.mk](make/apple-app.mk) | make | apple-app | The `apple-app-test` and `apple-app-deploy-beta` targets for every platform, `apple-app-<platform>-test` and `apple-app-<platform>-deploy-beta` for each, `apple-app-ios-stage`, and `apple-app-patch`, `apple-app-minor` and `apple-app-major`, which `apple/component.mk` runs as `make apple <command>` and `make apple <platform> <command>`. |
 | [components/apple-app/scaffold/apple/Brewfile](components/apple-app/scaffold/apple/Brewfile) | brewfile | apple-app | The tools the lanes use. |
 | [components/apple-app/bin/check-app-store-connect](components/apple-app/bin/check-app-store-connect) | script | apple-app | Checks the app record and its tester group in App Store Connect. |
-| [components/apple-app/bin/list-match-certificates](components/apple-app/bin/list-match-certificates) | script | apple-app | Lists the certificates and profiles in the fastlane match repository, with their expiry dates. |
+| [components/apple-app/bin/list-match-certificates](components/apple-app/bin/list-match-certificates) | script | apple-app | Lists the certificates and profiles in the fastlane match repository, with their expiry dates. It builds and runs the `list-match-certificates` command of the Swift package in [components/apple-app/match-certificates](components/apple-app/match-certificates), so its first run takes longer. |
 | [components/apple-app/bin/check-shared-lanes](components/apple-app/bin/check-shared-lanes) | script | apple-app | Checks that `fastlane/Fastfile` uses the shared lanes. |
 | [armcknight/workflows: vapor-ci.yml](https://github.com/armcknight/workflows/blob/4/.github/workflows/vapor-ci.yml) | workflow | vapor-fly | Builds and tests the package on Linux in the swift image on each pull request, and builds the Docker image. |
 | [armcknight/workflows: fly-deploy.yml](https://github.com/armcknight/workflows/blob/4/.github/workflows/fly-deploy.yml) | workflow | vapor-fly | Deploys the default branch's tip to Fly with its `GIT_SHA`, by hand or on a merge, then waits for the health check to answer. |
@@ -171,7 +172,7 @@ Sections of the superlinear guide that explain the component, each with a `title
 
 ### `certificates`
 
-Optional. Signing certificates, provisioning profiles and other files that stop working on a date. Each has an `id`, a `description`, a `list` command — a shell command, run in the component's `directory`, or at the repository root when it has none, that prints one line for each certificate: its expiry as an ISO 8601 date and time, such as `2027-03-01T12:00:00Z`, a tab, and its name — and `renew`, the human step to replace one, as `{ text = "…", twoFactor = true }`. `templatr check` reports each one that expires within 30 days, or has expired, with the `renew` text. A `list` command that exits with a status other than 0, or prints a line in another form, is reported as an error. The `apple-app` component lists the certificates and profiles in the fastlane match repository with [components/apple-app/bin/list-match-certificates](components/apple-app/bin/list-match-certificates), which decrypts them in memory with `MATCH_PASSWORD`.
+Optional. Signing certificates, provisioning profiles and other files that stop working on a date. Each has an `id`, a `description`, a `list` command — a shell command, run in the component's `directory`, or at the repository root when it has none, that prints one line for each certificate: its expiry as an ISO 8601 date and time, such as `2027-03-01T12:00:00Z`, a tab, and its name — and `renew`, the human step to replace one, as `{ text = "…", twoFactor = true }`. `templatr check` reports each one that expires within 30 days, or has expired, with the `renew` text. A `list` command that exits with a status other than 0, or prints a line in another form, is reported as an error. The `apple-app` component lists the certificates and profiles in the fastlane match repository with [components/apple-app/bin/list-match-certificates](components/apple-app/bin/list-match-certificates), which runs the Swift package in [components/apple-app/match-certificates](components/apple-app/match-certificates). It decrypts them in memory with `MATCH_PASSWORD`.
 
 ```toml
 [[certificates]]
