@@ -180,10 +180,18 @@ import Testing
     }
 
     @Test func versions() {
-        #expect(Version.isOlder("v1", than: "v1.1"))
-        #expect(!Version.isOlder("v1.0", than: "v1"))
-        #expect(Version.isOlder("v9", than: "v10"))
-        #expect(Version.newest(of: ["v1", "v10", "v9", "main"]) == "v10")
+        #expect(Version.parts("v1.1.0") == [1, 1, 0])
+        #expect(Version.parts("v1.1.0-RC1") == nil)
+        #expect(Version.parts("1.1.0") == nil)
+        #expect(Version.isAlias("v1"))
+        #expect(!Version.isAlias("v1.0.1"))
+        #expect(Version.isBehind("v1", "v2"))
+        #expect(Version.isBehind("v1.0.1", "v2"))
+        #expect(!Version.isBehind("v1", "v1"))
+        #expect(!Version.isBehind("v1.0.1", "v1"))
+        #expect(!Version.isBehind("v2", "v1"))
+        #expect(Version.newest(of: ["v1", "v10", "v9", "v10.0.1", "main"]) == "v10")
+        #expect(Version.newest(of: ["v1.0.0", "v1.1.0"]) == nil)
     }
 
     @Test func placeholdersAreQuotedInCommands() {

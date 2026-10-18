@@ -191,6 +191,25 @@ import Testing
         #expect(report.brokenLinks == [BrokenLink(file: "README.md", link: "docs/gone.md")])
     }
 
+    @Test func aFullTagInTheSameMajorIsNotAnOldTag() async throws {
+        _ = try await bootstrap(setSecret: setEverySecret)
+        let tags = TagList("v1\nv1.0.0\nv1.0.1\nv2.0.0-RC1\n0.1.0\n")
+        let checkout = try Templates.checkout(at: templates.root, tag: nil, runner: tags)
+        #expect(checkout.tag == "v1")
+        #expect(checkout.tags == ["v1"])
+        #expect(try Templates.checkout(at: templates.root, tag: "v1.0.1", runner: tags).tag == "v1.0.1")
+
+        let report = try await Bootstrapper(templates: checkout, services: stubs.services()).check(repository: project.root)
+        #expect(report.oldTags.isEmpty)
+        #expect(report.components == [ComponentStatus(name: "demo", tag: "v1", newestTag: "v1")])
+    }
+
+    @Test func aCheckoutWithoutAnAliasNeedsATag() throws {
+        #expect(throws: TemplatrError.self) {
+            try Templates.checkout(at: templates.root, tag: nil, runner: TagList("v1.0.0\n"))
+        }
+    }
+
     @Test func checkReportsCertificatesThatExpireWithin30Days() async throws {
         let formatter = ISO8601DateFormatter()
         func date(days: Double) -> String { formatter.string(from: stubs.now.addingTimeInterval(days * 86_400)) }
@@ -287,5 +306,18 @@ import Testing
         )
         #expect(result.report.errors == ["No component matches this repository."])
         #expect(empty.snapshot().isEmpty)
+    }
+}
+
+/// Answers `git tag --list` with `tags`.
+struct TagList: CommandRunner {
+    var tags: String
+
+    init(_ tags: String) {
+        self.tags = tags
+    }
+
+    func run(_ arguments: [String], input: Data?, in directory: URL?) throws -> CommandResult {
+        CommandResult(status: 0, output: Data(tags.utf8), error: Data())
     }
 }

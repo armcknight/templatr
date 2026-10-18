@@ -155,7 +155,7 @@ public struct Bootstrapper: Sendable {
 
     /// What `repository` still needs, without changing anything: the steps'
     /// checks, missing secrets by name, secrets due for a new value,
-    /// certificates near their expiry, components behind the newest tag, and
+    /// certificates near their expiry, components behind the newest alias, and
     /// README links that no longer resolve.
     public func check(repository: URL) async throws -> Report {
         let repository = repository.standardizedFileURL
@@ -202,7 +202,7 @@ public struct Bootstrapper: Sendable {
             }
         }
         if let newest = Version.newest(of: templates.tags) {
-            for resolved in components where Version.isOlder(resolved.tag, than: newest) {
+            for resolved in components where Version.isBehind(resolved.tag, newest) {
                 report.oldTags.append(OldTag(component: resolved.component.name, tag: resolved.tag, newest: newest))
             }
         }

@@ -2,13 +2,15 @@ import ComponentManifest
 import Foundation
 
 /// A checkout of the templatr repository: its components, the tag that new
-/// projects are pinned to, and the tags it has.
+/// projects are pinned to, and the major-version aliases it has.
 public struct Templates: Sendable {
     /// The checkout's root, which `{{templates}}` stands for.
     public var root: URL
     /// The tag that a component is pinned to when it is first recorded.
     public var tag: String
-    /// Every release tag, to find components behind the newest one.
+    /// The major-version aliases, such as `v1` and `v2`, to find components
+    /// behind the newest one. The full tags, such as `v1.0.1`, are not here:
+    /// a project pinned to `v1` gets them through the alias.
     public var tags: [String]
 
     public static let repository = "armcknight/templatr"
@@ -20,15 +22,15 @@ public struct Templates: Sendable {
         self.tags = tags
     }
 
-    /// The checkout at `root`, with its tags from git. `tag` defaults to its
-    /// newest tag.
-    /// - Throws: `TemplatrError` when there is no tag and none is given.
+    /// The checkout at `root`, with its aliases from git. `tag` defaults to
+    /// its newest alias; a full tag, such as `v1.0.1`, may be given.
+    /// - Throws: `TemplatrError` when there is no alias and no tag is given.
     public static func checkout(at root: URL, tag: String?, runner: any CommandRunner) throws -> Templates {
         let result = try? runner.run(["git", "-C", root.path, "tag", "--list", "v*"], input: nil, in: nil)
         let tags = (result?.succeeded ?? false)
-            ? result!.text.split(whereSeparator: \.isNewline).map(String.init) : []
+            ? result!.text.split(whereSeparator: \.isNewline).map(String.init).filter(Version.isAlias) : []
         guard let tag = tag ?? Version.newest(of: tags) else {
-            throw TemplatrError("\(root.path) has no v* tag to pin components to; give one with --tag")
+            throw TemplatrError("\(root.path) has no v<major> tag, such as v1, to pin components to; give one with --tag")
         }
         return Templates(root: root, tag: tag, tags: tags)
     }
@@ -116,27 +118,33 @@ public struct TemplatrError: Error, CustomStringConvertible, Sendable {
     }
 }
 
-/// Release tags, as `v1`, `v1.1` or `2`.
+/// Release tags: the full tags, as `v1.0.0` or `v1.1.0-RC1`, and the
+/// major-version aliases that projects are pinned to, as `v1`.
 enum Version {
-    /// The numbers in `tag`, or `nil` when it is not a version.
+    /// The numbers in `tag`, or `nil` when it is not a `v` tag. A prerelease
+    /// suffix, as in `v1.1.0-RC1`, is not a version.
     static func parts(_ tag: String) -> [Int]? {
-        let digits = tag.hasPrefix("v") ? tag.dropFirst() : Substring(tag)
-        let parts = digits.split(separator: ".", omittingEmptySubsequences: false).map { Int($0) }
+        guard tag.hasPrefix("v") else { return nil }
+        let parts = tag.dropFirst().split(separator: ".", omittingEmptySubsequences: false).map { Int($0) }
         guard !parts.isEmpty, parts.allSatisfy({ $0 != nil }) else { return nil }
         return parts.compactMap { $0 }
     }
 
-    /// Whether `lhs` is an older version than `rhs`; missing parts are 0.
-    static func isOlder(_ lhs: String, than rhs: String) -> Bool {
-        guard let left = parts(lhs), let right = parts(rhs) else { return false }
-        for index in 0..<max(left.count, right.count) {
-            let (a, b) = (index < left.count ? left[index] : 0, index < right.count ? right[index] : 0)
-            if a != b { return a < b }
-        }
-        return false
+    /// Whether `tag` is a major-version alias, such as `v1`.
+    static func isAlias(_ tag: String) -> Bool {
+        parts(tag)?.count == 1
     }
 
+    /// Whether a component pinned to `tag` is behind the alias `newest`: its
+    /// major version is older. `v1` and `v1.0.1` are both behind `v2`, and
+    /// neither is behind `v1`.
+    static func isBehind(_ tag: String, _ newest: String) -> Bool {
+        guard let pinned = parts(tag)?.first, let alias = parts(newest)?.first else { return false }
+        return pinned < alias
+    }
+
+    /// The newest alias in `tags`.
     static func newest(of tags: [String]) -> String? {
-        tags.filter { parts($0) != nil }.max { isOlder($0, than: $1) }
+        tags.filter(isAlias).max { parts($0)![0] < parts($1)![0] }
     }
 }

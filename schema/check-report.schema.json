@@ -21,7 +21,7 @@
         "properties": {
           "name": { "type": "string" },
           "tag": { "type": "string" },
-          "newestTag": { "type": "string", "description": "The templatr checkout's newest tag, when it has tags." }
+          "newestTag": { "type": "string", "description": "The templatr checkout's newest major-version alias, such as v2, when it has one." }
         }
       }
     },
@@ -158,7 +158,7 @@
       }
     },
     "oldTags": {
-      "description": "Components pinned to a tag older than the templatr checkout's newest.",
+      "description": "Components pinned to an older major version than the templatr checkout's newest alias, such as v1 when v2 exists.",
       "type": "array",
       "items": {
         "type": "object",

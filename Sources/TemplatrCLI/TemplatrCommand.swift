@@ -30,7 +30,7 @@ struct TemplatrCommand: AsyncParsableCommand {
         @Option(help: ArgumentHelp("A checkout of armcknight/templatr. This checkout by default.", valueName: "dir"))
         var templates: String?
 
-        @Option(help: "The tag new components are pinned to. The checkout's newest v* tag by default.")
+        @Option(help: "The tag new components are pinned to. The checkout's newest alias, such as v1, by default.")
         var tag: String?
 
         var repositoryURL: URL {
@@ -209,7 +209,7 @@ struct TemplatrCommand: AsyncParsableCommand {
         section("Certificates that expire within 30 days, or have expired:", report.certificateExpiries.map {
             "\($0.component)/\($0.id): \($0.name), expires \(dates.string(from: $0.expires))\($0.twoFactor ? " (renewing needs two-factor)" : "")\n    \($0.text)"
         })
-        section("Components behind the newest tag:", report.oldTags.map { "\($0.component) at \($0.tag); the newest is \($0.newest)" })
+        section("Components behind the newest alias:", report.oldTags.map { "\($0.component) at \($0.tag); the newest is \($0.newest)" })
         section("Broken links:", report.brokenLinks.map { "\($0.file): \($0.link)" })
         section("Errors:", report.errors)
         if report.isClean {
