@@ -15,3 +15,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `templatr --version` prints the version.
 - `make patch`, `minor` and `major` bump the version, and `make deploy` and
   `make deploy-beta` tag a release and make its GitHub release.
+- A `detect` or `infer` rule with `root = true` reads from the repository root
+  instead of the component's directory, so that a component can be detected
+  and its inputs found from another part of the project.

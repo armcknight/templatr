@@ -21,9 +21,9 @@ struct DecodingTests {
     @Test func theDemoManifestDecodes() throws {
         let decoded = try Manifest(toml: manifest)
         #expect(decoded.name == "demo")
-        #expect(decoded.detect?.all == [DetectRule(glob: "fly.toml", contains: nil)])
-        #expect(decoded.detect?.any == [DetectRule(glob: "Package.swift", contains: "vapor")])
-        #expect(decoded.inputs[0].infer == [InferRule(from: .toml(file: "fly.toml", key: "app"), map: nil)])
+        #expect(decoded.detect?.all == [DetectRule(glob: "fly.toml", contains: nil, root: false)])
+        #expect(decoded.detect?.any == [DetectRule(glob: "Package.swift", contains: "vapor", root: false)])
+        #expect(decoded.inputs[0].infer == [InferRule(from: .toml(file: "fly.toml", key: "app"), map: nil, root: false)])
         #expect(decoded.inputs[1].infer?[0].from == .regex(glob: "fly.toml", pattern: #"primary_region = "([a-z]+)""#))
         #expect(decoded.secrets[0].source == .keychain(item: "demo.fly-token"))
         #expect(decoded.secrets[0].scope == .app)
@@ -40,6 +40,23 @@ struct DecodingTests {
         let decoded = try Manifest(toml: manifest)
         let again = try Manifest(toml: decoded.toml())
         #expect(again == decoded)
+    }
+
+    @Test func aRootRuleDecodesAndRoundTrips() throws {
+        let toml = manifest
+            .replacingOccurrences(
+                of: #"{ glob = "Package.swift", contains = "vapor" }"#,
+                with: #"{ glob = "server/Package.swift", contains = "vapor", root = true }"#
+            )
+            .replacingOccurrences(
+                of: #"{ from = "toml", file = "fly.toml", key = "app" }"#,
+                with: #"{ from = "toml", file = "server/fly.toml", key = "app", root = true }"#
+            )
+        let decoded = try Manifest(toml: toml)
+        #expect(decoded.detect?.any == [DetectRule(glob: "server/Package.swift", contains: "vapor", root: true)])
+        #expect(decoded.detect?.all == [DetectRule(glob: "fly.toml", contains: nil, root: false)])
+        #expect(decoded.inputs[0].infer == [InferRule(from: .toml(file: "server/fly.toml", key: "app"), map: nil, root: true)])
+        #expect(try Manifest(toml: decoded.toml()) == decoded)
     }
 
     @Test func thisRepositoryDecodesAndRoundTrips() throws {

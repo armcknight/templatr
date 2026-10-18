@@ -214,7 +214,7 @@ struct DetectionTests {
         try repository.write("fly.toml", "primary_region = \"sea\"\n")
         let input = Input(
             name: "region", description: "The region.", example: "sjc", defaultValue: nil,
-            infer: [InferRule(from: .toml(file: "fly.toml", key: "primary_region"), map: ["sea": "sjc"])]
+            infer: [InferRule(from: .toml(file: "fly.toml", key: "primary_region"), map: ["sea": "sjc"], root: false)]
         )
         #expect(Detection(root: repository.root).value(of: input) == "sjc")
     }
@@ -222,7 +222,7 @@ struct DetectionTests {
     @Test func buildSettingIsNotRead() {
         let input = Input(
             name: "name", description: "The name.", example: "x", defaultValue: "x",
-            infer: [InferRule(from: .buildSetting(key: "PRODUCT_NAME"), map: nil)]
+            infer: [InferRule(from: .buildSetting(key: "PRODUCT_NAME"), map: nil, root: false)]
         )
         #expect(Detection(root: repository.root).value(of: input) == "x")
     }

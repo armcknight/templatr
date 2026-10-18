@@ -84,7 +84,7 @@
       "required": ["glob"],
       "properties": {
         "glob": {
-          "description": "A path glob, relative to the repository root. `**` matches any number of directories.",
+          "description": "A path glob, relative to the component's `directory`, or to the repository root when it has none or with `root`. `**` matches any number of directories.",
           "type": "string",
           "minLength": 1
         },
@@ -92,6 +92,10 @@
           "description": "A regular expression that the contents of at least one matching file must match.",
           "type": "string",
           "minLength": 1
+        },
+        "root": {
+          "description": "Whether `glob` is relative to the repository root instead of the component's `directory`, to read another part of the project. Only for a component with a `directory`.",
+          "type": "boolean"
         }
       }
     },
@@ -114,6 +118,10 @@
           "items": { "$ref": "#/$defs/inferRule" }
         }
       }
+    },
+    "inferRoot": {
+      "description": "Whether the file or glob is relative to the repository root instead of the component's `directory`, to read another part of the project. Only for a component with a `directory`.",
+      "type": "boolean"
     },
     "inferRule": {
       "type": "object",
@@ -145,6 +153,7 @@
             "from": { "const": "fastlane-config" },
             "file": { "type": "string", "minLength": 1 },
             "key": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+            "root": { "$ref": "#/$defs/inferRoot" },
             "map": true
           },
           "required": ["file", "key"],
@@ -156,6 +165,7 @@
             "from": { "const": "toml" },
             "file": { "type": "string", "minLength": 1 },
             "key": { "type": "string", "minLength": 1 },
+            "root": { "$ref": "#/$defs/inferRoot" },
             "map": true
           },
           "required": ["file", "key"],
@@ -168,6 +178,7 @@
             "file": { "type": "string", "minLength": 1 },
             "key": { "type": "string", "minLength": 1 },
             "separator": { "type": "string", "minLength": 1 },
+            "root": { "$ref": "#/$defs/inferRoot" },
             "map": true
           },
           "required": ["file", "key"],
@@ -181,6 +192,7 @@
             "contains": { "type": "string", "minLength": 1 },
             "exists": { "type": "boolean" },
             "stem": { "type": "boolean" },
+            "root": { "$ref": "#/$defs/inferRoot" },
             "map": true
           },
           "required": ["glob"],
@@ -192,6 +204,7 @@
             "from": { "const": "regex" },
             "glob": { "type": "string", "minLength": 1 },
             "pattern": { "type": "string", "minLength": 1 },
+            "root": { "$ref": "#/$defs/inferRoot" },
             "map": true
           },
           "required": ["glob", "pattern"],
