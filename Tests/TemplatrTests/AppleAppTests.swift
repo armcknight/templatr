@@ -108,6 +108,18 @@ import Testing
         #expect(resolution.components.last?.values["scheme"] == "Common")
     }
 
+    /// A submodule's xcconfig, which comes first by depth and name, is not the
+    /// app's.
+    @Test func theXcconfigIsNotInASubmodule() throws {
+        try project.write("ios/Kit/Kit.xcconfig", "MARKETING_VERSION = 9.9\n")
+        for arguments in [["init", "--quiet"], ["update-index", "--add", "--cacheinfo", "160000,\(String(repeating: "1", count: 40)),ios/Kit"]] {
+            let result = try ProcessRunner().run(["git", "-C", project.root.path] + arguments, input: nil, in: nil)
+            try #require(result.succeeded, "\(result.transcript)")
+        }
+        let resolution = try bootstrapper.resolve(repository: project.root, answers: [:])
+        #expect(resolution.components.last?.values["xcconfig"] == "config/Demo.xcconfig")
+    }
+
     @Test func aRecordedValueIsNotInferredAgain() throws {
         try project.write(Record.fileName, """
             [components.apple-app]
