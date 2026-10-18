@@ -1,0 +1,76 @@
+name = "github-repo"
+description = "A repository on GitHub whose pull requests are squashed when they merge, and whose default branch cannot be deleted or force-pushed except by the owner."
+
+inputs = []
+secrets = []
+
+# A .github directory. Whether a repository is on GitHub is not in its files:
+# its remote is in .git, which is not searched. Each project that superlinear
+# works on is on GitHub, and the other components' scaffolds give it a .github
+# directory.
+[detect]
+all = [{ glob = ".github" }]
+
+[[steps]]
+id = "gh-cli"
+description = "The GitHub CLI is installed."
+check = "command -v gh >/dev/null"
+fix = "brew install gh"
+
+[[steps]]
+id = "gh-auth"
+description = "The GitHub CLI is logged in."
+check = "gh auth status >/dev/null 2>&1"
+fix = { human = { text = "Run `gh auth login` on this Mac, as the owner of the repository." } }
+
+[[steps]]
+id = "github-remote"
+description = "The repository is on GitHub, and the logged-in user can administer it."
+check = "gh repo view --json viewerPermission --jq .viewerPermission 2>/dev/null | grep -qx ADMIN"
+fix = { human = { text = "Push the repository to GitHub, with a remote that points to it, and run `gh auth login` as its owner or as an admin of it." } }
+
+[[steps]]
+id = "merge-options"
+description = "Pull requests merge only by squashing, with the pull request's title as the commit's title; GitHub offers to update a pull request's branch, and deletes the branch after a merge."
+check = "{{templates}}/components/github-repo/bin/check-merge-options"
+fix = "gh api --method PATCH 'repos/{owner}/{repo}' -F allow_squash_merge=true -F allow_merge_commit=false -F allow_rebase_merge=false -f squash_merge_commit_title=PR_TITLE -F allow_update_branch=true -F delete_branch_on_merge=true >/dev/null"
+
+[[steps]]
+id = "default-branch-protection"
+description = "A ruleset stops the default branch from being deleted or force-pushed, and the repository's admins, who include the owner, can always bypass it."
+check = "{{templates}}/components/github-repo/bin/check-default-branch-protection"
+fix = "{{templates}}/components/github-repo/bin/protect-default-branch"
+
+[[shared]]
+kind = "script"
+path = "components/github-repo/bin/check-merge-options"
+version = "v1"
+description = "Checks that pull requests merge only by squashing, titled with the pull request's title, that branches can be updated, and that they are deleted after a merge."
+
+[[shared]]
+kind = "script"
+path = "components/github-repo/bin/check-default-branch-protection"
+version = "v1"
+description = "Checks that a ruleset that the owner can bypass stops the default branch from being deleted or force-pushed."
+
+[[shared]]
+kind = "script"
+path = "components/github-repo/bin/protect-default-branch"
+version = "v1"
+description = "Makes or updates the Default branch ruleset, which stops the default branch from being deleted or force-pushed, with a bypass for the repository's admins."
+
+[[docs]]
+title = "Components"
+anchor = "bootstrap.md#components"
+
+[[docs]]
+title = "bootstrap --check"
+anchor = "bootstrap.md#bootstrap-check"
+
+[[docs]]
+title = "The pull request"
+anchor = "lifecycle.md#pull-request"
+
+[[docs]]
+title = "The merge"
+anchor = "lifecycle.md#merge"

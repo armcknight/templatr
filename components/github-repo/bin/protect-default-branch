@@ -1,0 +1,32 @@
+#!/bin/sh
+# Usage: protect-default-branch
+#
+# Makes, or replaces the rules of, the ruleset "Default branch" in the GitHub
+# repository of the current directory: the default branch cannot be deleted or
+# force-pushed, and the repository's admins, which include the owner of a
+# personal repository, can always bypass it. Other rulesets are not changed.
+
+name="Default branch"
+
+if ! id=$(gh api 'repos/{owner}/{repo}/rulesets' --paginate --jq ".[] | select(.name == \"$name\" and .source_type == \"Repository\") | .id"); then
+  echo "Could not list the rulesets." >&2
+  exit 1
+fi
+
+ruleset=$(cat <<JSON
+{
+  "name": "$name",
+  "target": "branch",
+  "enforcement": "active",
+  "conditions": { "ref_name": { "include": ["~DEFAULT_BRANCH"], "exclude": [] } },
+  "rules": [{ "type": "deletion" }, { "type": "non_fast_forward" }],
+  "bypass_actors": [{ "actor_id": 5, "actor_type": "RepositoryRole", "bypass_mode": "always" }]
+}
+JSON
+)
+
+if [ -n "$id" ]; then
+  printf '%s\n' "$ruleset" | gh api --method PUT "repos/{owner}/{repo}/rulesets/$id" --input - >/dev/null
+else
+  printf '%s\n' "$ruleset" | gh api --method POST 'repos/{owner}/{repo}/rulesets' --input - >/dev/null
+fi
