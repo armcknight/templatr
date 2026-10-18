@@ -1,0 +1,15 @@
+#!/bin/sh
+# Usage: check-rulesets-available
+#
+# Exits 1 when GitHub does not offer rulesets for the repository of the current
+# directory, which is so for a private repository of an account on the free
+# plan. Exits 0 otherwise, also when the rules cannot be read for another
+# reason: check-default-branch-protection reports that.
+
+branch=$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name 2>/dev/null) || exit 0
+[ -n "$branch" ] || exit 0
+
+if gh api "repos/{owner}/{repo}/rules/branches/$branch" 2>&1 >/dev/null | grep -q 'Upgrade to GitHub Pro or make this repository public'; then
+  echo "GitHub offers no rulesets for this private repository on the free plan." >&2
+  exit 1
+fi

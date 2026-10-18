@@ -6,6 +6,9 @@
 # repository's admins, which include the owner of a personal repository, or the
 # organization's admins can always bypass. Classic branch protection does not
 # count: it cannot let the owner bypass those two rules.
+#
+# Also exits 0 when GitHub offers no rulesets for the repository, a private one
+# on the free plan: check-rulesets-available reports that.
 
 if ! branch=$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name) || [ -z "$branch" ]; then
   echo "Could not read the default branch." >&2
@@ -13,8 +16,17 @@ if ! branch=$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name) 
 fi
 
 # The active rules for the branch, from every ruleset, as "<type> <ruleset ID>".
+errors=$(mktemp)
+trap 'rm -f "$errors"' EXIT
 if ! rules=$(gh api "repos/{owner}/{repo}/rules/branches/$branch" --paginate \
-  --jq '.[] | select(.type == "deletion" or .type == "non_fast_forward") | "\(.type) \(.ruleset_id)"'); then
+  --jq '.[] | select(.type == "deletion" or .type == "non_fast_forward") | "\(.type) \(.ruleset_id)"' 2>"$errors"); then
+  # A private repository on the free plan has no rulesets, so nothing here can
+  # pass or be fixed: the rulesets-available step reports it to a person.
+  if grep -q 'Upgrade to GitHub Pro or make this repository public' "$errors"; then
+    echo "GitHub offers no rulesets for this private repository on the free plan; skipped." >&2
+    exit 0
+  fi
+  cat "$errors" >&2
   echo "Could not read the rules for $branch." >&2
   exit 1
 fi
