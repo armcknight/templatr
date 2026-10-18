@@ -42,6 +42,7 @@ import Testing
         #expect(try shell(check).succeeded)
 
         let spec = try #require(project.read("apple/project.yml"))
+        #expect(!spec.contains("@"), "A template placeholder is left in the spec.")
         #expect(spec.contains("name: \"Demo\"\n"))
         #expect(spec.components(separatedBy: "supportedDestinations: [iOS, macOS]\n").count == 3)
         #expect(spec.contains("  deploymentTarget:\n    iOS: \"18.0\"\n    macOS: \"15.0\"\n"))

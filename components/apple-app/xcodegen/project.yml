@@ -1,0 +1,43 @@
+# The XcodeGen spec of the app's one Xcode project, @PROJECT@. The
+# make commands run xcodegen before each build. Each target builds for every
+# platform in APPLE_APP_PLATFORMS in component.mk: add a platform to both.
+name: @NAME@
+options:
+  deploymentTarget:
+@DEPLOYMENT_TARGETS@
+configFiles:
+  Debug: @XCCONFIG@
+  Release: @XCCONFIG@
+settings:
+  base:
+    DEVELOPMENT_TEAM: @TEAM_ID@
+targets:
+  @SCHEME@:
+    type: application
+    supportedDestinations: @DESTINATIONS@
+    sources:
+      - @SCHEME@
+    settings:
+      base:
+        PRODUCT_NAME: @APP_NAME@
+        PRODUCT_BUNDLE_IDENTIFIER: @BUNDLE_ID@
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+    scheme:
+      testTargets:
+        - @TEST_SCHEME@
+  @TEST_SCHEME@:
+    type: bundle.unit-test
+    supportedDestinations: @DESTINATIONS@
+    sources:
+      - @TEST_SCHEME@
+    dependencies:
+      - target: @SCHEME@
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: @TEST_BUNDLE_ID@
+        GENERATE_INFOPLIST_FILE: YES
+        # The app's product name is not its target's name, and a Mac app's
+        # executable is in Contents/MacOS.
+        TEST_HOST: @TEST_HOST@
+        TEST_HOST[sdk=macosx*]: @MAC_TEST_HOST@

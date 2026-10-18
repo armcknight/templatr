@@ -12,7 +12,10 @@
 # It also writes the files the spec needs: the xcconfig with MARKETING_VERSION
 # and CURRENT_PROJECT_VERSION, a SwiftUI app in <scheme>/, and a test in
 # <scheme>Tests/. It changes no file that exists, and writes nothing when
-# project.yml exists.
+# project.yml exists. The files come from the templates in ../xcodegen/, where
+# each @NAME@ placeholder is replaced with its value.
+
+templates="$(cd "$(dirname "$0")/../xcodegen" && pwd)" || exit 1
 
 if [ "$#" -ne 7 ]; then
   echo "Usage: new-xcodegen-spec <app_name> <scheme> <project> <bundle_id> <team_id> <xcconfig> <platforms>" >&2
@@ -64,8 +67,8 @@ for platform in $platforms; do
     *" $destination "*) continue ;;
   esac
   destinations="${destinations:+$destinations }$destination"
-  deployment="$deployment
-    $destination: \"$version\""
+  deployment="${deployment:+$deployment
+}    $destination: \"$version\""
 done
 if [ -z "$destinations" ]; then
   echo "No platforms." >&2
@@ -78,84 +81,51 @@ quote() {
   printf '"%s"' "$(printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g')"
 }
 
-cat > project.yml <<EOF
-# The XcodeGen spec of the app's one Xcode project, $(quote "$project"). The
-# make commands run xcodegen before each build. Each target builds for every
-# platform in APPLE_APP_PLATFORMS in component.mk: add a platform to both.
-name: $(quote "$name")
-options:
-  deploymentTarget:$deployment
-configFiles:
-  Debug: $(quote "$xcconfig")
-  Release: $(quote "$xcconfig")
-settings:
-  base:
-    DEVELOPMENT_TEAM: $(quote "$team_id")
-targets:
-  $(quote "$scheme"):
-    type: application
-    supportedDestinations: $destination_list
-    sources:
-      - $(quote "$scheme")
-    settings:
-      base:
-        PRODUCT_NAME: $(quote "$app_name")
-        PRODUCT_BUNDLE_IDENTIFIER: $(quote "$bundle_id")
-        GENERATE_INFOPLIST_FILE: YES
-        INFOPLIST_KEY_UILaunchScreen_Generation: YES
-    scheme:
-      testTargets:
-        - $(quote "${scheme}Tests")
-  $(quote "${scheme}Tests"):
-    type: bundle.unit-test
-    supportedDestinations: $destination_list
-    sources:
-      - $(quote "${scheme}Tests")
-    dependencies:
-      - target: $(quote "$scheme")
-    settings:
-      base:
-        PRODUCT_BUNDLE_IDENTIFIER: $(quote "$bundle_id.tests")
-        GENERATE_INFOPLIST_FILE: YES
-        # The app's product name is not its target's name, and a Mac app's
-        # executable is in Contents/MacOS.
-        TEST_HOST: $(quote "\$(BUILT_PRODUCTS_DIR)/$app_name.app/$app_name")
-        TEST_HOST[sdk=macosx*]: $(quote "\$(BUILT_PRODUCTS_DIR)/$app_name.app/Contents/MacOS/$app_name")
-EOF
+# Writes the template $1 to $2, with each @NAME@ in it replaced with the value
+# of the environment variable NAME. The values are used as they are.
+render() {
+  awk '
+    {
+      line = $0
+      out = ""
+      while (match(line, /@[A-Z_]+@/)) {
+        key = substr(line, RSTART + 1, RLENGTH - 2)
+        out = out substr(line, 1, RSTART - 1) ENVIRON[key]
+        line = substr(line, RSTART + RLENGTH)
+      }
+      print out line
+    }
+  ' "$templates/$1" > "$2"
+}
+
+PROJECT="$(quote "$project")" \
+NAME="$(quote "$name")" \
+DEPLOYMENT_TARGETS="$deployment" \
+XCCONFIG="$(quote "$xcconfig")" \
+TEAM_ID="$(quote "$team_id")" \
+SCHEME="$(quote "$scheme")" \
+TEST_SCHEME="$(quote "${scheme}Tests")" \
+DESTINATIONS="$destination_list" \
+APP_NAME="$(quote "$app_name")" \
+BUNDLE_ID="$(quote "$bundle_id")" \
+TEST_BUNDLE_ID="$(quote "$bundle_id.tests")" \
+TEST_HOST="$(quote "\$(BUILT_PRODUCTS_DIR)/$app_name.app/$app_name")" \
+MAC_TEST_HOST="$(quote "\$(BUILT_PRODUCTS_DIR)/$app_name.app/Contents/MacOS/$app_name")" \
+  render project.yml project.yml
 
 # The build number is CURRENT_PROJECT_VERSION, which deploy-beta raises, and
 # the generated Info.plist's CFBundleVersion is it.
 if [ ! -e "$xcconfig" ]; then
   mkdir -p "$(dirname "$xcconfig")"
-  cat > "$xcconfig" <<EOF
-MARKETING_VERSION = 1.0
-CURRENT_PROJECT_VERSION = 1
-EOF
+  cp "$templates/App.xcconfig" "$xcconfig"
 fi
 
 if [ ! -e "$scheme" ]; then
   mkdir -p "$scheme"
-  cat > "$scheme/App.swift" <<'EOF'
-import SwiftUI
-
-@main
-struct MainApp: App {
-    var body: some Scene {
-        WindowGroup {
-            Text("Hello")
-        }
-    }
-}
-EOF
+  cp "$templates/App.swift" "$scheme/App.swift"
 fi
 
 if [ ! -e "${scheme}Tests" ]; then
   mkdir -p "${scheme}Tests"
-  cat > "${scheme}Tests/Tests.swift" <<'EOF'
-import Testing
-
-@Test func runs() {
-    #expect(true)
-}
-EOF
+  cp "$templates/Tests.swift" "${scheme}Tests/Tests.swift"
 fi
