@@ -22,6 +22,6 @@ jobs:
       # The Arkana keys to write to .env. Each value comes from the repository
       # secret of the same name, through `secrets: inherit`.
       arkana-keys: "{{inputs.arkana_keys}}"
-      # The Xcode project, the Gemfile and fastlane/ are in ios/.
-      working-directory: ios
+      # The Xcode project, the Gemfile and fastlane/ are in apple/.
+      working-directory: apple
     secrets: inherit

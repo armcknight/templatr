@@ -110,6 +110,60 @@ func makeLayoutTemplates() throws -> Directory {
         #expect(resolution.components.isEmpty)
     }
 
+    @Test func rootRulesReadAnotherPartOfTheRepository() throws {
+        // A database component in db/ that a project without db/ yet has.
+        try templates.write("components/db/component.toml", """
+            name = "db"
+            description = "The db part."
+            directory = "db"
+            secrets = []
+            steps = []
+            shared = []
+            docs = [{ title = "Builds", anchor = "builds.md#ci" }]
+
+            [detect]
+            any = [
+              { glob = "component.mk" },
+              { glob = "server/Package.swift", contains = "fluent-postgres-driver", root = true },
+            ]
+
+            [[inputs]]
+            name = "app"
+            description = "The server's Fly app."
+            example = "demo"
+            infer = [{ from = "toml", file = "server/fly.toml", key = "app", root = true }]
+
+            [[inputs]]
+            name = "ref"
+            description = "The project ref."
+            example = "abcdefghijklmnopqrst"
+            infer = [
+              { from = "regex", glob = "*.toml", pattern = 'ref = "([a-z]+)"' },
+              { from = "regex", glob = ".envrc.example", pattern = 'db\\.([a-z0-9]{20})', root = true },
+            ]
+            """)
+        try templates.write("components/db/CLAUDE.md", "# db\n")
+        try templates.write("components/db/scaffold/db/README.md", "# db\n")
+        let root = try Directory()
+        try root.write("server/Package.swift", ".package(url: \"https://github.com/vapor/fluent-postgres-driver.git\")\n")
+        try root.write("server/fly.toml", "app = \"demo-server\"\n")
+        try root.write(".envrc.example", "export DATABASE_URL=postgres://db.abcdefghij0123456789.supabase.co\n")
+        let resolution = try bootstrapper.resolve(repository: root.root, answers: [:])
+        let db = try #require(resolution.components.first { $0.component.name == "db" })
+        #expect(db.values == ["app": "demo-server", "ref": "abcdefghij0123456789"])
+    }
+
+    @Test func aRuleWithoutRootDoesNotReadTheRepositoryRoot() throws {
+        try templates.write("components/api/component.toml", directoryManifest("api").replacingOccurrences(
+            of: "infer = [{ from = \"toml\", file = \"api.toml\", key = \"app\" }]",
+            with: "infer = [{ from = \"toml\", file = \"root.toml\", key = \"app\" }]"
+        ))
+        try project.write("root.toml", "app = \"from-the-root\"\n")
+        let resolution = try bootstrapper.resolve(repository: project.root, answers: [:])
+        let api = try #require(resolution.components.first { $0.component.name == "api" })
+        #expect(api.values["app"] == nil)
+    }
+
     @Test func scaffoldsAreCopiedIntoTheirDirectories() async throws {
         let result = try await bootstrap()
         #expect(result.copiedFiles.sorted() == [

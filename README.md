@@ -12,7 +12,7 @@ This repository holds no secrets: only their names and where to get them.
 
 | Component | What it sets up |
 | --- | --- |
-| [apple-app](components/apple-app) | An iOS (with an optional embedded watch app), tvOS or macOS app in `ios/`, tested on each pull request, with staging builds on demand, and uploaded to TestFlight by hand with `make ios deploy-beta`. |
+| [apple-app](components/apple-app) | An app for iOS (with an optional embedded watch app), tvOS, macOS or more than one of them, from one Xcode project in `apple/`, tested on each pull request, with staging builds on demand, and uploaded to TestFlight by hand with `make apple <platform> deploy-beta`. |
 | [base](components/base) | The root files that every project has with its other components: the Makefile that includes each component's targets, and the README.md that links to each component's README. |
 | [github-repo](components/github-repo) | A repository on GitHub whose pull requests are squashed when they merge, with their branches deleted, and whose default branch cannot be deleted or force-pushed except by the owner. |
 | [linear-workspace](components/linear-workspace) | A Linear workspace that superlinear works from: each team has an In Review state after In Progress, a Todo state, Triage, and superlinear's labels; the owner has a "superlinear proposals" view in their favorites; and no onboarding issue is open. See [The linear-workspace component](#the-linear-workspace-component). |
@@ -26,12 +26,15 @@ components/<name>/component.toml   the manifest
 components/<name>/scaffold/        files copied one time into a project, at the paths they have there
 components/<name>/CLAUDE.md        conventions for agents, included by projects
 components/<name>/bin/             scripts the manifest's steps run
+components/apple-app/match-certificates/  the Swift package that bin/list-match-certificates builds and runs
 .github/workflows/ci.yml           this repository's own CI
 fastlane/                          shared lanes, imported with import_from_git
 make/                              Makefile fragments
 schema/component.schema.json       the manifest's JSON Schema, for editors
 schema/check-report.schema.json    the format of `templatr check --json`
 Package.swift                      the libraries and the commands
+Makefile                           the templatr command's builds and releases
+CHANGELOG.md                       the templatr command's changes
 Sources/ComponentManifest/         the manifest's types and the checks
 Sources/validate-components/       the validator command
 Sources/Templatr/                  the library that sets projects up
@@ -44,6 +47,8 @@ Tests/TemplatrTests/               the Templatr library's tests
 
 Releases are tags: `v1`, `v1.1`, `v2`. Projects refer to a tag — in `import_from_git(branch: "v1")` and `TEMPLATES_TAG = v1` — never to `main`. The workflows from armcknight/workflows are called at its major tag, such as `@4`, never `@main`. A change that a project must act on, such as a renamed input, a new required secret or a lane that behaves differently, takes a new major version.
 
+The `templatr` command has releases of its own, with three-part tags such as `0.1.0`, and its changes are in [CHANGELOG.md](CHANGELOG.md). `make patch`, `make minor` or `make major` bumps the version in `Sources/TemplatrCLI/Version.swift` and commits it. `make deploy` moves the changelog's `[Unreleased]` section into a section for the version, tags the commit, pushes, and makes a GitHub release; `make deploy-beta` does the same for a release candidate, such as `0.1.0-RC1`. `make help` lists the targets. vrsn and prepare-release come from the armcknight/tools cask. A component is never pinned to one of these tags, as `templatr` reads only the `v*` tags.
+
 ## Shared pieces
 
 | Piece | Kind | Used by | What it does |
@@ -52,9 +57,10 @@ Releases are tags: `v1`, `v1.1`, `v2`. Projects refer to a tag — in `import_fr
 | [armcknight/workflows: ios-ci.yml](https://github.com/armcknight/workflows/blob/4/.github/workflows/ios-ci.yml) | workflow | apple-app | Runs the `test` lane on each pull request, and on a `/build-staging` comment the `stage` lane, with an install link. |
 | [armcknight/workflows: ota-refresh.yml](https://github.com/armcknight/workflows/blob/4/.github/workflows/ota-refresh.yml) | workflow | apple-app | Signs a staging build's install link again on a `/refresh-staging` comment, and asks for a new build when the old one is gone. |
 | [armcknight/workflows: ota-cleanup.yml](https://github.com/armcknight/workflows/blob/4/.github/workflows/ota-cleanup.yml) | workflow | apple-app | Deletes a pull request's staging builds when it closes. |
-| [make/apple-app.mk](make/apple-app.mk) | make | apple-app | The `apple-app-test`, `apple-app-stage`, `apple-app-deploy-beta`, `apple-app-patch`, `apple-app-minor` and `apple-app-major` targets, which `ios/component.mk` runs as `make ios <command>`. |
-| [components/apple-app/scaffold/ios/Brewfile](components/apple-app/scaffold/ios/Brewfile) | brewfile | apple-app | The tools the lanes use. |
+| [make/apple-app.mk](make/apple-app.mk) | make | apple-app | The `apple-app-test` and `apple-app-deploy-beta` targets for every platform, `apple-app-<platform>-test` and `apple-app-<platform>-deploy-beta` for each, `apple-app-ios-stage`, and `apple-app-patch`, `apple-app-minor` and `apple-app-major`, which `apple/component.mk` runs as `make apple <command>` and `make apple <platform> <command>`. |
+| [components/apple-app/scaffold/apple/Brewfile](components/apple-app/scaffold/apple/Brewfile) | brewfile | apple-app | The tools the lanes use. |
 | [components/apple-app/bin/check-app-store-connect](components/apple-app/bin/check-app-store-connect) | script | apple-app | Checks the app record and its tester group in App Store Connect. |
+| [components/apple-app/bin/list-match-certificates](components/apple-app/bin/list-match-certificates) | script | apple-app | Lists the certificates and profiles in the fastlane match repository, with their expiry dates. It builds and runs the `list-match-certificates` command of the Swift package in [components/apple-app/match-certificates](components/apple-app/match-certificates), so its first run takes longer. |
 | [components/apple-app/bin/check-shared-lanes](components/apple-app/bin/check-shared-lanes) | script | apple-app | Checks that `fastlane/Fastfile` uses the shared lanes. |
 | [armcknight/workflows: vapor-ci.yml](https://github.com/armcknight/workflows/blob/4/.github/workflows/vapor-ci.yml) | workflow | vapor-fly | Builds and tests the package on Linux in the swift image on each pull request, and builds the Docker image. |
 | [armcknight/workflows: fly-deploy.yml](https://github.com/armcknight/workflows/blob/4/.github/workflows/fly-deploy.yml) | workflow | vapor-fly | Deploys the default branch's tip to Fly with its `GIT_SHA`, by hand or on a merge, then waits for the health check to answer. |
@@ -105,7 +111,7 @@ The component's name, which is also its directory's name, and one sentence about
 
 ### `directory`, `blurb`, `base`
 
-`directory` is the project's subdirectory that the component's files are in, such as `server` for vapor-fly and `ios` for apple-app. It names the part's role, not its framework or how it is deployed, so that it stays right when those change, and so that a second app can have its own, such as `android`. A component has its own directory also when a project has no other component. Its `detect` and `infer` rules read files in it, and its steps run in it.
+`directory` is the project's subdirectory that the component's files are in, such as `server` for vapor-fly and `apple` for apple-app. It names the part's role, not its framework or how it is deployed, so that it stays right when those change, and so that a second app can have its own, such as `android`. A component has its own directory also when a project has no other component. Its `detect` and `infer` rules read files in it, but for those with `root = true`, and its steps run in it.
 
 `blurb` is a summary of the component's part of the project, with placeholders. `templatr bootstrap` writes it in the root README.md, with a link to the README.md in `directory`.
 
@@ -113,7 +119,7 @@ A component with `base = true` comes with every other component, so it has no `d
 
 ### Project layout
 
-Each component's scaffold has the files at the paths they have in the project: under its `directory`, such as `scaffold/server/fly.toml`, with its own `README.md`, `.gitignore` and `Brewfile` there, and its workflows in `scaffold/.github/workflows/`, each named with the component's name first, such as `vapor-fly-ci.yml`, because GitHub reads workflows only there. The tools run in the directory, or are told where it is: `fly deploy server`, `docker compose --file server/docker-compose.yml`, `cd ios && bundle exec fastlane`, and the shared workflows' `working-directory` input. No two components have a file at the same path.
+Each component's scaffold has the files at the paths they have in the project: under its `directory`, such as `scaffold/server/fly.toml`, with its own `README.md`, `.gitignore` and `Brewfile` there, and its workflows in `scaffold/.github/workflows/`, each named with the component's name first, such as `vapor-fly-ci.yml`, because GitHub reads workflows only there. The tools run in the directory, or are told where it is: `fly deploy server`, `docker compose --file server/docker-compose.yml`, `cd apple && bundle exec fastlane`, and the shared workflows' `working-directory` input. No two components have a file at the same path.
 
 The root Makefile, from the base component, has `TEMPLATES_TAG`, the rule that downloads the Makefile fragments, `help` and `templates-update`, and includes every `*/component.mk`. Each component's `component.mk` sets its values, adds its namespace to `NAMESPACES` and its fragment to `TEMPLATES_FRAGMENTS`, includes the fragment, and maps `make <namespace> <command>` to the fragment's targets, such as `make server deploy` to `vapor-fly-deploy`.
 
@@ -129,20 +135,30 @@ all = [
 ]
 ```
 
+A rule with `root = true` reads from the repository root instead, so that a component can be detected from another part of the project before its own directory exists, such as a database from the server's `Package.swift`. `root` is only for a component with a `directory`; the validator rejects it otherwise.
+
+```toml
+[detect]
+any = [
+  { glob = "component.mk" },
+  { glob = "server/Package.swift", contains = "fluent-postgres-driver", root = true },
+]
+```
+
 ### `inputs`
 
 Values that differ for each project, such as the bundle ID or the team ID. Each has a `name`, a `description`, an `example`, an optional `default`, and `infer`: where to read the value in the repository, tried in order.
 
 | `from` | Reads |
 | --- | --- |
-| `build-setting` | `key` from `xcodebuild -showBuildSettings` for the project's scheme, in the Release configuration when the project has one. |
+| `build-setting` | `key` from `xcodebuild -showBuildSettings` for the project's scheme, in the Release configuration when the project has one. With `separator`, the setting is a list separated by white space, such as `SUPPORTED_PLATFORMS`: `map` replaces each word, a value already in the list is dropped, and the values are joined with `separator`. |
 | `fastlane-config` | The first argument of the call `key` in `file`, such as `team_id("…")` in `fastlane/Appfile`. An array's values are joined with commas. |
 | `toml` | The dotted `key` in the TOML `file`, such as `app` in `fly.toml`. |
 | `yaml` | The dotted `key` in the YAML `file`, such as `global_secrets` in `.arkana.yml`. A list's values are joined with `separator`, a comma by default. |
 | `glob` | The path of the first file that matches `glob` and, with `contains`, whose contents match that regular expression; with `stem = true`, that file's name without its directory and extension; with `exists = true`, `true` or `false`. |
 | `regex` | The first capture group of `pattern` in the first file that matches `glob`. |
 
-Any rule can have `map`, which replaces the value found with the value of its key, such as `{ iphoneos = "ios" }`. An input with no `infer`, or whose value is not found and has no `default`, is asked for one time.
+Any rule can have `map`, which replaces the value found with the value of its key, such as `{ iphoneos = "ios" }`. A rule that reads a file, every source but `build-setting`, can have `root = true`, as a `detect` rule can, to read its `file` or `glob` from the repository root instead of the component's `directory`, such as `{ from = "toml", file = "server/fly.toml", key = "app", root = true }`. An input with no `infer`, or whose value is not found and has no `default`, is asked for one time.
 
 ### `secrets`
 
@@ -160,11 +176,23 @@ The reusable pieces that the component uses: `kind` (`workflow`, `fastlane`, `ma
 
 Sections of the superlinear guide that explain the component, each with a `title` and an `anchor` listed in its [Anchors](https://github.com/armcknight/superlinear/blob/main/docs/anchors.md) page, as `<page>.md#<id>`, such as `builds.md#testflight`.
 
+### `certificates`
+
+Optional. Signing certificates, provisioning profiles and other files that stop working on a date. Each has an `id`, a `description`, a `list` command — a shell command, run in the component's `directory`, or at the repository root when it has none, that prints one line for each certificate: its expiry as an ISO 8601 date and time, such as `2027-03-01T12:00:00Z`, a tab, and its name — and `renew`, the human step to replace one, as `{ text = "…", twoFactor = true }`. `templatr check` reports each one that expires within 30 days, or has expired, with the `renew` text. A `list` command that exits with a status other than 0, or prints a line in another form, is reported as an error. The `apple-app` component lists the certificates and profiles in the fastlane match repository with [components/apple-app/bin/list-match-certificates](components/apple-app/bin/list-match-certificates), which runs the Swift package in [components/apple-app/match-certificates](components/apple-app/match-certificates). It decrypts them in memory with `MATCH_PASSWORD`.
+
+```toml
+[[certificates]]
+id = "match"
+description = "The signing certificates and provisioning profiles in the fastlane match repository."
+list = "{{templates}}/components/apple-app/bin/list-match-certificates {{inputs.match_git_url}} {{inputs.app_identifiers}}"
+renew = { text = "Renew them with match.", twoFactor = true }
+```
+
 ### Placeholders
 
-Scaffold files, step commands, secrets' sources, human texts and blurbs can contain:
+Scaffold files, step commands, certificates' `list` commands, secrets' sources, human texts and blurbs can contain:
 
-* `{{inputs.<name>}}`: an input's value. In `check` and `fix` commands, the value is quoted for the shell.
+* `{{inputs.<name>}}`: an input's value. In `check`, `fix` and `list` commands, the value is quoted for the shell.
 * `{{templates}}`: the path of a checkout of this repository at the project's tag, for the scripts in `components/<name>/bin/`.
 * `{{templates.tag}}`: the project's tag, such as `v1`.
 
@@ -203,7 +231,7 @@ swift run templatr check ~/Code/babysittr         # report what it still needs, 
 
 ### `templatr bootstrap [<repository>]`
 
-1. **Which components.** On the first run it matches each component's `detect` rules against the files in its directory; it can find more than one, and the base component comes with them. It reads each input from where its `infer` says, then shows the values it found to confirm, and asks for the ones it did not find. Leave an answer empty to skip it: the steps and scaffold files that need it wait for a later run.
+1. **Which components.** On the first run it matches each component's `detect` rules against the files in its directory, or the repository's for a rule with `root = true`; it can find more than one, and the base component comes with them. It reads each input from where its `infer` says, then shows the values it found to confirm, and asks for the ones it did not find. Leave an answer empty to skip it: the steps and scaffold files that need it wait for a later run.
 2. **The record.** It writes `.templatr.toml` at the repository's root: each component, the tag it is pinned to, and its inputs. Later runs read it instead of detecting again, and a change made to it by hand wins. A component that detection finds later, such as a watch app added to the project, is reported, not added: add it to the file to use it.
 
    ```toml
@@ -225,7 +253,7 @@ Options: `--yes` accepts the inputs found and sets missing secrets without askin
 
 ### `templatr check [<repository>] [--json]`
 
-The checks only; it changes nothing. It reports the steps whose checks fail, the human steps, the inputs and the secrets that are missing (by name), secrets due for a new value within 30 days of their `rotateEvery`, components pinned to a tag older than the newest, and links in the README that no longer resolve. `--offline` skips the web links.
+The checks only; it changes nothing. It reports the steps whose checks fail, the human steps, the inputs and the secrets that are missing (by name), secrets due for a new value within 30 days of their `rotateEvery`, certificates and profiles that expire within 30 days, from the manifests' `certificates`, components pinned to a tag older than the newest, and links in the README that no longer resolve. `--offline` skips the web links.
 
 With `--json`, it prints the report in the format of [schema/check-report.schema.json](schema/check-report.schema.json), which superlinear reads. Its `version` changes only when a change would break a reader.
 
@@ -242,14 +270,14 @@ The exit status is 0 when nothing is left to do, 1 when the report lists somethi
 
 [Package.swift](Package.swift) has four products:
 
-* `ComponentManifest`, a library: `Manifest` and its `Codable` types for `component.toml`, and `Validator`, the checks below. Decoding is strict: an unknown key, an empty text, a value that does not match its pattern, or an empty list is an error with its path in the file, such as `secrets/0/source`. The library does not run `detect` rules or `infer` rules; the `Templatr` library below does that on these types. The validator's tests have their own reference that runs them, `Tests/ComponentManifestTests/Detection.swift`, to test each component's rules against fixtures taken from the projects it comes from; set `MTG_REPOSITORY` to a checkout of mtg to also test `vapor-fly` against it.
+* `ComponentManifest`, a library: `Manifest` and its `Codable` types for `component.toml`, and `Validator`, the checks below. Decoding is strict: an unknown key, an empty text, a value that does not match its pattern, or an empty list is an error with its path in the file, such as `secrets/0/source`. The library does not run `detect` rules or `infer` rules; the `Templatr` library below does that on these types.
 * `validate-components`, a command: `validate-components [--root DIR] [--anchors PATH_OR_URL|none]`. The root is the current directory by default. The anchors come from superlinear's `docs/anchors.md` on `main` by default; a path or a URL replaces that, and `none` skips the check. It prints each problem to stderr and exits 1 when there are any.
-* `Templatr`, a library on the `ComponentManifest` types: `Bootstrapper`'s `resolve`, `bootstrap` and `check` do what [Setting up a project](#setting-up-a-project) says, and return a `Report`, the same values that `check --json` prints. Only the `linear-workspace` component's steps use Linear, with a key from the environment: superlinear turns the report into issues. The programs it runs, the Keychain, 1Password and GitHub are behind the protocols in `Services`, which the tests replace. `ProcessRunner(environment:)` adds environment variables to the commands it runs, such as a Linear API key for the steps.
+* `Templatr`, a library on the `ComponentManifest` types: `Bootstrapper`'s `resolve`, `bootstrap` and `check` do what [Setting up a project](#setting-up-a-project) says, and return a `Report`, the same values that `check --json` prints. Only the `linear-workspace` component's steps use Linear, with a key from the environment: superlinear turns the report into issues. The programs it runs, the Keychain, 1Password and GitHub are behind the protocols in `Services`, which the tests replace. `ProcessRunner(environment:)` adds environment variables to the commands it runs, such as a Linear API key for the steps. Its tests run each component's `detect` and `infer` rules with `resolve`, against fixtures taken from the projects the component comes from; set `MTG_REPOSITORY` to a checkout of mtg to also test `vapor-fly` against it.
 * `templatr`, a command: a thin layer on the library, which asks the questions.
 
 The package builds on macOS and Linux. [TOMLKit](https://github.com/LebJe/TOMLKit) parses the TOML, and [Yams](https://github.com/jpsim/Yams) the YAML.
 
-superlinear uses the library at a release tag. The tags are not three-part versions, so a `Package.swift` pins one as a revision:
+superlinear uses the library at a component release tag. The `v*` tags are not three-part versions, so a `Package.swift` pins one as a revision:
 
 ```swift
 .package(url: "https://github.com/armcknight/templatr", revision: "v1")
@@ -261,14 +289,15 @@ For each `components/<name>/component.toml`:
 
 * the manifest decodes;
 * `name` is the directory's name;
-* input names, secret names and step IDs are unique;
+* input names, secret names, step IDs and `certificates` IDs are unique;
 * a `local` secret's source is a Keychain item;
 * `CLAUDE.md` exists;
 * a component with a `directory` has `scaffold/<directory>/README.md`, without the generated section's markers, and its other scaffold files are under `scaffold/<directory>/` or are workflows named `.github/workflows/<name>-*`; a component with neither has only such workflows;
 * the base component has `scaffold/README.md`, with the generated section's markers, one time each and in order;
 * there is at most one base component, no two components have the same `directory`, no two scaffolds have a file at the same path, and no scaffold has a file in another component's directory;
-* each `{{placeholder}}` in the scaffold, the steps, the secrets' sources, the human texts and the blurb names a declared input, `templates` or `templates.tag`;
+* each `{{placeholder}}` in the scaffold, the steps, the certificates' `list` commands, the secrets' sources, the human texts and the blurb names a declared input, `templates` or `templates.tag`;
 * each regular expression compiles, and each `regex` infer rule has a capture group;
+* a `detect` or `infer` rule has `root = true` only in a component with a `directory`;
 * each shared path in this repository exists; a path in another `repo` is not checked;
 * each docs anchor is listed in superlinear's `docs/anchors.md`.
 

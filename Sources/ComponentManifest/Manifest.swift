@@ -16,8 +16,8 @@ public struct Manifest: Codable, Equatable, Sendable {
     /// the root Makefile and README.md, are at the repository root.
     public var base: Bool
     /// The subdirectory of the project that the component's files are in, such
-    /// as `server`. Its `detect` and `infer` rules read files there, and its
-    /// steps run there. `nil` for a component whose files are at the root.
+    /// as `server`. Its `detect` and `infer` rules read files there, but for a
+    /// rule with `root`, and its steps run there. `nil` for a component whose files are at the root.
     public var directory: String?
     /// A summary of the component's part of the project, which bootstrap
     /// writes in the root README.md with a link to the README.md in
@@ -30,14 +30,18 @@ public struct Manifest: Codable, Equatable, Sendable {
     public var steps: [Step]
     public var shared: [Shared]
     public var docs: [Doc]
+    /// Signing certificates, profiles and other files that expire. Optional:
+    /// most components have none.
+    public var certificates: [Certificate]
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case name, description, base, directory, blurb, detect, inputs, secrets, steps, shared, docs
+        case name, description, base, directory, blurb, detect, inputs, secrets, steps, shared, docs, certificates
     }
 
     public init(
         name: String, description: String, base: Bool = false, directory: String? = nil, blurb: String? = nil,
-        detect: Detect?, inputs: [Input], secrets: [Secret], steps: [Step], shared: [Shared], docs: [Doc]
+        detect: Detect?, inputs: [Input], secrets: [Secret], steps: [Step], shared: [Shared], docs: [Doc],
+        certificates: [Certificate] = []
     ) {
         self.name = name
         self.description = description
@@ -50,6 +54,7 @@ public struct Manifest: Codable, Equatable, Sendable {
         self.steps = steps
         self.shared = shared
         self.docs = docs
+        self.certificates = certificates
     }
 
     public init(from decoder: Decoder) throws {
@@ -74,6 +79,27 @@ public struct Manifest: Codable, Equatable, Sendable {
         steps = try container.decode([Step].self, forKey: .steps)
         shared = try container.decode([Shared].self, forKey: .shared)
         docs = try container.some(.docs, Doc.self)
+        certificates = try container.someIfPresent(.certificates, Certificate.self) ?? []
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(name, forKey: .name)
+        try container.encode(description, forKey: .description)
+        try container.encode(base, forKey: .base)
+        try container.encodeIfPresent(directory, forKey: .directory)
+        try container.encodeIfPresent(blurb, forKey: .blurb)
+        try container.encodeIfPresent(detect, forKey: .detect)
+        try container.encode(inputs, forKey: .inputs)
+        try container.encode(secrets, forKey: .secrets)
+        try container.encode(steps, forKey: .steps)
+        try container.encode(shared, forKey: .shared)
+        try container.encode(docs, forKey: .docs)
+        // An empty list does not decode, so a manifest without certificates
+        // has no key.
+        if !certificates.isEmpty {
+            try container.encode(certificates, forKey: .certificates)
+        }
     }
 
     /// Decodes a manifest from TOML text.
@@ -161,19 +187,23 @@ public struct Detect: Codable, Equatable, Sendable {
     }
 }
 
-/// A path glob, relative to the repository root, and a regular expression that
-/// the contents of at least one matching file must match.
+/// A path glob, relative to the component's directory, and a regular
+/// expression that the contents of at least one matching file must match.
 public struct DetectRule: Codable, Equatable, Sendable {
     public var glob: String
     public var contains: String?
+    /// Whether `glob` is relative to the repository root instead of the
+    /// component's directory, to read another part of the project.
+    public var root: Bool
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case glob, contains
+        case glob, contains, root
     }
 
-    public init(glob: String, contains: String?) {
+    public init(glob: String, contains: String?, root: Bool) {
         self.glob = glob
         self.contains = contains
+        self.root = root
     }
 
     public init(from decoder: Decoder) throws {
@@ -181,6 +211,14 @@ public struct DetectRule: Codable, Equatable, Sendable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         glob = try container.text(.glob)
         contains = try container.textIfPresent(.contains)
+        root = try container.decodeIfPresent(Bool.self, forKey: .root) ?? false
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(glob, forKey: .glob)
+        try container.encodeIfPresent(contains, forKey: .contains)
+        if root { try container.encode(root, forKey: .root) }
     }
 }
 
@@ -226,12 +264,19 @@ public struct Input: Codable, Equatable, Sendable {
 public struct InferRule: Codable, Equatable, Sendable {
     public var from: From
     public var map: [String: String]?
+    /// Whether the file or glob of `from` is relative to the repository root
+    /// instead of the component's directory, to read another part of the
+    /// project. A build setting reads no file, so it has no `root`.
+    public var root: Bool
 
     /// The sources, as `from` names them.
     public enum From: Equatable, Sendable {
         /// A build setting, as `xcodebuild -showBuildSettings` prints it for the
-        /// project's scheme.
-        case buildSetting(key: String)
+        /// project's scheme. With `separator`, the setting is a list separated
+        /// by white space, such as SUPPORTED_PLATFORMS: `map` replaces each of
+        /// its words, a value that is already in the list is dropped, and the
+        /// values are joined with `separator`.
+        case buildSetting(key: String, separator: String?)
         /// The first argument of a call in a fastlane configuration file, such
         /// as `team_id("…")` in fastlane/Appfile. An array's values are joined
         /// with commas.
@@ -271,27 +316,28 @@ public struct InferRule: Codable, Equatable, Sendable {
         /// The keys a rule with this source can have, besides `from` and `map`.
         var keys: Set<String> {
             switch self {
-            case .buildSetting: ["key"]
-            case .fastlaneConfig: ["file", "key"]
-            case .toml: ["file", "key"]
-            case .yaml: ["file", "key", "separator"]
-            case .glob: ["glob", "contains", "exists", "stem"]
-            case .regex: ["glob", "pattern"]
+            case .buildSetting: ["key", "separator"]
+            case .fastlaneConfig: ["file", "key", "root"]
+            case .toml: ["file", "key", "root"]
+            case .yaml: ["file", "key", "separator", "root"]
+            case .glob: ["glob", "contains", "exists", "stem", "root"]
+            case .regex: ["glob", "pattern", "root"]
             }
         }
     }
 
     /// Every key a rule can have, over all the sources.
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case from, map, key, file, separator, glob, contains, exists, stem, pattern
+        case from, map, key, file, separator, glob, contains, exists, stem, pattern, root
     }
 
     /// The keys every rule can have.
     static let commonKeys: Set<String> = [CodingKeys.from.rawValue, CodingKeys.map.rawValue]
 
-    public init(from: From, map: [String: String]?) {
+    public init(from: From, map: [String: String]?, root: Bool) {
         self.from = from
         self.map = map
+        self.root = root
     }
 
     public init(from decoder: Decoder) throws {
@@ -300,7 +346,7 @@ public struct InferRule: Codable, Equatable, Sendable {
         try decoder.rejectKeys(outside: Self.commonKeys.union(source.keys), context: " for from = \"\(source.rawValue)\"")
         switch source {
         case .buildSetting:
-            from = .buildSetting(key: try container.text(.key, .constant))
+            from = .buildSetting(key: try container.text(.key, .constant), separator: try container.textIfPresent(.separator))
         case .fastlaneConfig:
             from = .fastlaneConfig(file: try container.text(.file), key: try container.text(.key, .fastlaneKey))
         case .toml:
@@ -320,14 +366,16 @@ public struct InferRule: Codable, Equatable, Sendable {
             from = .regex(glob: try container.text(.glob), pattern: try container.text(.pattern))
         }
         map = try container.decodeIfPresent([String: String].self, forKey: .map)
+        root = try container.decodeIfPresent(Bool.self, forKey: .root) ?? false
     }
 
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(from.source, forKey: .from)
         switch from {
-        case .buildSetting(let key):
+        case .buildSetting(let key, let separator):
             try container.encode(key, forKey: .key)
+            try container.encodeIfPresent(separator, forKey: .separator)
         case .fastlaneConfig(let file, let key), .toml(let file, let key):
             try container.encode(file, forKey: .file)
             try container.encode(key, forKey: .key)
@@ -345,6 +393,7 @@ public struct InferRule: Codable, Equatable, Sendable {
             try container.encode(pattern, forKey: .pattern)
         }
         try container.encodeIfPresent(map, forKey: .map)
+        if root { try container.encode(root, forKey: .root) }
     }
 }
 
@@ -588,6 +637,40 @@ public struct Step: Codable, Equatable, Sendable {
         scope = try container.valueIfPresent(.scope, Scope.self) ?? .repo
         check = try container.text(.check)
         fix = try container.decode(Fix.self, forKey: .fix)
+    }
+}
+
+/// Certificates, provisioning profiles or other files that stop working on a
+/// date, and the command that lists them with that date.
+public struct Certificate: Codable, Equatable, Sendable {
+    public var id: String
+    public var description: String
+    /// A shell command, run in the component's directory, or at the repository
+    /// root when it has none, that prints one line for each certificate: its
+    /// expiry as an ISO 8601 date and time, a tab, and its name. A status other
+    /// than 0 means it could not list them.
+    public var list: String
+    /// What a person must do to replace one that expires soon.
+    public var renew: Human
+
+    enum CodingKeys: String, CodingKey, CaseIterable {
+        case id, description, list, renew
+    }
+
+    public init(id: String, description: String, list: String, renew: Human) {
+        self.id = id
+        self.description = description
+        self.list = list
+        self.renew = renew
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectKeys(unknownTo: CodingKeys.self)
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.text(.id, .slug)
+        description = try container.text(.description)
+        list = try container.text(.list)
+        renew = try container.decode(Human.self, forKey: .renew)
     }
 }
 

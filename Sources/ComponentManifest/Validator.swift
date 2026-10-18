@@ -86,6 +86,7 @@ public struct Validator: Sendable {
             ("input", manifest.inputs.map(\.name)),
             ("secret", manifest.secrets.map(\.name)),
             ("step", manifest.steps.map(\.id)),
+            ("certificates", manifest.certificates.map(\.id)),
         ] {
             for value in Self.duplicates(in: values) {
                 problems.append("\(`where`): \(kind) '\(value)' is declared more than one time")
@@ -97,16 +98,24 @@ public struct Validator: Sendable {
             problems.append("\(`where`): secret \(secret.name) is local, so its source must be a keychain: item")
         }
 
+        // Without a directory, every rule already reads from the root.
+        let rootMeansNothing = "root = true means nothing in a component without a directory"
         for (group, rules) in [("all", manifest.detect?.all), ("any", manifest.detect?.any)] {
             for (index, rule) in (rules ?? []).enumerated() {
                 if let contains = rule.contains {
                     problems += Self.regexProblems(at: "\(`where`): detect.\(group)[\(index)]", pattern: contains, needsGroup: false)
+                }
+                if rule.root && manifest.directory == nil {
+                    problems.append("\(`where`): detect.\(group)[\(index)]: \(rootMeansNothing)")
                 }
             }
         }
         for input in manifest.inputs {
             for (index, rule) in (input.infer ?? []).enumerated() {
                 let label = "\(`where`): input \(input.name) infer[\(index)]"
+                if rule.root && manifest.directory == nil {
+                    problems.append("\(label): \(rootMeansNothing)")
+                }
                 switch rule.from {
                 case .regex(_, let pattern):
                     problems += Self.regexProblems(at: label, pattern: pattern, needsGroup: true)
@@ -190,6 +199,10 @@ public struct Validator: Sendable {
         }
         if let blurb = manifest.blurb {
             sources.append(("\(`where`): blurb", blurb))
+        }
+        for certificates in manifest.certificates {
+            sources.append(("\(`where`): certificates \(certificates.id) list", certificates.list))
+            sources.append(("\(`where`): certificates \(certificates.id) renew", certificates.renew.text))
         }
         for (label, text) in sources {
             for name in Placeholders.names(in: text).subtracting(allowed).sorted() {

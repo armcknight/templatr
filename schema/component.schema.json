@@ -67,6 +67,12 @@
       "type": "array",
       "minItems": 1,
       "items": { "$ref": "#/$defs/doc" }
+    },
+    "certificates": {
+      "description": "Signing certificates, provisioning profiles and other files that expire. templatr check reports those within 30 days of their expiry.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/certificate" }
     }
   },
   "$defs": {
@@ -84,7 +90,7 @@
       "required": ["glob"],
       "properties": {
         "glob": {
-          "description": "A path glob, relative to the repository root. `**` matches any number of directories.",
+          "description": "A path glob, relative to the component's `directory`, or to the repository root when it has none or with `root`. `**` matches any number of directories.",
           "type": "string",
           "minLength": 1
         },
@@ -92,6 +98,10 @@
           "description": "A regular expression that the contents of at least one matching file must match.",
           "type": "string",
           "minLength": 1
+        },
+        "root": {
+          "description": "Whether `glob` is relative to the repository root instead of the component's `directory`, to read another part of the project. Only for a component with a `directory`.",
+          "type": "boolean"
         }
       }
     },
@@ -115,6 +125,10 @@
         }
       }
     },
+    "inferRoot": {
+      "description": "Whether the file or glob is relative to the repository root instead of the component's `directory`, to read another part of the project. Only for a component with a `directory`.",
+      "type": "boolean"
+    },
     "inferRule": {
       "type": "object",
       "required": ["from"],
@@ -130,10 +144,11 @@
       },
       "oneOf": [
         {
-          "description": "A build setting, as `xcodebuild -showBuildSettings` prints it for the project's scheme.",
+          "description": "A build setting, as `xcodebuild -showBuildSettings` prints it for the project's scheme. With `separator`, the setting is a list separated by white space, such as SUPPORTED_PLATFORMS: `map` replaces each of its words, a value already in the list is dropped, and the values are joined with `separator`.",
           "properties": {
             "from": { "const": "build-setting" },
             "key": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" },
+            "separator": { "type": "string", "minLength": 1 },
             "map": true
           },
           "required": ["key"],
@@ -145,6 +160,7 @@
             "from": { "const": "fastlane-config" },
             "file": { "type": "string", "minLength": 1 },
             "key": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+            "root": { "$ref": "#/$defs/inferRoot" },
             "map": true
           },
           "required": ["file", "key"],
@@ -156,6 +172,7 @@
             "from": { "const": "toml" },
             "file": { "type": "string", "minLength": 1 },
             "key": { "type": "string", "minLength": 1 },
+            "root": { "$ref": "#/$defs/inferRoot" },
             "map": true
           },
           "required": ["file", "key"],
@@ -168,6 +185,7 @@
             "file": { "type": "string", "minLength": 1 },
             "key": { "type": "string", "minLength": 1 },
             "separator": { "type": "string", "minLength": 1 },
+            "root": { "$ref": "#/$defs/inferRoot" },
             "map": true
           },
           "required": ["file", "key"],
@@ -181,6 +199,7 @@
             "contains": { "type": "string", "minLength": 1 },
             "exists": { "type": "boolean" },
             "stem": { "type": "boolean" },
+            "root": { "$ref": "#/$defs/inferRoot" },
             "map": true
           },
           "required": ["glob"],
@@ -192,6 +211,7 @@
             "from": { "const": "regex" },
             "glob": { "type": "string", "minLength": 1 },
             "pattern": { "type": "string", "minLength": 1 },
+            "root": { "$ref": "#/$defs/inferRoot" },
             "map": true
           },
           "required": ["glob", "pattern"],
@@ -265,6 +285,24 @@
               "properties": { "human": { "$ref": "#/$defs/human" } }
             }
           ]
+        }
+      }
+    },
+    "certificate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "description", "list", "renew"],
+      "properties": {
+        "id": { "$ref": "#/$defs/slug" },
+        "description": { "type": "string", "minLength": 1 },
+        "list": {
+          "description": "A shell command, run in the component's directory, or at the repository root when it has none, that prints one line for each certificate: its expiry as an ISO 8601 date and time, a tab, and its name. An exit status other than 0 means it could not list them.",
+          "type": "string",
+          "minLength": 1
+        },
+        "renew": {
+          "description": "What a person must do to replace one that expires soon.",
+          "$ref": "#/$defs/human"
         }
       }
     },

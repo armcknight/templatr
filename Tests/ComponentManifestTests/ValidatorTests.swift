@@ -71,6 +71,44 @@ struct ValidatorTests {
         expectProblem("exists and stem cannot both be true")
     }
 
+    @Test func rootRulesInAComponentWithADirectory() throws {
+        try repository.editManifest(
+            #"any = [{ glob = "Package.swift", contains = "vapor" }]"#,
+            #"any = [{ glob = "server/Package.swift", contains = "vapor", root = true }]"#
+        )
+        try repository.editManifest(
+            #"infer = [{ from = "toml", file = "fly.toml", key = "app" }]"#,
+            #"infer = [{ from = "toml", file = "server/fly.toml", key = "app", root = true }]"#
+        )
+        #expect(repository.problems() == [])
+    }
+
+    @Test func aRootDetectRuleNeedsADirectory() throws {
+        try repository.editManifest(#"directory = "server""#, "")
+        try repository.editManifest(
+            #"any = [{ glob = "Package.swift", contains = "vapor" }]"#,
+            #"any = [{ glob = "Package.swift", contains = "vapor", root = true }]"#
+        )
+        expectProblem("detect.any[0]: root = true means nothing in a component without a directory")
+    }
+
+    @Test func aRootInferRuleNeedsADirectory() throws {
+        try repository.editManifest(#"directory = "server""#, "")
+        try repository.editManifest(
+            #"infer = [{ from = "toml", file = "fly.toml", key = "app" }]"#,
+            #"infer = [{ from = "toml", file = "fly.toml", key = "app", root = true }]"#
+        )
+        expectProblem("input app infer[0]: root = true means nothing in a component without a directory")
+    }
+
+    @Test func aBuildSettingHasNoRoot() throws {
+        try repository.editManifest(
+            #"{ from = "toml", file = "fly.toml", key = "app" }"#,
+            #"{ from = "build-setting", key = "APP", root = true }"#
+        )
+        expectProblem("inputs/0/infer/0")
+    }
+
     @Test func invalidDetectRegex() throws {
         try repository.editManifest(#"contains = "vapor""#, #"contains = "vapor(""#)
         expectProblem("invalid regular expression")
@@ -91,6 +129,26 @@ struct ValidatorTests {
     @Test func unknownPlaceholderInHumanText() throws {
         try repository.editManifest("Point the domain at {{inputs.app}}.", "Point {{inputs.domain}} at the app.")
         expectProblem("step domain fix: unknown placeholder {{inputs.domain}}")
+    }
+
+    @Test func unknownPlaceholderInCertificates() throws {
+        try repository.editManifest("fly certs list --app {{inputs.app}}", "fly certs list --app {{inputs.name}}")
+        try repository.editManifest("Renew the TLS certificate of {{inputs.app}}.", "Renew {{inputs.host}}.")
+        expectProblem("certificates tls list: unknown placeholder {{inputs.name}}")
+        expectProblem("certificates tls renew: unknown placeholder {{inputs.host}}")
+    }
+
+    @Test func duplicateCertificates() throws {
+        try repository.editManifest("[[certificates]]", """
+            [[certificates]]
+            id = "tls"
+            description = "Again."
+            list = "true"
+            renew = { text = "Renew it." }
+
+            [[certificates]]
+            """)
+        expectProblem("certificates 'tls' is declared more than one time")
     }
 
     @Test func placeholderInSecretSource() throws {

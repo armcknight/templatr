@@ -30,6 +30,10 @@ final class Directory {
         try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: root.appending(path: path).path)
     }
 
+    func delete(_ path: String) throws {
+        try FileManager.default.removeItem(at: root.appending(path: path))
+    }
+
     func read(_ path: String) -> String? {
         try? String(contentsOf: root.appending(path: path), encoding: .utf8)
     }
@@ -120,6 +124,12 @@ let demoManifest = #"""
     [[docs]]
     title = "Builds"
     anchor = "builds.md#ci"
+
+    [[certificates]]
+    id = "signing"
+    description = "The signing certificates."
+    list = "test ! -e certs.fail || { echo 'Could not read the certificates of {{inputs.app}}.' >&2; exit 2; }; cat certs.tsv 2>/dev/null || true"
+    renew = { text = "Renew the signing certificates of {{inputs.app}}.", twoFactor = true }
     """#
 
 let otherManifest = """
@@ -247,3 +257,18 @@ final class Stubs: Keychain, PasswordManager, SecretStore, BuildSettingsProvider
 }
 
 let setEverySecret: @Sendable (Secret) -> Bool = { _ in true }
+
+/// The component `name` of this repository, resolved in `repository` as
+/// bootstrap resolves it, or `nil` when its `detect` rules do not match.
+func resolve(_ name: String, in repository: URL) throws -> ResolvedComponent? {
+    let bootstrapper = Bootstrapper(templates: Templates(root: repositoryRoot, tag: "v1", tags: []), services: Stubs().services())
+    return try bootstrapper.resolve(repository: repository, answers: [:]).components.first { $0.component.name == name }
+}
+
+extension ResolvedComponent {
+    /// Each input's value: inferred, else its default, else `nil`, which
+    /// bootstrap asks for.
+    var inputs: [String: String?] {
+        values.mapValues { $0 }.merging(missing.map { ($0.name, nil) }) { value, _ in value }
+    }
+}

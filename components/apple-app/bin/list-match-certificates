@@ -1,0 +1,15 @@
+#!/bin/sh
+# Usage: list-match-certificates <match git URL> [<bundle IDs, comma separated>...]
+#
+# Prints one line for each certificate in the fastlane match repository, and
+# for each provisioning profile there for one of the bundle IDs (every profile
+# when none is given): its expiry as an ISO 8601 date and time, a tab, and its
+# name. Exits 2 when it cannot read the repository.
+#
+# It builds and runs the list-match-certificates command of the Swift package
+# in ../match-certificates. The first run builds it, and later runs reuse the
+# build. --quiet keeps the build's messages off standard output, which is the
+# list.
+set -e
+package="$(cd "$(dirname "$0")/../match-certificates" && pwd)"
+exec swift run --quiet -c release --package-path "$package" list-match-certificates "$@"

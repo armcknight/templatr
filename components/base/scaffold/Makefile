@@ -1,11 +1,12 @@
 # The project's Makefile. Each component's targets are in its directory's
-# component.mk, such as server/component.mk or ios/component.mk, which this
+# component.mk, such as server/component.mk or apple/component.mk, which this
 # file includes. Their Makefile fragments come from armcknight/templatr at
 # TEMPLATES_TAG: each is downloaded on first use, and `make templates-update`
 # downloads them again, as after changing the tag.
 #
-# Commands are namespaced: `make server deploy` runs the server-deploy target.
-# The direct form, `make server-deploy`, works too. `make help` lists them.
+# Commands are namespaced: `make server deploy` runs the server-deploy target,
+# and `make apple ios test` runs apple-ios-test. The direct form, `make
+# server-deploy`, works too. `make help` lists them.
 
 TEMPLATES_TAG = {{templates.tag}}
 TEMPLATES_MAKE = .superlinear/make
@@ -21,11 +22,14 @@ TEMPLATES_FRAGMENTS :=
 include $(sort $(wildcard */component.mk))
 
 # `make <namespace> <command>` runs `<namespace>-<command>`, and the words after
-# the namespace do nothing by themselves. A namespace with no command lists the
-# targets.
+# the namespace do nothing by themselves. A command can be more than one word,
+# joined with dashes: `make apple ios test` runs `apple-ios-test`. A namespace
+# with no command lists the targets.
 ifneq ($(filter $(firstword $(MAKECMDGOALS)),$(NAMESPACES)),)
 NS  := $(firstword $(MAKECMDGOALS))
-CMD := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
+EMPTY :=
+SPACE := $(EMPTY) $(EMPTY)
+CMD := $(subst $(SPACE),-,$(strip $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))))
 .PHONY: $(NS)
 $(NS):
 	@$(MAKE) --no-print-directory $(if $(strip $(CMD)),$(NS)-$(CMD),help)

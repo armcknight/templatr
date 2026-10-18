@@ -21,9 +21,9 @@ struct DecodingTests {
     @Test func theDemoManifestDecodes() throws {
         let decoded = try Manifest(toml: manifest)
         #expect(decoded.name == "demo")
-        #expect(decoded.detect?.all == [DetectRule(glob: "fly.toml", contains: nil)])
-        #expect(decoded.detect?.any == [DetectRule(glob: "Package.swift", contains: "vapor")])
-        #expect(decoded.inputs[0].infer == [InferRule(from: .toml(file: "fly.toml", key: "app"), map: nil)])
+        #expect(decoded.detect?.all == [DetectRule(glob: "fly.toml", contains: nil, root: false)])
+        #expect(decoded.detect?.any == [DetectRule(glob: "Package.swift", contains: "vapor", root: false)])
+        #expect(decoded.inputs[0].infer == [InferRule(from: .toml(file: "fly.toml", key: "app"), map: nil, root: false)])
         #expect(decoded.inputs[1].infer?[0].from == .regex(glob: "fly.toml", pattern: #"primary_region = "([a-z]+)""#))
         #expect(decoded.secrets[0].source == .keychain(item: "demo.fly-token"))
         #expect(decoded.secrets[0].scope == .app)
@@ -34,6 +34,31 @@ struct DecodingTests {
         #expect(decoded.steps[1].fix == .human(Human(text: "Point the domain at {{inputs.app}}.", twoFactor: false)))
         #expect(decoded.shared[0].link == ".github/workflows/demo.yml")
         #expect(decoded.docs == [Doc(title: "Builds", anchor: "builds.md#ci")])
+        #expect(decoded.certificates == [Certificate(
+            id: "tls", description: "The app's TLS certificate.", list: "fly certs list --app {{inputs.app}}",
+            renew: Human(text: "Renew the TLS certificate of {{inputs.app}}.", twoFactor: false)
+        )])
+    }
+
+    @Test func certificatesAreOptional() throws {
+        let start = try #require(manifest.range(of: "[[certificates]]"))
+        let decoded = try Manifest(toml: String(manifest[..<start.lowerBound]))
+        #expect(decoded.certificates.isEmpty)
+        #expect(try decoded.toml().contains("certificates") == false)
+        #expect(try Manifest(toml: decoded.toml()) == decoded)
+    }
+
+    @Test func certificatesNeedAnElement() {
+        let start = manifest.range(of: "[[certificates]]")!
+        #expect(error(decoding: "certificates = []\n" + manifest[..<start.lowerBound])?.path == "certificates")
+    }
+
+    @Test func certificatesNeedRenewText() {
+        let error = error(decoding: manifest.replacingOccurrences(
+            of: #"renew = { text = "Renew the TLS certificate of {{inputs.app}}." }"#, with: ""
+        ))
+        #expect(error?.path == "certificates/0")
+        #expect(error?.message == "'renew' is required")
     }
 
     @Test func theManifestRoundTripsThroughToml() throws {
@@ -42,14 +67,35 @@ struct DecodingTests {
         #expect(again == decoded)
     }
 
+    @Test func aRootRuleDecodesAndRoundTrips() throws {
+        let toml = manifest
+            .replacingOccurrences(
+                of: #"{ glob = "Package.swift", contains = "vapor" }"#,
+                with: #"{ glob = "server/Package.swift", contains = "vapor", root = true }"#
+            )
+            .replacingOccurrences(
+                of: #"{ from = "toml", file = "fly.toml", key = "app" }"#,
+                with: #"{ from = "toml", file = "server/fly.toml", key = "app", root = true }"#
+            )
+        let decoded = try Manifest(toml: toml)
+        #expect(decoded.detect?.any == [DetectRule(glob: "server/Package.swift", contains: "vapor", root: true)])
+        #expect(decoded.detect?.all == [DetectRule(glob: "fly.toml", contains: nil, root: false)])
+        #expect(decoded.inputs[0].infer == [InferRule(from: .toml(file: "server/fly.toml", key: "app"), map: nil, root: true)])
+        #expect(try Manifest(toml: decoded.toml()) == decoded)
+    }
+
     @Test func thisRepositoryDecodesAndRoundTrips() throws {
         let url = repositoryRoot.appending(path: "components/apple-app/component.toml")
         let decoded = try Manifest(contentsOf: url)
         #expect(decoded.name == "apple-app")
-        #expect(decoded.inputs.contains { $0.name == "platform" && $0.infer?[0].map?["iphoneos"] == "ios" })
+        #expect(decoded.inputs.contains {
+            $0.name == "platforms" && $0.infer?[0].from == .buildSetting(key: "SUPPORTED_PLATFORMS", separator: " ")
+                && $0.infer?[0].map?["iphonesimulator"] == "ios"
+        })
         #expect(decoded.shared.contains {
             $0.link == "https://github.com/armcknight/workflows/blob/4/.github/workflows/ios-ci.yml"
         })
+        #expect(decoded.certificates.map(\.id) == ["match"])
         #expect(try Manifest(toml: decoded.toml()) == decoded)
     }
 

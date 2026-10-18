@@ -1,7 +1,7 @@
 # The apple-app component's lanes come from armcknight/templatr at the tag
-# below: `fastlane {{inputs.platform}} test`, `fastlane ios stage` and
-# `fastlane {{inputs.platform}} beta`. Do not define lanes named test, stage or
-# beta here. Add this project's own lanes below the import.
+# below: `fastlane <platform> test` and `fastlane <platform> beta` for each of
+# {{inputs.platforms}}, and `fastlane ios stage`. Do not define lanes named test,
+# stage or beta here. Add this project's own lanes below the import.
 
 ENV["APPLE_APP_SCHEME"] ||= "{{inputs.scheme}}"
 ENV["APPLE_APP_PROJECT"] ||= "{{inputs.project}}"

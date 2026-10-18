@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import ComponentManifest
+@testable import Templatr
 
 // The parts of mtg's files that the vapor-fly rules read, cut down.
 
@@ -93,35 +93,35 @@ let mtgInputs: [String: String?] = [
     "default_branch": "main",
 ]
 
+/// Detection and inference with this repository's vapor-fly manifest, as
+/// bootstrap runs them.
 @Suite("vapor-fly")
 struct VaporFlyTests {
-    let repository: Repository
-    let vaporFly: Manifest
+    let repository: Directory
 
     init() throws {
-        repository = try Repository()
-        vaporFly = try Manifest(contentsOf: repositoryRoot.appending(path: "components/vapor-fly/component.toml"))
+        repository = try Directory()
     }
 
-    var detection: Detection { Detection(root: repository.root) }
+    var vaporFly: ResolvedComponent? {
+        get throws { try resolve("vapor-fly", in: repository.root) }
+    }
 
     @Test func readsTheFilesInItsDirectory() throws {
         try repository.write("Package.swift", mtgPackage)
-        #expect(!detection.detects(vaporFly))
+        #expect(try vaporFly == nil)
     }
 
     @Test func mtg() throws {
         try repository.write("server/Package.swift", mtgPackage)
         try repository.write("server/fly.toml", mtgFlyToml)
         try repository.write("server/Dockerfile", mtgDockerfile)
-        #expect(detection.detects(vaporFly))
-        #expect(detection.inputs(of: vaporFly) == mtgInputs)
+        #expect(try #require(try vaporFly).inputs == mtgInputs)
     }
 
     @Test func newServerHasOnlyAPackage() throws {
         try repository.write("server/Package.swift", mtgPackage)
-        #expect(detection.detects(vaporFly))
-        let inputs = detection.inputs(of: vaporFly)
+        let inputs = try #require(try vaporFly).inputs
         #expect(inputs["product"] == "mtg-server")
         #expect(inputs["swift_version"] == "5.9")
         #expect(inputs["health_check_path"] == "/healthz")
@@ -137,14 +137,19 @@ struct VaporFlyTests {
             "server/Package.swift",
             mtgPackage.replacingOccurrences(of: "github.com/vapor/vapor", with: "github.com/hummingbird-project/hummingbird")
         )
-        #expect(!detection.detects(vaporFly))
+        #expect(try vaporFly == nil)
     }
 
     @Test func libraryThatUsesVapor() throws {
         try repository.write(
             "server/Package.swift", mtgPackage.replacingOccurrences(of: #".executable(name: "mtg-server""#, with: #".library(name: "mtg-server""#)
         )
-        #expect(!detection.detects(vaporFly))
+        #expect(try vaporFly == nil)
+    }
+
+    @Test func packageInADependencyCheckout() throws {
+        try repository.write("server/.build/checkouts/vapor/Package.swift", mtgPackage)
+        #expect(try vaporFly == nil)
     }
 
     @Test func healthCheckInServices() throws {
@@ -152,7 +157,7 @@ struct VaporFlyTests {
         try repository.write(
             "server/fly.toml", "app = \"demo\"\n\n[[services]]\n  internal_port = 8080\n\n  [[services.http_checks]]\n    path = \"/status\"\n"
         )
-        #expect(detection.inputs(of: vaporFly)["health_check_path"] == "/status")
+        #expect(try #require(try vaporFly).inputs["health_check_path"] == "/status")
     }
 
     @Test func dockerfileProductComesFirst() throws {
@@ -164,66 +169,14 @@ struct VaporFlyTests {
             )
         )
         try repository.write("server/Dockerfile", mtgDockerfile)
-        #expect(detection.inputs(of: vaporFly)["product"] == "mtg-server")
+        #expect(try #require(try vaporFly).inputs["product"] == "mtg-server")
     }
 
     /// Set MTG_REPOSITORY to a checkout of mtg to run it.
     @Test(.enabled(if: ProcessInfo.processInfo.environment["MTG_REPOSITORY"] != nil))
     func mtgCheckout() throws {
-        let checkout = Detection(root: URL(fileURLWithPath: ProcessInfo.processInfo.environment["MTG_REPOSITORY"]!))
-        #expect(checkout.detects(vaporFly))
-        #expect(checkout.inputs(of: vaporFly).filter { $0.value == nil }.keys.sorted() == [])
-    }
-}
-
-@Suite("Detection")
-struct DetectionTests {
-    let repository: Repository
-
-    init() throws {
-        repository = try Repository()
-    }
-
-    func matches(_ glob: String, _ path: String) -> Bool {
-        path.range(of: Detection.regex(forGlob: glob), options: .regularExpression) != nil
-    }
-
-    @Test func doubleStarMatchesAnyNumberOfDirectories() {
-        #expect(matches("**/*.xcodeproj/project.pbxproj", "App.xcodeproj/project.pbxproj"))
-        #expect(matches("**/*.xcodeproj/project.pbxproj", "apps/ios/App.xcodeproj/project.pbxproj"))
-        #expect(!matches("**/*.xcodeproj/project.pbxproj", "App.xcodeproj/sub/project.pbxproj"))
-    }
-
-    @Test func starDoesNotCrossADirectory() {
-        #expect(!matches("*.xcconfig", "config/App.xcconfig"))
-    }
-
-    @Test func skippedDirectories() throws {
-        try repository.write(".build/checkouts/vapor/Package.swift", mtgPackage)
-        #expect(Detection(root: repository.root).paths(matching: "**/Package.swift") == [])
-    }
-
-    @Test func globExists() throws {
-        let rule = InferRule.From.glob(glob: "project.yml", contains: nil, exists: true, stem: nil)
-        #expect(Detection(root: repository.root).value(rule) == "false")
-        try repository.write("project.yml", "")
-        #expect(Detection(root: repository.root).value(rule) == "true")
-    }
-
-    @Test func map() throws {
-        try repository.write("fly.toml", "primary_region = \"sea\"\n")
-        let input = Input(
-            name: "region", description: "The region.", example: "sjc", defaultValue: nil,
-            infer: [InferRule(from: .toml(file: "fly.toml", key: "primary_region"), map: ["sea": "sjc"])]
-        )
-        #expect(Detection(root: repository.root).value(of: input) == "sjc")
-    }
-
-    @Test func buildSettingIsNotRead() {
-        let input = Input(
-            name: "name", description: "The name.", example: "x", defaultValue: "x",
-            infer: [InferRule(from: .buildSetting(key: "PRODUCT_NAME"), map: nil)]
-        )
-        #expect(Detection(root: repository.root).value(of: input) == "x")
+        let checkout = URL(fileURLWithPath: ProcessInfo.processInfo.environment["MTG_REPOSITORY"]!)
+        let vaporFly = try #require(try resolve("vapor-fly", in: checkout))
+        #expect(vaporFly.missing.map(\.name) == [])
     }
 }
