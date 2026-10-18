@@ -138,10 +138,11 @@
       },
       "oneOf": [
         {
-          "description": "A build setting, as `xcodebuild -showBuildSettings` prints it for the project's scheme.",
+          "description": "A build setting, as `xcodebuild -showBuildSettings` prints it for the project's scheme. With `separator`, the setting is a list separated by white space, such as SUPPORTED_PLATFORMS: `map` replaces each of its words, a value already in the list is dropped, and the values are joined with `separator`.",
           "properties": {
             "from": { "const": "build-setting" },
             "key": { "type": "string", "pattern": "^[A-Z][A-Z0-9_]*$" },
+            "separator": { "type": "string", "minLength": 1 },
             "map": true
           },
           "required": ["key"],

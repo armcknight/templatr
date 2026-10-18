@@ -12,7 +12,7 @@ This repository holds no secrets: only their names and where to get them.
 
 | Component | What it sets up |
 | --- | --- |
-| [apple-app](components/apple-app) | An iOS (with an optional embedded watch app), tvOS or macOS app in `apple/`, tested on each pull request, with staging builds on demand, and uploaded to TestFlight by hand with `make apple deploy-beta`. |
+| [apple-app](components/apple-app) | An app for iOS (with an optional embedded watch app), tvOS, macOS or more than one of them, from one Xcode project in `apple/`, tested on each pull request, with staging builds on demand, and uploaded to TestFlight by hand with `make apple <platform> deploy-beta`. |
 | [base](components/base) | The root files that every project has with its other components: the Makefile that includes each component's targets, and the README.md that links to each component's README. |
 | [github-repo](components/github-repo) | A repository on GitHub whose pull requests are squashed when they merge, with their branches deleted, and whose default branch cannot be deleted or force-pushed except by the owner. |
 | [linear-workspace](components/linear-workspace) | A Linear workspace that superlinear works from: each team has an In Review state after In Progress, a Todo state, Triage, and superlinear's labels; the owner has a "superlinear proposals" view in their favorites; and no onboarding issue is open. See [The linear-workspace component](#the-linear-workspace-component). |
@@ -55,7 +55,7 @@ The `templatr` command has releases of its own, with three-part tags such as `0.
 | [armcknight/workflows: ios-ci.yml](https://github.com/armcknight/workflows/blob/4/.github/workflows/ios-ci.yml) | workflow | apple-app | Runs the `test` lane on each pull request, and on a `/build-staging` comment the `stage` lane, with an install link. |
 | [armcknight/workflows: ota-refresh.yml](https://github.com/armcknight/workflows/blob/4/.github/workflows/ota-refresh.yml) | workflow | apple-app | Signs a staging build's install link again on a `/refresh-staging` comment, and asks for a new build when the old one is gone. |
 | [armcknight/workflows: ota-cleanup.yml](https://github.com/armcknight/workflows/blob/4/.github/workflows/ota-cleanup.yml) | workflow | apple-app | Deletes a pull request's staging builds when it closes. |
-| [make/apple-app.mk](make/apple-app.mk) | make | apple-app | The `apple-app-test`, `apple-app-stage`, `apple-app-deploy-beta`, `apple-app-patch`, `apple-app-minor` and `apple-app-major` targets, which `apple/component.mk` runs as `make apple <command>`. |
+| [make/apple-app.mk](make/apple-app.mk) | make | apple-app | The `apple-app-test` and `apple-app-deploy-beta` targets for every platform, `apple-app-<platform>-test` and `apple-app-<platform>-deploy-beta` for each, `apple-app-ios-stage`, and `apple-app-patch`, `apple-app-minor` and `apple-app-major`, which `apple/component.mk` runs as `make apple <command>` and `make apple <platform> <command>`. |
 | [components/apple-app/scaffold/apple/Brewfile](components/apple-app/scaffold/apple/Brewfile) | brewfile | apple-app | The tools the lanes use. |
 | [components/apple-app/bin/check-app-store-connect](components/apple-app/bin/check-app-store-connect) | script | apple-app | Checks the app record and its tester group in App Store Connect. |
 | [components/apple-app/bin/check-shared-lanes](components/apple-app/bin/check-shared-lanes) | script | apple-app | Checks that `fastlane/Fastfile` uses the shared lanes. |
@@ -143,7 +143,7 @@ Values that differ for each project, such as the bundle ID or the team ID. Each 
 
 | `from` | Reads |
 | --- | --- |
-| `build-setting` | `key` from `xcodebuild -showBuildSettings` for the project's scheme, in the Release configuration when the project has one. |
+| `build-setting` | `key` from `xcodebuild -showBuildSettings` for the project's scheme, in the Release configuration when the project has one. With `separator`, the setting is a list separated by white space, such as `SUPPORTED_PLATFORMS`: `map` replaces each word, a value already in the list is dropped, and the values are joined with `separator`. |
 | `fastlane-config` | The first argument of the call `key` in `file`, such as `team_id("…")` in `fastlane/Appfile`. An array's values are joined with commas. |
 | `toml` | The dotted `key` in the TOML `file`, such as `app` in `fly.toml`. |
 | `yaml` | The dotted `key` in the YAML `file`, such as `global_secrets` in `.arkana.yml`. A list's values are joined with `separator`, a comma by default. |

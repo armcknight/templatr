@@ -113,6 +113,10 @@ struct Inferrer {
     private func value(of input: Input, settings: [String: String]?) -> String? {
         for rule in input.infer ?? [] {
             guard var value = value(of: rule.from, in: files.files(root: rule.root), settings: settings) else { continue }
+            if case .buildSetting(_, let separator?) = rule.from {
+                guard let list = Self.list(value, map: rule.map) else { continue }
+                return list.joined(separator: separator)
+            }
             if let map = rule.map {
                 guard let mapped = map[value] else { continue }
                 value = mapped
@@ -124,7 +128,7 @@ struct Inferrer {
 
     private func value(of source: InferRule.From, in files: RepositoryFiles, settings: [String: String]?) -> String? {
         switch source {
-        case .buildSetting(let key):
+        case .buildSetting(let key, _):
             return settings?[key]
         case .fastlaneConfig(let file, let key):
             return files.text(of: file).flatMap { Self.fastlaneArgument(key, in: $0) }
@@ -194,6 +198,18 @@ struct Inferrer {
         if let int = value.int { return String(int) }
         if let double = value.double { return String(double) }
         return nil
+    }
+
+    /// The words of a list separated by white space, each replaced by its value
+    /// in `map`, with no value twice. Nil when the list is empty or a word is
+    /// not a key of `map`.
+    static func list(_ value: String, map: [String: String]?) -> [String]? {
+        var values: [String] = []
+        for word in value.split(whereSeparator: \.isWhitespace).map(String.init) {
+            guard let mapped = map.map({ $0[word] }) ?? word else { return nil }
+            if !values.contains(mapped) { values.append(mapped) }
+        }
+        return values.isEmpty ? nil : values
     }
 
     static func yamlValue(_ document: Any, at key: String, separator: String) -> String? {

@@ -246,8 +246,11 @@ public struct InferRule: Codable, Equatable, Sendable {
     /// The sources, as `from` names them.
     public enum From: Equatable, Sendable {
         /// A build setting, as `xcodebuild -showBuildSettings` prints it for the
-        /// project's scheme.
-        case buildSetting(key: String)
+        /// project's scheme. With `separator`, the setting is a list separated
+        /// by white space, such as SUPPORTED_PLATFORMS: `map` replaces each of
+        /// its words, a value that is already in the list is dropped, and the
+        /// values are joined with `separator`.
+        case buildSetting(key: String, separator: String?)
         /// The first argument of a call in a fastlane configuration file, such
         /// as `team_id("…")` in fastlane/Appfile. An array's values are joined
         /// with commas.
@@ -287,7 +290,7 @@ public struct InferRule: Codable, Equatable, Sendable {
         /// The keys a rule with this source can have, besides `from` and `map`.
         var keys: Set<String> {
             switch self {
-            case .buildSetting: ["key"]
+            case .buildSetting: ["key", "separator"]
             case .fastlaneConfig: ["file", "key", "root"]
             case .toml: ["file", "key", "root"]
             case .yaml: ["file", "key", "separator", "root"]
@@ -317,7 +320,7 @@ public struct InferRule: Codable, Equatable, Sendable {
         try decoder.rejectKeys(outside: Self.commonKeys.union(source.keys), context: " for from = \"\(source.rawValue)\"")
         switch source {
         case .buildSetting:
-            from = .buildSetting(key: try container.text(.key, .constant))
+            from = .buildSetting(key: try container.text(.key, .constant), separator: try container.textIfPresent(.separator))
         case .fastlaneConfig:
             from = .fastlaneConfig(file: try container.text(.file), key: try container.text(.key, .fastlaneKey))
         case .toml:
@@ -344,8 +347,9 @@ public struct InferRule: Codable, Equatable, Sendable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(from.source, forKey: .from)
         switch from {
-        case .buildSetting(let key):
+        case .buildSetting(let key, let separator):
             try container.encode(key, forKey: .key)
+            try container.encodeIfPresent(separator, forKey: .separator)
         case .fastlaneConfig(let file, let key), .toml(let file, let key):
             try container.encode(file, forKey: .file)
             try container.encode(key, forKey: .key)

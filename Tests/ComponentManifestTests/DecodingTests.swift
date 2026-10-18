@@ -63,7 +63,10 @@ struct DecodingTests {
         let url = repositoryRoot.appending(path: "components/apple-app/component.toml")
         let decoded = try Manifest(contentsOf: url)
         #expect(decoded.name == "apple-app")
-        #expect(decoded.inputs.contains { $0.name == "platform" && $0.infer?[0].map?["iphoneos"] == "ios" })
+        #expect(decoded.inputs.contains {
+            $0.name == "platforms" && $0.infer?[0].from == .buildSetting(key: "SUPPORTED_PLATFORMS", separator: " ")
+                && $0.infer?[0].map?["iphonesimulator"] == "ios"
+        })
         #expect(decoded.shared.contains {
             $0.link == "https://github.com/armcknight/workflows/blob/4/.github/workflows/ios-ci.yml"
         })

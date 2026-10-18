@@ -35,7 +35,7 @@ import Testing
             "PRODUCT_NAME": "Demo",
             // xcodebuild prints SDKROOT as a path.
             "SDKROOT": "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.1.sdk",
-            "PLATFORM_NAME": "iphoneos", "PRODUCT_BUNDLE_IDENTIFIER": "io.example.other",
+            "SUPPORTED_PLATFORMS": "iphoneos iphonesimulator", "PRODUCT_BUNDLE_IDENTIFIER": "io.example.other",
             "DEVELOPMENT_TEAM": "ZZZZZ99999",
         ]
     }
@@ -77,7 +77,7 @@ import Testing
             "workspace": "",
             "xcconfig": "config/Demo.xcconfig",
             "xcodegen": "false",
-            "platform": "ios",
+            "platforms": "ios",
             // The fastlane configuration comes before the build settings.
             "bundle_id": "io.example.demo",
             "adhoc_bundle_id": "io.example.demo.adhoc",
@@ -96,10 +96,18 @@ import Testing
         #expect(stubs.settingsRequests == [["Demo.xcodeproj", nil, "Demo"]])
     }
 
-    @Test func aMappedValueThatIsNotInTheMapIsNotFound() throws {
-        stubs.settings?["PLATFORM_NAME"] = "watchos"
+    /// One Xcode project can build the app for more than one platform. A
+    /// simulator's platform is the same platform, and is not named twice.
+    @Test func infersEveryPlatform() throws {
+        stubs.settings?["SUPPORTED_PLATFORMS"] = "macosx iphoneos iphonesimulator appletvsimulator appletvos"
         let resolution = try bootstrapper.resolve(repository: project.root, answers: [:])
-        #expect(resolution.components.last?.missing.map(\.name) == ["platform"])
+        #expect(resolution.components.last?.values["platforms"] == "mac ios tvos")
+    }
+
+    @Test func aMappedValueThatIsNotInTheMapIsNotFound() throws {
+        stubs.settings?["SUPPORTED_PLATFORMS"] = "iphoneos iphonesimulator xros xrsimulator"
+        let resolution = try bootstrapper.resolve(repository: project.root, answers: [:])
+        #expect(resolution.components.last?.missing.map(\.name) == ["platforms"])
     }
 
     @Test func aSchemeThatBuildsNoAppIsChosenWhenNoneDoes() throws {
