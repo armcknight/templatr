@@ -154,8 +154,9 @@ public struct Bootstrapper: Sendable {
     }
 
     /// What `repository` still needs, without changing anything: the steps'
-    /// checks, missing secrets by name, secrets due for a new value, components
-    /// behind the newest tag, and README links that no longer resolve.
+    /// checks, missing secrets by name, secrets due for a new value,
+    /// certificates near their expiry, components behind the newest tag, and
+    /// README links that no longer resolve.
     public func check(repository: URL) async throws -> Report {
         let repository = repository.standardizedFileURL
         let resolution = try resolve(repository: repository, answers: [:])
@@ -192,8 +193,14 @@ public struct Bootstrapper: Sendable {
         }
     }
 
-    /// The reports every run ends with: old tags, expiries and broken links.
+    /// The reports every run ends with: certificates near their expiry, old
+    /// tags and broken links.
     private func finish(_ report: inout Report, _ components: [ResolvedComponent], in repository: URL) async {
+        for resolved in components {
+            for certificates in resolved.component.manifest.certificates {
+                expiries(of: certificates, of: resolved, in: repository, report: &report)
+            }
+        }
         if let newest = Version.newest(of: templates.tags) {
             for resolved in components where Version.isOlder(resolved.tag, than: newest) {
                 report.oldTags.append(OldTag(component: resolved.component.name, tag: resolved.tag, newest: newest))
@@ -397,12 +404,69 @@ public struct Bootstrapper: Sendable {
         guard let period = secret.rotateEvery, let lastSet,
               let due = period.date(after: lastSet)
         else { return }
-        let warning = Calendar(identifier: .gregorian).date(byAdding: .day, value: 30, to: services.now())!
-        if due <= warning {
+        if due <= warningDate {
             report.expiries.append(Expiry(
                 component: component, secret: secret.name, rotateEvery: period.rawValue, lastSet: lastSet, due: due
             ))
         }
+    }
+
+    /// Expiries on or before this date are reported: 30 days from now.
+    private var warningDate: Date {
+        Calendar(identifier: .gregorian).date(byAdding: .day, value: 30, to: services.now())!
+    }
+
+    /// Runs the `list` command of a manifest's `certificates`, and reports
+    /// those that expire by the warning date. A command that fails, or prints
+    /// a line it should not, is an error: the certificates were not checked.
+    private func expiries(
+        of certificates: Certificate, of resolved: ResolvedComponent, in repository: URL, report: inout Report
+    ) {
+        let name = resolved.component.name
+        let values = PlaceholderValues(inputs: resolved.values, templates: templates.root, tag: resolved.tag)
+        let list = values.render(certificates.list, quoted: true)
+        guard list.missing.isEmpty else {
+            report.blockedSteps.append(BlockedStep(
+                component: name, id: "certificates:\(certificates.id)", description: certificates.description,
+                missingInputs: Array(Set(list.missing.map { $0.replacingOccurrences(of: "inputs.", with: "") })).sorted()
+            ))
+            return
+        }
+        let listed = shell(list.text, in: resolved.component.root(in: repository))
+        guard listed.succeeded else {
+            report.errors.append("Could not list \(name)/\(certificates.id): \(listed.transcript)")
+            return
+        }
+        let text = values.render(certificates.renew.text, quoted: false).text
+        let warning = warningDate
+        for line in listed.text.split(whereSeparator: \.isNewline) where !line.allSatisfy(\.isWhitespace) {
+            guard let (expires, certificate) = Self.certificate(in: line) else {
+                report.errors.append("\(name)/\(certificates.id) printed a line that is not <ISO 8601 date>\t<name>: \(line)")
+                continue
+            }
+            if expires <= warning {
+                report.certificateExpiries.append(CertificateExpiry(
+                    component: name, id: certificates.id, name: certificate, expires: expires,
+                    text: text, twoFactor: certificates.renew.twoFactor
+                ))
+            }
+        }
+    }
+
+    /// The expiry and name in a line of a `list` command's output.
+    static func certificate(in line: Substring) -> (Date, String)? {
+        let parts = line.split(separator: "\t", maxSplits: 1)
+        guard parts.count == 2 else { return nil }
+        let name = parts[1].trimmingCharacters(in: .whitespaces)
+        let date = parts[0].trimmingCharacters(in: .whitespaces)
+        let formatter = ISO8601DateFormatter()
+        var expires = formatter.date(from: date)
+        if expires == nil {
+            formatter.formatOptions.insert(.withFractionalSeconds)
+            expires = formatter.date(from: date)
+        }
+        guard let expires, !name.isEmpty else { return nil }
+        return (expires, name)
     }
 
     /// The links in README.md that do not resolve: relative paths that do not

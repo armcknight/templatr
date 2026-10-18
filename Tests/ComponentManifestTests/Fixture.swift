@@ -57,6 +57,12 @@ let manifest = #"""
     title = "Builds"
     anchor = "builds.md#ci"
 
+    [[certificates]]
+    id = "tls"
+    description = "The app's TLS certificate."
+    list = "fly certs list --app {{inputs.app}}"
+    renew = { text = "Renew the TLS certificate of {{inputs.app}}." }
+
     """#
 
 let readme = """

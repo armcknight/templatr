@@ -58,6 +58,7 @@ The `templatr` command has releases of its own, with three-part tags such as `0.
 | [make/apple-app.mk](make/apple-app.mk) | make | apple-app | The `apple-app-test` and `apple-app-deploy-beta` targets for every platform, `apple-app-<platform>-test` and `apple-app-<platform>-deploy-beta` for each, `apple-app-ios-stage`, and `apple-app-patch`, `apple-app-minor` and `apple-app-major`, which `apple/component.mk` runs as `make apple <command>` and `make apple <platform> <command>`. |
 | [components/apple-app/scaffold/apple/Brewfile](components/apple-app/scaffold/apple/Brewfile) | brewfile | apple-app | The tools the lanes use. |
 | [components/apple-app/bin/check-app-store-connect](components/apple-app/bin/check-app-store-connect) | script | apple-app | Checks the app record and its tester group in App Store Connect. |
+| [components/apple-app/bin/list-match-certificates](components/apple-app/bin/list-match-certificates) | script | apple-app | Lists the certificates and profiles in the fastlane match repository, with their expiry dates. |
 | [components/apple-app/bin/check-shared-lanes](components/apple-app/bin/check-shared-lanes) | script | apple-app | Checks that `fastlane/Fastfile` uses the shared lanes. |
 | [armcknight/workflows: vapor-ci.yml](https://github.com/armcknight/workflows/blob/4/.github/workflows/vapor-ci.yml) | workflow | vapor-fly | Builds and tests the package on Linux in the swift image on each pull request, and builds the Docker image. |
 | [armcknight/workflows: fly-deploy.yml](https://github.com/armcknight/workflows/blob/4/.github/workflows/fly-deploy.yml) | workflow | vapor-fly | Deploys the default branch's tip to Fly with its `GIT_SHA`, by hand or on a merge, then waits for the health check to answer. |
@@ -168,11 +169,23 @@ The reusable pieces that the component uses: `kind` (`workflow`, `fastlane`, `ma
 
 Sections of the superlinear guide that explain the component, each with a `title` and an `anchor` listed in its [Anchors](https://github.com/armcknight/superlinear/blob/main/docs/anchors.md) page, as `<page>.md#<id>`, such as `builds.md#testflight`.
 
+### `certificates`
+
+Optional. Signing certificates, provisioning profiles and other files that stop working on a date. Each has an `id`, a `description`, a `list` command — a shell command, run in the component's `directory`, or at the repository root when it has none, that prints one line for each certificate: its expiry as an ISO 8601 date and time, such as `2027-03-01T12:00:00Z`, a tab, and its name — and `renew`, the human step to replace one, as `{ text = "…", twoFactor = true }`. `templatr check` reports each one that expires within 30 days, or has expired, with the `renew` text. A `list` command that exits with a status other than 0, or prints a line in another form, is reported as an error. The `apple-app` component lists the certificates and profiles in the fastlane match repository with [components/apple-app/bin/list-match-certificates](components/apple-app/bin/list-match-certificates), which decrypts them in memory with `MATCH_PASSWORD`.
+
+```toml
+[[certificates]]
+id = "match"
+description = "The signing certificates and provisioning profiles in the fastlane match repository."
+list = "bundle exec ruby {{templates}}/components/apple-app/bin/list-match-certificates {{inputs.match_git_url}} {{inputs.app_identifiers}}"
+renew = { text = "Renew them with match.", twoFactor = true }
+```
+
 ### Placeholders
 
-Scaffold files, step commands, secrets' sources, human texts and blurbs can contain:
+Scaffold files, step commands, certificates' `list` commands, secrets' sources, human texts and blurbs can contain:
 
-* `{{inputs.<name>}}`: an input's value. In `check` and `fix` commands, the value is quoted for the shell.
+* `{{inputs.<name>}}`: an input's value. In `check`, `fix` and `list` commands, the value is quoted for the shell.
 * `{{templates}}`: the path of a checkout of this repository at the project's tag, for the scripts in `components/<name>/bin/`.
 * `{{templates.tag}}`: the project's tag, such as `v1`.
 
@@ -233,7 +246,7 @@ Options: `--yes` accepts the inputs found and sets missing secrets without askin
 
 ### `templatr check [<repository>] [--json]`
 
-The checks only; it changes nothing. It reports the steps whose checks fail, the human steps, the inputs and the secrets that are missing (by name), secrets due for a new value within 30 days of their `rotateEvery`, components pinned to a tag older than the newest, and links in the README that no longer resolve. `--offline` skips the web links.
+The checks only; it changes nothing. It reports the steps whose checks fail, the human steps, the inputs and the secrets that are missing (by name), secrets due for a new value within 30 days of their `rotateEvery`, certificates and profiles that expire within 30 days, from the manifests' `certificates`, components pinned to a tag older than the newest, and links in the README that no longer resolve. `--offline` skips the web links.
 
 With `--json`, it prints the report in the format of [schema/check-report.schema.json](schema/check-report.schema.json), which superlinear reads. Its `version` changes only when a change would break a reader.
 
@@ -269,13 +282,13 @@ For each `components/<name>/component.toml`:
 
 * the manifest decodes;
 * `name` is the directory's name;
-* input names, secret names and step IDs are unique;
+* input names, secret names, step IDs and `certificates` IDs are unique;
 * a `local` secret's source is a Keychain item;
 * `CLAUDE.md` exists;
 * a component with a `directory` has `scaffold/<directory>/README.md`, without the generated section's markers, and its other scaffold files are under `scaffold/<directory>/` or are workflows named `.github/workflows/<name>-*`; a component with neither has only such workflows;
 * the base component has `scaffold/README.md`, with the generated section's markers, one time each and in order;
 * there is at most one base component, no two components have the same `directory`, no two scaffolds have a file at the same path, and no scaffold has a file in another component's directory;
-* each `{{placeholder}}` in the scaffold, the steps, the secrets' sources, the human texts and the blurb names a declared input, `templates` or `templates.tag`;
+* each `{{placeholder}}` in the scaffold, the steps, the certificates' `list` commands, the secrets' sources, the human texts and the blurb names a declared input, `templates` or `templates.tag`;
 * each regular expression compiles, and each `regex` infer rule has a capture group;
 * a `detect` or `infer` rule has `root = true` only in a component with a `directory`;
 * each shared path in this repository exists; a path in another `repo` is not checked;

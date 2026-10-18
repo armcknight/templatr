@@ -21,3 +21,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A `build-setting` infer rule with `separator` reads a list setting, such as
   `SUPPORTED_PLATFORMS`: it maps each word, drops a value that is already in
   the list, and joins the values with `separator`.
+- `templatr check` reports signing certificates, provisioning profiles and
+  other files that expire within 30 days, from a manifest's optional
+  `certificates`, whose `list` command prints each one with its expiry. The
+  report's new `certificateExpiries` has them. The `apple-app` component lists
+  the certificates and profiles in the fastlane match repository.

@@ -1,0 +1,82 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Usage: list-match-certificates <match git URL> [<bundle IDs, comma separated>...]
+#
+# Prints one line for each certificate in the fastlane match repository, and
+# for each provisioning profile there for one of the bundle IDs (every profile
+# when none is given): its expiry as an ISO 8601 date and time, a tab, and its
+# name. Exits 2 when it cannot read the repository.
+#
+# It clones the repository's default branch into a temporary directory and
+# decrypts each file in memory, with MATCH_PASSWORD or, without it, the
+# Keychain item superlinear.match.password. Nothing decrypted is written to a
+# file. Run it with the project's bundle (`bundle exec ruby`), which has
+# fastlane, and so match.
+
+require "match"
+require "open3"
+require "openssl"
+require "plist"
+require "tmpdir"
+
+def fail_with(message)
+  warn(message)
+  exit(2)
+end
+
+git_url = ARGV.shift
+abort("Usage: list-match-certificates <match git URL> [<bundle IDs, comma separated>...]") if git_url.to_s.empty?
+bundle_ids = ARGV.flat_map { |argument| argument.split(",") }.map(&:strip).reject(&:empty?)
+
+password = ENV.fetch("MATCH_PASSWORD", "")
+if password.empty?
+  output, status = Open3.capture2("security", "find-generic-password", "-s", "superlinear.match.password", "-w")
+  password = output.chomp
+  if !status.success? || password.empty?
+    fail_with("MATCH_PASSWORD is not set, and the Keychain has no item superlinear.match.password.")
+  end
+end
+
+lines = []
+Dir.mktmpdir("match") do |directory|
+  _, error, status = Open3.capture3("git", "clone", "--quiet", "--depth", "1", git_url, directory)
+  fail_with("Could not clone #{git_url}: #{error.strip}") unless status.success?
+
+  encryption = Match::Encryption::MatchDataEncryption.new
+  decrypt = lambda do |path|
+    encryption.decrypt(base64encoded_encrypted: File.read(path), password: password)
+  rescue StandardError => e
+    detail = e.message.to_s.empty? ? "" : " (#{e.message})"
+    fail_with("Could not decrypt #{path.delete_prefix("#{directory}/")}#{detail}. Is MATCH_PASSWORD right?")
+  end
+
+  Dir.glob(File.join(directory, "certs", "**", "*.cer")).sort.each do |path|
+    certificate = OpenSSL::X509::Certificate.new(decrypt.call(path))
+    common_name = certificate.subject.to_a.find { |key, _, _| key == "CN" }&.at(1)
+    lines << [certificate.not_after, "certificate #{common_name || File.basename(path, ".cer")}"]
+  rescue OpenSSL::X509::CertificateError => e
+    fail_with("Could not read the certificate #{path.delete_prefix("#{directory}/")}: #{e.message}")
+  end
+
+  Dir.glob(File.join(directory, "profiles", "**", "*.{mobileprovision,provisionprofile}")).sort.each do |path|
+    signed = OpenSSL::PKCS7.new(decrypt.call(path))
+    # As fastlane reads a profile: the signature is not what this checks.
+    signed.verify([], OpenSSL::X509::Store.new, nil, OpenSSL::PKCS7::NOVERIFY)
+    profile = Plist.parse_xml(signed.data.to_s)
+    fail_with("Could not read the profile #{path.delete_prefix("#{directory}/")}") unless profile.is_a?(Hash)
+    # The application identifier is the team ID, a dot, and the bundle ID.
+    bundle_id = profile.dig("Entitlements", "application-identifier").to_s.split(".", 2).last
+    next unless bundle_ids.empty? || bundle_ids.include?(bundle_id)
+
+    expires = profile["ExpirationDate"]
+    expires = expires.to_time if expires.respond_to?(:to_time)
+    lines << [expires, "profile #{profile["Name"] || File.basename(path)}"]
+  rescue ArgumentError, OpenSSL::PKCS7::PKCS7Error => e
+    fail_with("Could not read the profile #{path.delete_prefix("#{directory}/")}: #{e.message}")
+  end
+end
+
+lines.sort_by(&:first).each do |expires, name|
+  puts("#{expires.utc.iso8601}\t#{name}")
+end

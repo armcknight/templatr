@@ -267,6 +267,12 @@ description = "Checks the app record and its tester group in App Store Connect."
 
 [[shared]]
 kind = "script"
+path = "components/apple-app/bin/list-match-certificates"
+version = "v1"
+description = "Lists the certificates and profiles in the fastlane match repository, with their expiry dates."
+
+[[shared]]
+kind = "script"
 path = "components/apple-app/bin/check-shared-lanes"
 version = "v1"
 description = "Checks that fastlane/Fastfile uses the shared lanes."
@@ -286,3 +292,12 @@ anchor = "builds.md#testflight"
 [[docs]]
 title = "Build numbers"
 anchor = "builds.md#build-numbers"
+
+# The certificates and profiles in the fastlane match repository: the
+# certificates, and the profiles for the app's bundle IDs. Reading them needs
+# the match-access step and MATCH_PASSWORD in the Keychain.
+[[certificates]]
+id = "match"
+description = "The signing certificates and provisioning profiles in the fastlane match repository."
+list = "bundle exec ruby {{templates}}/components/apple-app/bin/list-match-certificates {{inputs.match_git_url}} {{inputs.app_identifiers}} {{inputs.adhoc_bundle_id}}"
+renew = { text = "Renew the certificates and profiles named here, which are in {{inputs.match_git_url}}. For a profile, run `bundle exec fastlane match appstore --readonly false --force` in `apple/`, or `adhoc` for the ad-hoc profile, on a Mac that can push to the match repository. For a certificate, revoke it in the developer portal's Certificates page, then run match the same way: it makes a new certificate and new profiles for it.", twoFactor = true }
