@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v1.0.0] 2026-10-18
+
 ### Added
 
 - The `base` component: the project's root Makefile, which includes each
