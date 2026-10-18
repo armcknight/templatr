@@ -17,17 +17,26 @@ struct Detection {
 
     static let skippedDirectories: Set<String> = [".git", ".build", ".swiftpm", "DerivedData", "node_modules"]
 
-    /// Whether the repository uses the component.
+    /// The rules of a component with a `directory` read the files there.
+    func scoped(to manifest: Manifest) -> Detection {
+        manifest.directory.map { Detection(root: root.appending(path: $0)) } ?? self
+    }
+
+    /// Whether the repository uses the component. A base component has no
+    /// rules: it comes with the others.
     func detects(_ manifest: Manifest) -> Bool {
-        let all = manifest.detect.all ?? []
-        let any = manifest.detect.any ?? []
-        return all.allSatisfy(matches) && (any.isEmpty || any.contains(where: matches))
+        guard let detect = manifest.detect else { return false }
+        let scoped = scoped(to: manifest)
+        let all = detect.all ?? []
+        let any = detect.any ?? []
+        return all.allSatisfy(scoped.matches) && (any.isEmpty || any.contains(where: scoped.matches))
     }
 
     /// Each input's value: the first one an `infer` rule finds, else its
     /// default, else `nil`, which bootstrap asks for.
     func inputs(of manifest: Manifest) -> [String: String?] {
-        Dictionary(uniqueKeysWithValues: manifest.inputs.map { ($0.name, value(of: $0)) })
+        let scoped = scoped(to: manifest)
+        return Dictionary(uniqueKeysWithValues: manifest.inputs.map { ($0.name, scoped.value(of: $0)) })
     }
 
     func value(of input: Input) -> String? {

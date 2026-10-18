@@ -11,12 +11,22 @@ struct MarkedSection {
     /// The component conventions that CLAUDE.md imports.
     static let claude = MarkedSection(begin: "<!-- templatr:begin components -->", end: "<!-- templatr:end -->")
 
+    /// A component's blurb in the root README.md.
+    static func component(_ name: String) -> MarkedSection {
+        MarkedSection(begin: "<!-- templatr:begin \(name) -->", end: "<!-- templatr:end -->")
+    }
+
     /// `text` with `body` between the markers, and nothing else changed. When
-    /// the markers are not there, in order, they are added at the end.
-    func replace(in text: String, with body: String) -> String {
+    /// the markers are not there, in order, they are added before the line
+    /// that has `before`, or at the end.
+    func replace(in text: String, with body: String, before: String? = nil) -> String {
         if let begin = text.range(of: begin),
            let end = text.range(of: end, range: begin.upperBound..<text.endIndex) {
             return String(text[..<begin.upperBound]) + "\n" + body + String(text[end.lowerBound...])
+        }
+        if let before, let found = text.range(of: before) {
+            let line = text[..<found.lowerBound].lastIndex(of: "\n").map { text.index(after: $0) } ?? text.startIndex
+            return String(text[..<line]) + begin + "\n" + body + end + "\n\n" + String(text[line...])
         }
         var text = text
         if !text.isEmpty && !text.hasSuffix("\n") { text += "\n" }
@@ -43,7 +53,10 @@ enum Markdown {
         ]
         for resolved in components {
             let component = resolved.component
-            lines.append("* [\(component.name)](\(component.link(tag: resolved.tag))) at `\(resolved.tag)`: \(component.manifest.description)")
+            let place = component.manifest.directory.map { ", in `\($0)/`" } ?? ""
+            lines.append(
+                "* [\(component.name)](\(component.link(tag: resolved.tag))) at `\(resolved.tag)`\(place): \(component.manifest.description)"
+            )
         }
 
         var shared: [String] = []
@@ -109,6 +122,16 @@ enum Markdown {
         case .generate(let kind):
             "Generated (\(kind.rawValue)) and kept in the Keychain item `\(secret.keychainItem ?? "")`."
         }
+    }
+
+    /// The component's blurb for the root README.md, with a link to the
+    /// README.md in its directory, or `nil` when it has none.
+    static func blurb(_ resolved: ResolvedComponent) -> String? {
+        guard let blurb = resolved.component.manifest.blurb else { return nil }
+        let values = PlaceholderValues(inputs: resolved.values, templates: URL(fileURLWithPath: "/"), tag: resolved.tag)
+        let text = values.render(blurb, quoted: false).text
+        guard let directory = resolved.component.manifest.directory else { return text + "\n" }
+        return "[\(directory)/](\(directory)/README.md): \(text)\n"
     }
 
     /// The CLAUDE.md section that imports each component's conventions.

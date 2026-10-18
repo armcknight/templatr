@@ -1,4 +1,4 @@
-name: Stage cleanup
+name: iOS stage cleanup
 
 # Deletes a pull request's staging builds from the bucket when it closes.
 

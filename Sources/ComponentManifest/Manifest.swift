@@ -11,7 +11,20 @@ import TOMLKit
 public struct Manifest: Codable, Equatable, Sendable {
     public var name: String
     public var description: String
-    public var detect: Detect
+    /// Whether every project gets the component, with the others. A base
+    /// component has no `detect` rules and no `directory`: its files, such as
+    /// the root Makefile and README.md, are at the repository root.
+    public var base: Bool
+    /// The subdirectory of the project that the component's files are in, such
+    /// as `server`. Its `detect` and `infer` rules read files there, and its
+    /// steps run there. `nil` for a component whose files are at the root.
+    public var directory: String?
+    /// A summary of the component's part of the project, which bootstrap
+    /// writes in the root README.md with a link to the README.md in
+    /// `directory`.
+    public var blurb: String?
+    /// `nil` only for a base component.
+    public var detect: Detect?
     public var inputs: [Input]
     public var secrets: [Secret]
     public var steps: [Step]
@@ -19,15 +32,18 @@ public struct Manifest: Codable, Equatable, Sendable {
     public var docs: [Doc]
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case name, description, detect, inputs, secrets, steps, shared, docs
+        case name, description, base, directory, blurb, detect, inputs, secrets, steps, shared, docs
     }
 
     public init(
-        name: String, description: String, detect: Detect, inputs: [Input], secrets: [Secret],
-        steps: [Step], shared: [Shared], docs: [Doc]
+        name: String, description: String, base: Bool = false, directory: String? = nil, blurb: String? = nil,
+        detect: Detect?, inputs: [Input], secrets: [Secret], steps: [Step], shared: [Shared], docs: [Doc]
     ) {
         self.name = name
         self.description = description
+        self.base = base
+        self.directory = directory
+        self.blurb = blurb
         self.detect = detect
         self.inputs = inputs
         self.secrets = secrets
@@ -41,7 +57,18 @@ public struct Manifest: Codable, Equatable, Sendable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         name = try container.text(.name, .slug)
         description = try container.text(.description)
-        detect = try container.decode(Detect.self, forKey: .detect)
+        base = try container.decodeIfPresent(Bool.self, forKey: .base) ?? false
+        directory = try container.textIfPresent(.directory, .slug)
+        blurb = try container.textIfPresent(.blurb)
+        detect = try container.decodeIfPresent(Detect.self, forKey: .detect)
+        if base {
+            if detect != nil { throw container.corrupted(at: .detect, "a base component has no detect rules") }
+            if directory != nil { throw container.corrupted(at: .directory, "a base component's files are at the root") }
+        } else if detect == nil {
+            throw DecodingError.keyNotFound(CodingKeys.detect, DecodingError.Context(
+                codingPath: decoder.codingPath, debugDescription: "'detect' is required"
+            ))
+        }
         inputs = try container.decode([Input].self, forKey: .inputs)
         secrets = try container.decode([Secret].self, forKey: .secrets)
         steps = try container.decode([Step].self, forKey: .steps)

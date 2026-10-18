@@ -21,8 +21,8 @@ struct DecodingTests {
     @Test func theDemoManifestDecodes() throws {
         let decoded = try Manifest(toml: manifest)
         #expect(decoded.name == "demo")
-        #expect(decoded.detect.all == [DetectRule(glob: "fly.toml", contains: nil)])
-        #expect(decoded.detect.any == [DetectRule(glob: "Package.swift", contains: "vapor")])
+        #expect(decoded.detect?.all == [DetectRule(glob: "fly.toml", contains: nil)])
+        #expect(decoded.detect?.any == [DetectRule(glob: "Package.swift", contains: "vapor")])
         #expect(decoded.inputs[0].infer == [InferRule(from: .toml(file: "fly.toml", key: "app"), map: nil)])
         #expect(decoded.inputs[1].infer?[0].from == .regex(glob: "fly.toml", pattern: #"primary_region = "([a-z]+)""#))
         #expect(decoded.secrets[0].source == .keychain(item: "demo.fly-token"))

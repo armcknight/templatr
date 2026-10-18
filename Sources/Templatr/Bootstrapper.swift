@@ -33,21 +33,36 @@ public struct Bootstrapper: Sendable {
         let repository = repository.standardizedFileURL
         let catalog = try templates.components()
         let byName = Dictionary(catalog.map { ($0.name, $0) }) { first, _ in first }
-        let files = RepositoryFiles(root: repository, runner: services.runner)
-        let detected = catalog.filter { $0.manifest.detect.matches(files) }.map(\.name)
+        // Each component's rules read the files in its own directory.
+        var cache: [URL: RepositoryFiles] = [:]
+        func files(of component: Component) -> RepositoryFiles {
+            let root = component.root(in: repository)
+            if let found = cache[root] { return found }
+            let found = RepositoryFiles(root: root, runner: services.runner)
+            cache[root] = found
+            return found
+        }
+        var detected = catalog.filter { component in
+            component.manifest.detect.map { $0.matches(files(of: component)) } ?? false
+        }.map(\.name)
+        // The base components come with any other, first.
+        if !detected.isEmpty {
+            detected = catalog.filter(\.manifest.base).map(\.name) + detected
+        }
         let record = try Record.read(in: repository)
 
         var names = detected
         var resolution = Resolution(recorded: record != nil, components: [], newComponents: [], unknownComponents: [])
         if let record {
-            names = record.components.keys.sorted().filter { byName[$0] != nil }
+            let recorded = record.components.keys.sorted().filter { byName[$0] != nil }
+            names = recorded.filter { byName[$0]!.manifest.base } + recorded.filter { !byName[$0]!.manifest.base }
             resolution.unknownComponents = record.components.keys.sorted().filter { byName[$0] == nil }
             resolution.newComponents = detected.filter { record.components[$0] == nil }
         }
 
-        let inferrer = Inferrer(files: files, buildSettings: services.buildSettings)
         resolution.components = names.map { name in
             let component = byName[name]!
+            let inferrer = Inferrer(files: files(of: component), buildSettings: services.buildSettings)
             let entry = record?.components[name]
             let known = (entry?.inputs ?? [:]).merging(answers[name] ?? [:]) { $1 }
             let inferred = inferrer.infer(component.manifest.inputs, known: known)
@@ -89,10 +104,19 @@ public struct Bootstrapper: Sendable {
         }) { first, _ in first })
         try write(record.toml(), to: Record.fileName, in: repository, result: &result)
 
-        for resolved in components {
-            try copyScaffold(resolved, to: repository, result: &result, report: &report)
+        let conflicts = scaffoldConflicts(components)
+        for (path, names) in conflicts.sorted(by: { $0.key < $1.key }) {
+            report.errors.append(
+                "\(path) is in the scaffolds of \(names.joined(separator: " and ")), so it is not copied from either."
+            )
         }
         for resolved in components {
+            try copyScaffold(resolved, to: repository, skipping: Set(conflicts.keys), result: &result, report: &report)
+        }
+        for resolved in components {
+            // A step runs in the component's directory, which the scaffold
+            // makes unless an input that it needs is missing.
+            try FileManager.default.createDirectory(at: resolved.component.root(in: repository), withIntermediateDirectories: true)
             for step in resolved.component.manifest.steps {
                 run(step, of: resolved, in: repository, fixing: true, result: &result, report: &report)
             }
@@ -102,7 +126,12 @@ public struct Bootstrapper: Sendable {
         let readme = (try? String(contentsOf: repository.appending(path: "README.md"), encoding: .utf8))
             ?? "# \(repository.lastPathComponent)\n"
         let section = Markdown.readmeSection(components, links: options.links)
-        try write(MarkedSection.readme.replace(in: readme, with: section), to: "README.md", in: repository, result: &result)
+        var text = MarkedSection.readme.replace(in: readme, with: section)
+        for resolved in components {
+            guard let blurb = Markdown.blurb(resolved) else { continue }
+            text = MarkedSection.component(resolved.component.name).replace(in: text, with: blurb, before: MarkedSection.readme.begin)
+        }
+        try write(text, to: "README.md", in: repository, result: &result)
 
         for resolved in components {
             let source = resolved.component.directory.appending(path: "CLAUDE.md")
@@ -170,20 +199,27 @@ public struct Bootstrapper: Sendable {
         report.brokenLinks = await brokenLinks(in: repository)
     }
 
-    private func copyScaffold(
-        _ resolved: ResolvedComponent, to repository: URL, result: inout BootstrapResult, report: inout Report
-    ) throws {
-        let scaffold = resolved.component.directory.appending(path: "scaffold")
-        let values = PlaceholderValues(inputs: resolved.values, templates: templates.root, tag: resolved.tag)
-        let manager = FileManager.default
-        guard let enumerator = manager.enumerator(atPath: scaffold.path) else { return }
-        var paths: [String] = []
-        while let path = enumerator.nextObject() as? String {
-            if enumerator.fileAttributes?[.type] as? FileAttributeType == .typeRegular {
-                paths.append(path)
+    /// The scaffold paths that more than one component has, with those
+    /// components' names. Neither file is copied, so that the result does not
+    /// depend on the components' order.
+    private func scaffoldConflicts(_ components: [ResolvedComponent]) -> [String: [String]] {
+        var owners: [String: [String]] = [:]
+        for resolved in components {
+            for path in Validator.scaffoldPaths(in: resolved.component.scaffold) {
+                owners[path, default: []].append(resolved.component.name)
             }
         }
-        for path in paths.sorted() {
+        return owners.filter { $0.value.count > 1 }
+    }
+
+    private func copyScaffold(
+        _ resolved: ResolvedComponent, to repository: URL, skipping: Set<String>,
+        result: inout BootstrapResult, report: inout Report
+    ) throws {
+        let scaffold = resolved.component.scaffold
+        let values = PlaceholderValues(inputs: resolved.values, templates: templates.root, tag: resolved.tag)
+        let manager = FileManager.default
+        for path in Validator.scaffoldPaths(in: scaffold) where !skipping.contains(path) {
             let target = repository.appending(path: path)
             guard !manager.fileExists(atPath: target.path) else { continue }
             let source = scaffold.appending(path: path)
@@ -227,7 +263,8 @@ public struct Bootstrapper: Sendable {
             ))
             return
         }
-        let checked = shell(check.text, in: repository)
+        let directory = resolved.component.root(in: repository)
+        let checked = shell(check.text, in: directory)
         if checked.succeeded { return }
 
         switch step.fix {
@@ -240,8 +277,8 @@ public struct Bootstrapper: Sendable {
         case .command:
             var output = checked.transcript
             if fixing, let fixCommand {
-                let fixed = shell(fixCommand.text, in: repository)
-                let rechecked = shell(check.text, in: repository)
+                let fixed = shell(fixCommand.text, in: directory)
+                let rechecked = shell(check.text, in: directory)
                 if rechecked.succeeded {
                     result.fixedSteps.append("\(name)/\(step.id)")
                     return

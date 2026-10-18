@@ -1,6 +1,3 @@
-# Downloaded Makefile fragments; see the Makefile.
-/.superlinear/make/
-
 # fastlane output
 /fastlane/report.xml
 /fastlane/test_output/
@@ -8,5 +5,5 @@
 /*.pkg
 /*.dSYM.zip
 
-# `make deploy-beta` logs
+# `make ios deploy-beta` logs
 /deploy-beta*.log
