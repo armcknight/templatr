@@ -299,5 +299,5 @@ anchor = "builds.md#build-numbers"
 [[certificates]]
 id = "match"
 description = "The signing certificates and provisioning profiles in the fastlane match repository."
-list = "bundle exec ruby {{templates}}/components/apple-app/bin/list-match-certificates {{inputs.match_git_url}} {{inputs.app_identifiers}} {{inputs.adhoc_bundle_id}}"
+list = "{{templates}}/components/apple-app/bin/list-match-certificates {{inputs.match_git_url}} {{inputs.app_identifiers}} {{inputs.adhoc_bundle_id}}"
 renew = { text = "Renew the certificates and profiles named here, which are in {{inputs.match_git_url}}. For a profile, run `bundle exec fastlane match appstore --readonly false --force` in `apple/`, or `adhoc` for the ad-hoc profile, on a Mac that can push to the match repository. For a certificate, revoke it in the developer portal's Certificates page, then run match the same way: it makes a new certificate and new profiles for it.", twoFactor = true }

@@ -177,7 +177,7 @@ Optional. Signing certificates, provisioning profiles and other files that stop 
 [[certificates]]
 id = "match"
 description = "The signing certificates and provisioning profiles in the fastlane match repository."
-list = "bundle exec ruby {{templates}}/components/apple-app/bin/list-match-certificates {{inputs.match_git_url}} {{inputs.app_identifiers}}"
+list = "{{templates}}/components/apple-app/bin/list-match-certificates {{inputs.match_git_url}} {{inputs.app_identifiers}}"
 renew = { text = "Renew them with match.", twoFactor = true }
 ```
 
