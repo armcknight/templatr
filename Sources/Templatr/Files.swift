@@ -42,31 +42,68 @@ struct RepositoryFiles {
     let directories: Set<String>
 
     /// Directories that hold no source: version control, build products and
-    /// downloaded dependencies.
+    /// downloaded dependencies. Only a directory walk skips them; git skips
+    /// what the repository ignores.
     static let skipped: Set<String> = [".git", ".build", ".swiftpm", "DerivedData", "node_modules", "Pods"]
 
-    init(root: URL) {
+    /// The files git lists in `root`, tracked and untracked but not ignored,
+    /// and their directories. A submodule is one directory, without its
+    /// contents. When `root` is not a git checkout, the files of a directory
+    /// walk.
+    init(root: URL, runner: CommandRunner = ProcessRunner()) {
         self.root = root
-        var paths: [String] = []
-        var directories: Set<String> = []
-        if let enumerator = FileManager.default.enumerator(atPath: root.path) {
-            while let path = enumerator.nextObject() as? String {
-                let type = enumerator.fileAttributes?[.type] as? FileAttributeType
-                if type == .typeDirectory {
-                    if Self.skipped.contains((path as NSString).lastPathComponent) {
-                        enumerator.skipDescendants()
-                        continue
-                    }
-                    directories.insert(path)
-                }
-                paths.append(path)
-            }
-        }
+        let (paths, directories) = Self.gitFiles(root: root, runner: runner) ?? Self.walk(root: root)
         self.paths = paths.sorted { lhs, rhs in
             let (left, right) = (lhs.split(separator: "/").count, rhs.split(separator: "/").count)
             return left == right ? lhs < rhs : left < right
         }
         self.directories = directories
+    }
+
+    /// The paths from `git ls-files`, with the directories that hold them, or
+    /// `nil` when git cannot list them.
+    private static func gitFiles(root: URL, runner: CommandRunner) -> (Set<String>, Set<String>)? {
+        let arguments = ["git", "-C", root.path, "ls-files", "-z", "--cached", "--others", "--exclude-standard"]
+        guard let result = try? runner.run(arguments, input: nil, in: nil), result.succeeded else { return nil }
+        var paths: Set<String> = []
+        var directories: Set<String> = []
+        for entry in result.text.split(separator: "\0") {
+            // An untracked repository inside this one ends in a slash.
+            let path = entry.hasSuffix("/") ? String(entry.dropLast()) : String(entry)
+            // A tracked file deleted from the working tree is still listed.
+            var isDirectory: ObjCBool = false
+            guard !path.isEmpty, FileManager.default.fileExists(atPath: root.appending(path: path).path, isDirectory: &isDirectory)
+            else { continue }
+            paths.insert(path)
+            // A submodule and an untracked repository are directories.
+            if isDirectory.boolValue { directories.insert(path) }
+            var parent = (path as NSString).deletingLastPathComponent
+            while !parent.isEmpty, directories.insert(parent).inserted {
+                paths.insert(parent)
+                parent = (parent as NSString).deletingLastPathComponent
+            }
+        }
+        return (paths, directories)
+    }
+
+    /// Every path under `root` but those in the skipped directories.
+    private static func walk(root: URL) -> (Set<String>, Set<String>) {
+        var paths: Set<String> = []
+        var directories: Set<String> = []
+        if let enumerator = FileManager.default.enumerator(atPath: root.path) {
+            while let path = enumerator.nextObject() as? String {
+                let type = enumerator.fileAttributes?[.type] as? FileAttributeType
+                if type == .typeDirectory {
+                    if skipped.contains((path as NSString).lastPathComponent) {
+                        enumerator.skipDescendants()
+                        continue
+                    }
+                    directories.insert(path)
+                }
+                paths.insert(path)
+            }
+        }
+        return (paths, directories)
     }
 
     /// The paths that match `glob`, files and directories.
