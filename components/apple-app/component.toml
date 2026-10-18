@@ -170,6 +170,16 @@ scope = "team"
 human = { text = "Add the public half of the generated key (the Keychain item superlinear.match-deploy-key.pub) to the fastlane match repository as a read-only deploy key." }
 rotateEvery = "1y"
 
+# A new app has no Xcode project yet: the fix writes the XcodeGen spec, with a
+# target that builds for each platform in the platforms input, and xcodegen
+# makes the project before each build. An app that has a project, a workspace
+# or a spec already passes the check, and nothing is written.
+[[steps]]
+id = "xcode-project"
+description = "apple/ has the app's Xcode project, workspace, XcodeGen spec or Tuist manifest."
+check = "for f in *.xcodeproj *.xcworkspace project.yml Project.swift; do [ -e \"$f\" ] && exit 0; done; exit 1"
+fix = "{{templates}}/components/apple-app/bin/new-xcodegen-spec {{inputs.app_name}} {{inputs.scheme}} {{inputs.project}} {{inputs.bundle_id}} {{inputs.team_id}} {{inputs.xcconfig}} {{inputs.platforms}}"
+
 [[steps]]
 id = "gemfile"
 description = "The Gemfile has fastlane."
@@ -270,6 +280,12 @@ kind = "script"
 path = "components/apple-app/bin/list-match-certificates"
 version = "v1"
 description = "Lists the certificates and profiles in the fastlane match repository, with their expiry dates."
+
+[[shared]]
+kind = "script"
+path = "components/apple-app/bin/new-xcodegen-spec"
+version = "v1"
+description = "Writes a new app's XcodeGen spec, with targets that build for each of its platforms."
 
 [[shared]]
 kind = "script"

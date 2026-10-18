@@ -1,0 +1,131 @@
+#!/bin/sh
+# Usage: new-xcodegen-spec <app_name> <scheme> <project> <bundle_id> <team_id> <xcconfig> <platforms>
+#
+# Writes the XcodeGen spec of a new app's one Xcode project, project.yml, in the
+# current directory, which is apple/. Its app target and its test target build
+# for each platform in <platforms>, as fastlane names them and separated by
+# spaces, such as "ios mac": ios is iOS, tvos is tvOS and mac is macOS, in
+# XcodeGen's supportedDestinations. The targets are named <scheme>, and so is
+# the scheme that builds and tests the app. <project> is the .xcodeproj that
+# xcodegen makes.
+#
+# It also writes the files the spec needs: the xcconfig with MARKETING_VERSION
+# and CURRENT_PROJECT_VERSION, a SwiftUI app in <scheme>/, and a test in
+# <scheme>Tests/. It changes no file that exists, and writes nothing when
+# project.yml exists. The files come from the templates in ../xcodegen/, where
+# each @NAME@ placeholder is replaced with its value.
+
+templates="$(cd "$(dirname "$0")/../xcodegen" && pwd)" || exit 1
+
+if [ "$#" -ne 7 ]; then
+  echo "Usage: new-xcodegen-spec <app_name> <scheme> <project> <bundle_id> <team_id> <xcconfig> <platforms>" >&2
+  exit 2
+fi
+
+app_name="$1"
+scheme="$2"
+project="$3"
+bundle_id="$4"
+team_id="$5"
+xcconfig="$6"
+platforms="$7"
+
+if [ -e project.yml ]; then
+  echo "project.yml exists." >&2
+  exit 1
+fi
+
+case "$project" in
+  *.xcodeproj) name="${project%.xcodeproj}" ;;
+  *)
+    echo "The project, $project, is not an .xcodeproj." >&2
+    exit 2
+    ;;
+esac
+case "$name" in
+  */*)
+    echo "The project, $project, is not in apple/ itself." >&2
+    exit 2
+    ;;
+esac
+
+# XcodeGen's names for the platforms, and the oldest version of each that the
+# app runs on.
+destinations=""
+deployment=""
+for platform in $platforms; do
+  case "$platform" in
+    ios) destination=iOS version=18.0 ;;
+    tvos) destination=tvOS version=18.0 ;;
+    mac) destination=macOS version=15.0 ;;
+    *)
+      echo "Unknown platform: $platform. The platforms are ios, tvos and mac." >&2
+      exit 2
+      ;;
+  esac
+  case " $destinations " in
+    *" $destination "*) continue ;;
+  esac
+  destinations="${destinations:+$destinations }$destination"
+  deployment="${deployment:+$deployment
+}    $destination: \"$version\""
+done
+if [ -z "$destinations" ]; then
+  echo "No platforms." >&2
+  exit 2
+fi
+destination_list="[$(printf '%s' "$destinations" | sed 's/ /, /g')]"
+
+# A YAML string in double quotes.
+quote() {
+  printf '"%s"' "$(printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g')"
+}
+
+# Writes the template $1 to $2, with each @NAME@ in it replaced with the value
+# of the environment variable NAME. The values are used as they are.
+render() {
+  awk '
+    {
+      line = $0
+      out = ""
+      while (match(line, /@[A-Z_]+@/)) {
+        key = substr(line, RSTART + 1, RLENGTH - 2)
+        out = out substr(line, 1, RSTART - 1) ENVIRON[key]
+        line = substr(line, RSTART + RLENGTH)
+      }
+      print out line
+    }
+  ' "$templates/$1" > "$2"
+}
+
+PROJECT="$(quote "$project")" \
+NAME="$(quote "$name")" \
+DEPLOYMENT_TARGETS="$deployment" \
+XCCONFIG="$(quote "$xcconfig")" \
+TEAM_ID="$(quote "$team_id")" \
+SCHEME="$(quote "$scheme")" \
+TEST_SCHEME="$(quote "${scheme}Tests")" \
+DESTINATIONS="$destination_list" \
+APP_NAME="$(quote "$app_name")" \
+BUNDLE_ID="$(quote "$bundle_id")" \
+TEST_BUNDLE_ID="$(quote "$bundle_id.tests")" \
+TEST_HOST="$(quote "\$(BUILT_PRODUCTS_DIR)/$app_name.app/$app_name")" \
+MAC_TEST_HOST="$(quote "\$(BUILT_PRODUCTS_DIR)/$app_name.app/Contents/MacOS/$app_name")" \
+  render project.yml project.yml
+
+# The build number is CURRENT_PROJECT_VERSION, which deploy-beta raises, and
+# the generated Info.plist's CFBundleVersion is it.
+if [ ! -e "$xcconfig" ]; then
+  mkdir -p "$(dirname "$xcconfig")"
+  cp "$templates/App.xcconfig" "$xcconfig"
+fi
+
+if [ ! -e "$scheme" ]; then
+  mkdir -p "$scheme"
+  cp "$templates/App.swift" "$scheme/App.swift"
+fi
+
+if [ ! -e "${scheme}Tests" ]; then
+  mkdir -p "${scheme}Tests"
+  cp "$templates/Tests.swift" "${scheme}Tests/Tests.swift"
+fi
