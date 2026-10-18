@@ -33,3 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `product` from `server/Package.swift`, `ca_cert_path` from the certificate
   that `server/Dockerfile` copies, and `ca_cert_env` from `server/fly.toml`'s
   `[env]`.
+
+### Changed
+
+- `templatr check` and `bootstrap` read only the templates' major-version
+  aliases, such as `v1`, and pin new components to the newest one; `--tag`
+  still takes a full tag, such as `v1.0.1`. A component is behind when a newer
+  alias exists, so `v1` is behind `v2` but not `v1.0.1`.

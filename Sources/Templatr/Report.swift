@@ -33,7 +33,7 @@ public struct Report: Codable, Equatable, Sendable {
     /// Certificates, profiles and other files that expire within 30 days, or
     /// have expired, from the manifests' `certificates`.
     public var certificateExpiries: [CertificateExpiry] = []
-    /// Components pinned to a tag older than the newest one.
+    /// Components pinned to an older major version than the newest alias.
     public var oldTags: [OldTag] = []
     /// Links in README.md that no longer resolve.
     public var brokenLinks: [BrokenLink] = []
@@ -67,7 +67,8 @@ public struct Report: Codable, Equatable, Sendable {
 public struct ComponentStatus: Codable, Equatable, Sendable {
     public var name: String
     public var tag: String
-    /// The newest tag of the templatr checkout, when it knows its tags.
+    /// The newest alias of the templatr checkout, such as `v2`, when it knows
+    /// its tags.
     public var newestTag: String?
 }
 

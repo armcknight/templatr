@@ -46,9 +46,17 @@ Tests/TemplatrTests/               the Templatr library's tests
 
 ## Releases
 
-Releases are tags: `v1`, `v1.1`, `v2`. Projects refer to a tag — in `import_from_git(branch: "v1")` and `TEMPLATES_TAG = v1` — never to `main`. The workflows from armcknight/workflows are called at its major tag, such as `@4`, never `@main`. A change that a project must act on, such as a renamed input, a new required secret or a lane that behaves differently, takes a new major version.
+The templates — the components, the `make/*.mk` fragments and the shared Fastfile — have releases with three-part tags: `v1.0.0`, `v1.1.0`, `v2.0.0`. Their version is in [components/VERSION](components/VERSION) and their changes are in [components/CHANGELOG.md](components/CHANGELOG.md). Each release also moves the alias of its major version, `v1` or `v2`, to it, and projects pin the alias — in `import_from_git(branch: "v1")`, `TEMPLATES_TAG = v1` and `.templatr.toml` — never a full tag or `main`. The workflows from armcknight/workflows are called the same way, at their major alias, such as `@4`, never `@main`.
 
-The `templatr` command has releases of its own, with three-part tags such as `0.1.0`, and its changes are in [CHANGELOG.md](CHANGELOG.md). `make patch`, `make minor` or `make major` bumps the version in `Sources/TemplatrCLI/Version.swift` and commits it. `make deploy` moves the changelog's `[Unreleased]` section into a section for the version, tags the commit, pushes, and makes a GitHub release; `make deploy-beta` does the same for a release candidate, such as `0.1.0-RC1`. `make help` lists the targets. vrsn and prepare-release come from the armcknight/tools cask. A component is never pinned to one of these tags, as `templatr` reads only the `v*` tags.
+A compatible change, such as a fixed lane or a new optional input, is a minor or patch release, and reaches every project pinned to its alias on that project's next `make templates-update` or fastlane run. A change that a project must act on, such as a renamed input, a new required secret or a lane that behaves differently, is a new major version; moving a project from `v1` to `v2` is a change in that project, and `templatr check` reports each component that is pinned to an older major than the newest alias.
+
+* `make templates-patch`, `make templates-minor` or `make templates-major` bumps `components/VERSION` and commits it.
+* `make templates-deploy` moves the `[Unreleased]` section of `components/CHANGELOG.md` into a section for the version, commits, tags the commit with the version and a `v`, such as `v1.1.0`, and pushes. [release.yml](.github/workflows/release.yml) then makes the GitHub release from that section and moves the alias `v1` to the tag, when the tag is on `main` and is the newest of its major.
+* `make templates-deploy-beta` does the same for a release candidate, such as `v1.1.0-RC1`, which is a prerelease and does not move the alias. Pin one project to it, with `TEMPLATES_TAG` and `import_from_git`, to try a lane or a fragment before every project gets it.
+
+The `templatr` command has releases of its own, with three-part tags without the `v`, such as `0.1.0`, and its changes are in [CHANGELOG.md](CHANGELOG.md). `make patch`, `make minor` or `make major` bumps the version in `Sources/TemplatrCLI/Version.swift` and commits it. `make deploy` moves the changelog's `[Unreleased]` section into a section for the version, tags the commit, pushes, and makes a GitHub release; `make deploy-beta` does the same for a release candidate, such as `0.1.0-RC1`. A component is never pinned to one of these tags, as `templatr` reads only the `v*` tags.
+
+`make help` lists both families of targets. vrsn and prepare-release come from the armcknight/tools cask.
 
 ## Shared pieces
 
@@ -251,11 +259,11 @@ swift run templatr check ~/Code/babysittr         # report what it still needs, 
 
 It then reports what is left, as `check` does. Running it again changes nothing that is already done.
 
-Options: `--yes` accepts the inputs found and sets missing secrets without asking; without a terminal, nothing is asked, and secrets are set only with `--yes`. `--link TITLE=URL`, which can be given more than one time, adds a link to the README section, such as the project's Linear team or spec document. `--tag TAG` is the tag new components are pinned to, the checkout's newest `v*` tag by default, and `--templates DIR` another checkout of this repository.
+Options: `--yes` accepts the inputs found and sets missing secrets without asking; without a terminal, nothing is asked, and secrets are set only with `--yes`. `--link TITLE=URL`, which can be given more than one time, adds a link to the README section, such as the project's Linear team or spec document. `--tag TAG` is the tag new components are pinned to, the checkout's newest alias, such as `v1`, by default (a full tag, such as `v1.0.1`, can be given), and `--templates DIR` another checkout of this repository.
 
 ### `templatr check [<repository>] [--json]`
 
-The checks only; it changes nothing. It reports the steps whose checks fail, the human steps, the inputs and the secrets that are missing (by name), secrets due for a new value within 30 days of their `rotateEvery`, certificates and profiles that expire within 30 days, from the manifests' `certificates`, components pinned to a tag older than the newest, and links in the README that no longer resolve. `--offline` skips the web links.
+The checks only; it changes nothing. It reports the steps whose checks fail, the human steps, the inputs and the secrets that are missing (by name), secrets due for a new value within 30 days of their `rotateEvery`, certificates and profiles that expire within 30 days, from the manifests' `certificates`, components pinned to an older major version than the newest alias (`v1` when `v2` exists, but not when only `v1.0.1` does), and links in the README that no longer resolve. `--offline` skips the web links.
 
 With `--json`, it prints the report in the format of [schema/check-report.schema.json](schema/check-report.schema.json), which superlinear reads. Its `version` changes only when a change would break a reader.
 
@@ -266,7 +274,7 @@ The exit status is 0 when nothing is left to do, 1 when the report lists somethi
 1. Make `components/<name>/` with `component.toml`, with its `directory` and `blurb`, `CLAUDE.md`, and `scaffold/<directory>/README.md`, without the markers. Put its files under `scaffold/<directory>/`, its Makefile targets in `scaffold/<directory>/component.mk`, and its workflows in `scaffold/.github/workflows/<name>-*.yml`.
 2. Put shared lanes, Makefile fragments and scripts at the top level, and reusable workflows in armcknight/workflows. Add them to the manifest's `shared` and to the table above.
 3. Add any new guide section to superlinear's `docs/`, with its anchor listed in `docs/anchors.md`, first.
-4. Run the checks below, then tag a release.
+4. Add it to the `[Unreleased]` section of [components/CHANGELOG.md](components/CHANGELOG.md), and run the checks below. Its release is the next `make templates-minor` and `make templates-deploy`.
 
 ## The package
 
@@ -279,7 +287,7 @@ The exit status is 0 when nothing is left to do, 1 when the report lists somethi
 
 The package builds on macOS and Linux. [TOMLKit](https://github.com/LebJe/TOMLKit) parses the TOML, and [Yams](https://github.com/jpsim/Yams) the YAML.
 
-superlinear uses the library at a component release tag. The `v*` tags are not three-part versions, so a `Package.swift` pins one as a revision:
+superlinear uses the library at a templates release. The alias `v1` is not a three-part version, so a `Package.swift` pins it as a revision:
 
 ```swift
 .package(url: "https://github.com/armcknight/templatr", revision: "v1")
