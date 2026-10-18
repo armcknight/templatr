@@ -174,7 +174,7 @@ public struct DetectRule: Codable, Equatable, Sendable {
         case glob, contains, root
     }
 
-    public init(glob: String, contains: String?, root: Bool = false) {
+    public init(glob: String, contains: String?, root: Bool) {
         self.glob = glob
         self.contains = contains
         self.root = root
@@ -305,7 +305,7 @@ public struct InferRule: Codable, Equatable, Sendable {
     /// The keys every rule can have.
     static let commonKeys: Set<String> = [CodingKeys.from.rawValue, CodingKeys.map.rawValue]
 
-    public init(from: From, map: [String: String]?, root: Bool = false) {
+    public init(from: From, map: [String: String]?, root: Bool) {
         self.from = from
         self.map = map
         self.root = root
