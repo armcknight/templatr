@@ -11,11 +11,11 @@ struct ValidatorTests {
     }
 
     /// Fails unless one problem contains `fragment`.
-    func expectProblem(_ fragment: String, sourceLocation: SourceLocation = #_sourceLocation) {
+    func expectProblem(_ fragment: String) {
         let problems = repository.problems()
         #expect(
             problems.contains { $0.contains(fragment) },
-            "no problem with '\(fragment)' in \(problems)", sourceLocation: sourceLocation
+            "no problem with '\(fragment)' in \(problems)"
         )
     }
 

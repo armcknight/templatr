@@ -5,15 +5,15 @@ import Testing
 @Suite("Decoding")
 struct DecodingTests {
     /// The error decoding `toml`, which must not decode.
-    func error(decoding toml: String, sourceLocation: SourceLocation = #_sourceLocation) -> ManifestError? {
+    func error(decoding toml: String) -> ManifestError? {
         do {
             _ = try Manifest(toml: toml)
-            Issue.record("decoded", sourceLocation: sourceLocation)
+            Issue.record("decoded")
             return nil
         } catch let error as ManifestError {
             return error
         } catch {
-            Issue.record(error, sourceLocation: sourceLocation)
+            Issue.record(error)
             return nil
         }
     }
@@ -21,9 +21,9 @@ struct DecodingTests {
     @Test func theDemoManifestDecodes() throws {
         let decoded = try Manifest(toml: manifest)
         #expect(decoded.name == "demo")
-        #expect(decoded.detect.all == [DetectRule(glob: "fly.toml")])
+        #expect(decoded.detect.all == [DetectRule(glob: "fly.toml", contains: nil)])
         #expect(decoded.detect.any == [DetectRule(glob: "Package.swift", contains: "vapor")])
-        #expect(decoded.inputs[0].infer == [InferRule(from: .toml(file: "fly.toml", key: "app"))])
+        #expect(decoded.inputs[0].infer == [InferRule(from: .toml(file: "fly.toml", key: "app"), map: nil)])
         #expect(decoded.inputs[1].infer?[0].from == .regex(glob: "fly.toml", pattern: #"primary_region = "([a-z]+)""#))
         #expect(decoded.secrets[0].source == .keychain(item: "demo.fly-token"))
         #expect(decoded.secrets[0].scope == .app)
@@ -31,7 +31,7 @@ struct DecodingTests {
         #expect(decoded.secrets[0].rotateEvery == RotationPeriod(count: 90, unit: .days))
         #expect(decoded.steps[0].scope == .repo)
         #expect(decoded.steps[0].fix == .command("fly apps create {{inputs.app}}"))
-        #expect(decoded.steps[1].fix == .human(Human(text: "Point the domain at {{inputs.app}}.")))
+        #expect(decoded.steps[1].fix == .human(Human(text: "Point the domain at {{inputs.app}}.", twoFactor: false)))
         #expect(decoded.shared[0].link == ".github/workflows/demo.yml")
         #expect(decoded.docs == [Doc(title: "Builds", anchor: "builds.md#ci")])
     }

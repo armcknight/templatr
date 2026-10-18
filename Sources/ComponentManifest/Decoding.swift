@@ -76,11 +76,11 @@ struct Format: Sendable {
 extension Decoder {
     /// Throws when the table has a key that `Key` does not name.
     func rejectKeys<Key: CodingKey & CaseIterable>(unknownTo keys: Key.Type) throws {
-        try rejectKeys(outside: Set(Key.allCases.map(\.stringValue)))
+        try rejectKeys(outside: Set(Key.allCases.map(\.stringValue)), context: "")
     }
 
     /// Throws when the table has a key that is not in `known`.
-    func rejectKeys(outside known: Set<String>, context: String = "") throws {
+    func rejectKeys(outside known: Set<String>, context: String) throws {
         let container = try self.container(keyedBy: AnyKey.self)
         let unknown = container.allKeys.map(\.stringValue).filter { !known.contains($0) }.sorted()
         guard let first = unknown.first else { return }

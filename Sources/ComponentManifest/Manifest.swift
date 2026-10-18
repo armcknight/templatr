@@ -23,8 +23,8 @@ public struct Manifest: Codable, Equatable, Sendable {
     }
 
     public init(
-        name: String, description: String, detect: Detect, inputs: [Input] = [], secrets: [Secret] = [],
-        steps: [Step] = [], shared: [Shared] = [], docs: [Doc]
+        name: String, description: String, detect: Detect, inputs: [Input], secrets: [Secret],
+        steps: [Step], shared: [Shared], docs: [Doc]
     ) {
         self.name = name
         self.description = description
@@ -116,7 +116,7 @@ public struct Detect: Codable, Equatable, Sendable {
         case all, any
     }
 
-    public init(all: [DetectRule]? = nil, any: [DetectRule]? = nil) {
+    public init(all: [DetectRule]?, any: [DetectRule]?) {
         self.all = all
         self.any = any
     }
@@ -144,7 +144,7 @@ public struct DetectRule: Codable, Equatable, Sendable {
         case glob, contains
     }
 
-    public init(glob: String, contains: String? = nil) {
+    public init(glob: String, contains: String?) {
         self.glob = glob
         self.contains = contains
     }
@@ -174,7 +174,7 @@ public struct Input: Codable, Equatable, Sendable {
         case infer
     }
 
-    public init(name: String, description: String, example: String, defaultValue: String? = nil, infer: [InferRule]? = nil) {
+    public init(name: String, description: String, example: String, defaultValue: String?, infer: [InferRule]?) {
         self.name = name
         self.description = description
         self.example = example
@@ -261,7 +261,7 @@ public struct InferRule: Codable, Equatable, Sendable {
     /// The keys every rule can have.
     static let commonKeys: Set<String> = [CodingKeys.from.rawValue, CodingKeys.map.rawValue]
 
-    public init(from: From, map: [String: String]? = nil) {
+    public init(from: From, map: [String: String]?) {
         self.from = from
         self.map = map
     }
@@ -329,7 +329,7 @@ public struct Human: Codable, Equatable, Sendable {
         case text, twoFactor
     }
 
-    public init(text: String, twoFactor: Bool = false) {
+    public init(text: String, twoFactor: Bool) {
         self.text = text
         self.twoFactor = twoFactor
     }
@@ -420,8 +420,8 @@ public struct Secret: Codable, Equatable, Sendable {
     }
 
     public init(
-        name: String, description: String, source: Source, scope: Scope, human: Human? = nil,
-        rotateEvery: RotationPeriod? = nil
+        name: String, description: String, source: Source, scope: Scope, human: Human?,
+        rotateEvery: RotationPeriod?
     ) {
         self.name = name
         self.description = description
@@ -542,7 +542,7 @@ public struct Step: Codable, Equatable, Sendable {
         case id, description, scope, check, fix
     }
 
-    public init(id: String, description: String, scope: Scope = .repo, check: String, fix: Fix) {
+    public init(id: String, description: String, scope: Scope, check: String, fix: Fix) {
         self.id = id
         self.description = description
         self.scope = scope
@@ -583,7 +583,7 @@ public struct Shared: Codable, Equatable, Sendable {
         case kind, repo, path, version, description
     }
 
-    public init(kind: Kind, repo: String? = nil, path: String, version: String, description: String) {
+    public init(kind: Kind, repo: String?, path: String, version: String, description: String) {
         self.kind = kind
         self.repo = repo
         self.path = path

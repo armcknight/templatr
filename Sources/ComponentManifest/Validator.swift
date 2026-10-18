@@ -98,7 +98,7 @@ public struct Validator: Sendable {
         for (group, rules) in [("all", manifest.detect.all), ("any", manifest.detect.any)] {
             for (index, rule) in (rules ?? []).enumerated() {
                 if let contains = rule.contains {
-                    problems += Self.regexProblems(at: "\(`where`): detect.\(group)[\(index)]", pattern: contains)
+                    problems += Self.regexProblems(at: "\(`where`): detect.\(group)[\(index)]", pattern: contains, needsGroup: false)
                 }
             }
         }
@@ -109,7 +109,7 @@ public struct Validator: Sendable {
                 case .regex(_, let pattern):
                     problems += Self.regexProblems(at: label, pattern: pattern, needsGroup: true)
                 case .glob(_, let contains?, _):
-                    problems += Self.regexProblems(at: label, pattern: contains)
+                    problems += Self.regexProblems(at: label, pattern: contains, needsGroup: false)
                 default:
                     break
                 }
@@ -208,7 +208,7 @@ public struct Validator: Sendable {
     }
 
     /// Why `pattern` is not a regular expression that the component can use.
-    static func regexProblems(at label: String, pattern: String, needsGroup: Bool = false) -> [String] {
+    static func regexProblems(at label: String, pattern: String, needsGroup: Bool) -> [String] {
         let regex: NSRegularExpression
         do {
             regex = try NSRegularExpression(pattern: pattern)
