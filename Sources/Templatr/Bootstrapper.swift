@@ -33,14 +33,17 @@ public struct Bootstrapper: Sendable {
         let repository = repository.standardizedFileURL
         let catalog = try templates.components()
         let byName = Dictionary(catalog.map { ($0.name, $0) }) { first, _ in first }
-        // Each component's rules read the files in its own directory.
+        // Each component's rules read the files in its own directory, or the
+        // repository's for a rule with root = true.
         var cache: [URL: RepositoryFiles] = [:]
-        func files(of component: Component) -> RepositoryFiles {
-            let root = component.root(in: repository)
+        func files(at root: URL) -> RepositoryFiles {
             if let found = cache[root] { return found }
             let found = RepositoryFiles(root: root, runner: services.runner)
             cache[root] = found
             return found
+        }
+        func files(of component: Component) -> ComponentFiles {
+            ComponentFiles(own: files(at: component.root(in: repository)), repository: files(at: repository))
         }
         var detected = catalog.filter { component in
             component.manifest.detect.map { $0.matches(files(of: component)) } ?? false

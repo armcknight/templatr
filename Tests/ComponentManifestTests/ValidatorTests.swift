@@ -71,6 +71,44 @@ struct ValidatorTests {
         expectProblem("exists and stem cannot both be true")
     }
 
+    @Test func rootRulesInAComponentWithADirectory() throws {
+        try repository.editManifest(
+            #"any = [{ glob = "Package.swift", contains = "vapor" }]"#,
+            #"any = [{ glob = "server/Package.swift", contains = "vapor", root = true }]"#
+        )
+        try repository.editManifest(
+            #"infer = [{ from = "toml", file = "fly.toml", key = "app" }]"#,
+            #"infer = [{ from = "toml", file = "server/fly.toml", key = "app", root = true }]"#
+        )
+        #expect(repository.problems() == [])
+    }
+
+    @Test func aRootDetectRuleNeedsADirectory() throws {
+        try repository.editManifest(#"directory = "server""#, "")
+        try repository.editManifest(
+            #"any = [{ glob = "Package.swift", contains = "vapor" }]"#,
+            #"any = [{ glob = "Package.swift", contains = "vapor", root = true }]"#
+        )
+        expectProblem("detect.any[0]: root = true means nothing in a component without a directory")
+    }
+
+    @Test func aRootInferRuleNeedsADirectory() throws {
+        try repository.editManifest(#"directory = "server""#, "")
+        try repository.editManifest(
+            #"infer = [{ from = "toml", file = "fly.toml", key = "app" }]"#,
+            #"infer = [{ from = "toml", file = "fly.toml", key = "app", root = true }]"#
+        )
+        expectProblem("input app infer[0]: root = true means nothing in a component without a directory")
+    }
+
+    @Test func aBuildSettingHasNoRoot() throws {
+        try repository.editManifest(
+            #"{ from = "toml", file = "fly.toml", key = "app" }"#,
+            #"{ from = "build-setting", key = "APP", root = true }"#
+        )
+        expectProblem("inputs/0/infer/0")
+    }
+
     @Test func invalidDetectRegex() throws {
         try repository.editManifest(#"contains = "vapor""#, #"contains = "vapor(""#)
         expectProblem("invalid regular expression")

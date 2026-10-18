@@ -3,16 +3,28 @@ import Foundation
 import TOMLKit
 import Yams
 
+/// The files a component's rules read: those in its directory, and those of
+/// the whole repository for a rule with `root = true`.
+struct ComponentFiles {
+    let own: RepositoryFiles
+    let repository: RepositoryFiles
+
+    func files(root: Bool) -> RepositoryFiles {
+        root ? repository : own
+    }
+}
+
 extension Detect {
     /// Every rule in `all` matches and, when `any` has rules, at least one of
     /// them does.
-    func matches(_ files: RepositoryFiles) -> Bool {
+    func matches(_ files: ComponentFiles) -> Bool {
         (all ?? []).allSatisfy { $0.matches(files) } && (any.map { $0.contains { $0.matches(files) } } ?? true)
     }
 }
 
 extension DetectRule {
-    func matches(_ files: RepositoryFiles) -> Bool {
+    func matches(_ files: ComponentFiles) -> Bool {
+        let files = files.files(root: root)
         guard let contains else { return !files.matching(glob).isEmpty }
         return files.files(matching: glob).contains { path in
             files.text(of: path).map { Patterns.matches(contains, $0) } ?? false
@@ -68,7 +80,7 @@ public struct XcodeBuildSettings: BuildSettingsProvider {
 
 /// Finds inputs' values in a repository.
 struct Inferrer {
-    let files: RepositoryFiles
+    let files: ComponentFiles
     let buildSettings: any BuildSettingsProvider
 
     /// The values that the `infer` rules find for `inputs`, by name. `known`
@@ -90,7 +102,7 @@ struct Inferrer {
         let names = known.merging(found) { $1 }
         let nonEmpty: (String) -> String? = { names[$0].flatMap { $0.isEmpty ? nil : $0 } }
         let settings = buildSettings.buildSettings(
-            repository: files.root, project: nonEmpty("project"), workspace: nonEmpty("workspace"), scheme: nonEmpty("scheme")
+            repository: files.own.root, project: nonEmpty("project"), workspace: nonEmpty("workspace"), scheme: nonEmpty("scheme")
         )
         for input in later {
             found[input.name] = value(of: input, settings: settings)
@@ -100,7 +112,7 @@ struct Inferrer {
 
     private func value(of input: Input, settings: [String: String]?) -> String? {
         for rule in input.infer ?? [] {
-            guard var value = value(of: rule.from, settings: settings) else { continue }
+            guard var value = value(of: rule.from, in: files.files(root: rule.root), settings: settings) else { continue }
             if let map = rule.map {
                 guard let mapped = map[value] else { continue }
                 value = mapped
@@ -110,7 +122,7 @@ struct Inferrer {
         return nil
     }
 
-    private func value(of source: InferRule.From, settings: [String: String]?) -> String? {
+    private func value(of source: InferRule.From, in files: RepositoryFiles, settings: [String: String]?) -> String? {
         switch source {
         case .buildSetting(let key):
             return settings?[key]

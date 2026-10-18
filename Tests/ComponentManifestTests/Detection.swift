@@ -14,12 +14,24 @@ import TOMLKit
 /// that matches the glob and that has the pattern.
 struct Detection {
     let root: URL
+    /// The repository root, which a rule with `root = true` reads.
+    let repository: URL
+
+    init(root: URL, repository: URL? = nil) {
+        self.root = root
+        self.repository = repository ?? root
+    }
+
+    /// The files a rule reads.
+    func reading(root: Bool) -> Detection {
+        root ? Detection(root: repository) : self
+    }
 
     static let skippedDirectories: Set<String> = [".git", ".build", ".swiftpm", "DerivedData", "node_modules"]
 
     /// The rules of a component with a `directory` read the files there.
     func scoped(to manifest: Manifest) -> Detection {
-        manifest.directory.map { Detection(root: root.appending(path: $0)) } ?? self
+        manifest.directory.map { Detection(root: root.appending(path: $0), repository: root) } ?? self
     }
 
     /// Whether the repository uses the component. A base component has no
@@ -41,7 +53,7 @@ struct Detection {
 
     func value(of input: Input) -> String? {
         for rule in input.infer ?? [] {
-            guard var found = value(rule.from) else { continue }
+            guard var found = reading(root: rule.root).value(rule.from) else { continue }
             if let map = rule.map {
                 guard let mapped = map[found] else { continue }
                 found = mapped
@@ -81,7 +93,7 @@ struct Detection {
     }
 
     func matches(_ rule: DetectRule) -> Bool {
-        !files(matching: rule.glob, contains: rule.contains).isEmpty
+        !reading(root: rule.root).files(matching: rule.glob, contains: rule.contains).isEmpty
     }
 
     /// The paths that match the glob and, with `contains`, the files whose

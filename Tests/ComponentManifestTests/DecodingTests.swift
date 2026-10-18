@@ -42,6 +42,23 @@ struct DecodingTests {
         #expect(again == decoded)
     }
 
+    @Test func aRootRuleDecodesAndRoundTrips() throws {
+        let toml = manifest
+            .replacingOccurrences(
+                of: #"{ glob = "Package.swift", contains = "vapor" }"#,
+                with: #"{ glob = "server/Package.swift", contains = "vapor", root = true }"#
+            )
+            .replacingOccurrences(
+                of: #"{ from = "toml", file = "fly.toml", key = "app" }"#,
+                with: #"{ from = "toml", file = "server/fly.toml", key = "app", root = true }"#
+            )
+        let decoded = try Manifest(toml: toml)
+        #expect(decoded.detect?.any == [DetectRule(glob: "server/Package.swift", contains: "vapor", root: true)])
+        #expect(decoded.detect?.all == [DetectRule(glob: "fly.toml", contains: nil, root: false)])
+        #expect(decoded.inputs[0].infer == [InferRule(from: .toml(file: "server/fly.toml", key: "app"), map: nil, root: true)])
+        #expect(try Manifest(toml: decoded.toml()) == decoded)
+    }
+
     @Test func thisRepositoryDecodesAndRoundTrips() throws {
         let url = repositoryRoot.appending(path: "components/apple-app/component.toml")
         let decoded = try Manifest(contentsOf: url)
