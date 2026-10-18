@@ -1,6 +1,6 @@
 # vapor-fly
 
-This project is a Swift server built with Vapor and run on [Fly.io](https://fly.io), with the `vapor-fly` component from [armcknight/templatr](https://github.com/armcknight/templatr). `.superlinear/components.toml` has the tag it is pinned to.
+This project is a Swift server built with Vapor and run on [Fly.io](https://fly.io), with the `vapor-fly` component from [armcknight/templatr](https://github.com/armcknight/templatr). `.templatr.toml` has the tag it is pinned to.
 
 The server's files are in `server/`: its Swift package, the Dockerfile, `fly.toml` and `docker-compose.yml`. Run `swift` commands there, or with `--package-path server`. The `make server …` commands run from the repository's root.
 
