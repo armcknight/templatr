@@ -9,33 +9,33 @@ import Testing
 
     init() throws {
         project = try Directory()
-        try project.write("ios/Demo.xcodeproj/project.pbxproj", """
+        try project.write("apple/Demo.xcodeproj/project.pbxproj", """
             /* Begin PBXNativeTarget section */
             productType = "com.apple.product-type.application";
             """)
         // The scheme's file name, not the product it builds, is its name. A
         // framework's scheme comes first by name, but does not build an app.
-        try project.write("ios/Demo.xcodeproj/xcshareddata/xcschemes/Demo.xcscheme", """
+        try project.write("apple/Demo.xcodeproj/xcshareddata/xcschemes/Demo.xcscheme", """
             <BuildableReference BuildableName = "Demo Dev.app" BlueprintName = "Demo">
             """)
-        try project.write("ios/Demo.xcodeproj/xcshareddata/xcschemes/Common.xcscheme", """
+        try project.write("apple/Demo.xcodeproj/xcshareddata/xcschemes/Common.xcscheme", """
             <BuildableReference BuildableName = "Common.framework" BlueprintName = "Common">
             """)
-        try project.write("ios/config/Demo.xcconfig", "MARKETING_VERSION = 1.2\nCURRENT_PROJECT_VERSION = 7\n")
-        try project.write("ios/fastlane/Appfile", """
+        try project.write("apple/config/Demo.xcconfig", "MARKETING_VERSION = 1.2\nCURRENT_PROJECT_VERSION = 7\n")
+        try project.write("apple/fastlane/Appfile", """
             app_identifier("io.example.demo")
             team_id "ABCDE12345"
             """)
-        try project.write("ios/fastlane/Matchfile", """
+        try project.write("apple/fastlane/Matchfile", """
             git_url("git@github.com:example/match.git")
             app_identifier(["io.example.demo", "io.example.demo.adhoc", 'io.example.demo.watchkitapp'])
             """)
-        try project.write("ios/.arkana.yml", "global_secrets:\n  - SentryDSN\n  - FeedbackEmail\n")
+        try project.write("apple/.arkana.yml", "global_secrets:\n  - SentryDSN\n  - FeedbackEmail\n")
         stubs.settings = [
             "PRODUCT_NAME": "Demo",
             // xcodebuild prints SDKROOT as a path.
             "SDKROOT": "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.1.sdk",
-            "PLATFORM_NAME": "iphoneos", "PRODUCT_BUNDLE_IDENTIFIER": "io.example.other",
+            "SUPPORTED_PLATFORMS": "iphoneos iphonesimulator", "PRODUCT_BUNDLE_IDENTIFIER": "io.example.other",
             "DEVELOPMENT_TEAM": "ZZZZZ99999",
         ]
     }
@@ -60,8 +60,8 @@ import Testing
 
     @Test func doesNotDetectAPackage() throws {
         let package = try Directory()
-        try package.write("ios/Package.swift", "// swift-tools-version: 6.0\n")
-        try package.write("ios/Demo.xcodeproj/project.pbxproj", "productType = \"com.apple.product-type.tool\";\n")
+        try package.write("apple/Package.swift", "// swift-tools-version: 6.0\n")
+        try package.write("apple/Demo.xcodeproj/project.pbxproj", "productType = \"com.apple.product-type.tool\";\n")
         let resolution = try bootstrapper.resolve(repository: package.root, answers: [:])
         #expect(resolution.components.isEmpty)
     }
@@ -77,7 +77,7 @@ import Testing
             "workspace": "",
             "xcconfig": "config/Demo.xcconfig",
             "xcodegen": "false",
-            "platform": "ios",
+            "platforms": "ios",
             // The fastlane configuration comes before the build settings.
             "bundle_id": "io.example.demo",
             "adhoc_bundle_id": "io.example.demo.adhoc",
@@ -96,14 +96,22 @@ import Testing
         #expect(stubs.settingsRequests == [["Demo.xcodeproj", nil, "Demo"]])
     }
 
-    @Test func aMappedValueThatIsNotInTheMapIsNotFound() throws {
-        stubs.settings?["PLATFORM_NAME"] = "watchos"
+    /// One Xcode project can build the app for more than one platform. A
+    /// simulator's platform is the same platform, and is not named twice.
+    @Test func infersEveryPlatform() throws {
+        stubs.settings?["SUPPORTED_PLATFORMS"] = "macosx iphoneos iphonesimulator appletvsimulator appletvos"
         let resolution = try bootstrapper.resolve(repository: project.root, answers: [:])
-        #expect(resolution.components.last?.missing.map(\.name) == ["platform"])
+        #expect(resolution.components.last?.values["platforms"] == "mac ios tvos")
+    }
+
+    @Test func aMappedValueThatIsNotInTheMapIsNotFound() throws {
+        stubs.settings?["SUPPORTED_PLATFORMS"] = "iphoneos iphonesimulator xros xrsimulator"
+        let resolution = try bootstrapper.resolve(repository: project.root, answers: [:])
+        #expect(resolution.components.last?.missing.map(\.name) == ["platforms"])
     }
 
     @Test func aSchemeThatBuildsNoAppIsChosenWhenNoneDoes() throws {
-        try FileManager.default.removeItem(at: project.root.appending(path: "ios/Demo.xcodeproj/xcshareddata/xcschemes/Demo.xcscheme"))
+        try FileManager.default.removeItem(at: project.root.appending(path: "apple/Demo.xcodeproj/xcshareddata/xcschemes/Demo.xcscheme"))
         let resolution = try bootstrapper.resolve(repository: project.root, answers: [:])
         #expect(resolution.components.last?.values["scheme"] == "Common")
     }
@@ -111,8 +119,8 @@ import Testing
     /// A submodule's xcconfig, which comes first by depth and name, is not the
     /// app's.
     @Test func theXcconfigIsNotInASubmodule() throws {
-        try project.write("ios/Kit/Kit.xcconfig", "MARKETING_VERSION = 9.9\n")
-        for arguments in [["init", "--quiet"], ["update-index", "--add", "--cacheinfo", "160000,\(String(repeating: "1", count: 40)),ios/Kit"]] {
+        try project.write("apple/Kit/Kit.xcconfig", "MARKETING_VERSION = 9.9\n")
+        for arguments in [["init", "--quiet"], ["update-index", "--add", "--cacheinfo", "160000,\(String(repeating: "1", count: 40)),apple/Kit"]] {
             let result = try ProcessRunner().run(["git", "-C", project.root.path] + arguments, input: nil, in: nil)
             try #require(result.succeeded, "\(result.transcript)")
         }

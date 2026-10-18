@@ -5,5 +5,5 @@
 /*.pkg
 /*.dSYM.zip
 
-# `make ios deploy-beta` logs
+# `make apple deploy-beta` logs
 /deploy-beta*.log

@@ -12,7 +12,7 @@ This repository holds no secrets: only their names and where to get them.
 
 | Component | What it sets up |
 | --- | --- |
-| [apple-app](components/apple-app) | An iOS (with an optional embedded watch app), tvOS or macOS app in `ios/`, tested on each pull request, with staging builds on demand, and uploaded to TestFlight by hand with `make ios deploy-beta`. |
+| [apple-app](components/apple-app) | An app for iOS (with an optional embedded watch app), tvOS, macOS or more than one of them, from one Xcode project in `apple/`, tested on each pull request, with staging builds on demand, and uploaded to TestFlight by hand with `make apple <platform> deploy-beta`. |
 | [base](components/base) | The root files that every project has with its other components: the Makefile that includes each component's targets, and the README.md that links to each component's README. |
 | [github-repo](components/github-repo) | A repository on GitHub whose pull requests are squashed when they merge, with their branches deleted, and whose default branch cannot be deleted or force-pushed except by the owner. |
 | [linear-workspace](components/linear-workspace) | A Linear workspace that superlinear works from: each team has an In Review state after In Progress, a Todo state, Triage, and superlinear's labels; the owner has a "superlinear proposals" view in their favorites; and no onboarding issue is open. See [The linear-workspace component](#the-linear-workspace-component). |
@@ -55,8 +55,8 @@ The `templatr` command has releases of its own, with three-part tags such as `0.
 | [armcknight/workflows: ios-ci.yml](https://github.com/armcknight/workflows/blob/4/.github/workflows/ios-ci.yml) | workflow | apple-app | Runs the `test` lane on each pull request, and on a `/build-staging` comment the `stage` lane, with an install link. |
 | [armcknight/workflows: ota-refresh.yml](https://github.com/armcknight/workflows/blob/4/.github/workflows/ota-refresh.yml) | workflow | apple-app | Signs a staging build's install link again on a `/refresh-staging` comment, and asks for a new build when the old one is gone. |
 | [armcknight/workflows: ota-cleanup.yml](https://github.com/armcknight/workflows/blob/4/.github/workflows/ota-cleanup.yml) | workflow | apple-app | Deletes a pull request's staging builds when it closes. |
-| [make/apple-app.mk](make/apple-app.mk) | make | apple-app | The `apple-app-test`, `apple-app-stage`, `apple-app-deploy-beta`, `apple-app-patch`, `apple-app-minor` and `apple-app-major` targets, which `ios/component.mk` runs as `make ios <command>`. |
-| [components/apple-app/scaffold/ios/Brewfile](components/apple-app/scaffold/ios/Brewfile) | brewfile | apple-app | The tools the lanes use. |
+| [make/apple-app.mk](make/apple-app.mk) | make | apple-app | The `apple-app-test` and `apple-app-deploy-beta` targets for every platform, `apple-app-<platform>-test` and `apple-app-<platform>-deploy-beta` for each, `apple-app-ios-stage`, and `apple-app-patch`, `apple-app-minor` and `apple-app-major`, which `apple/component.mk` runs as `make apple <command>` and `make apple <platform> <command>`. |
+| [components/apple-app/scaffold/apple/Brewfile](components/apple-app/scaffold/apple/Brewfile) | brewfile | apple-app | The tools the lanes use. |
 | [components/apple-app/bin/check-app-store-connect](components/apple-app/bin/check-app-store-connect) | script | apple-app | Checks the app record and its tester group in App Store Connect. |
 | [components/apple-app/bin/check-shared-lanes](components/apple-app/bin/check-shared-lanes) | script | apple-app | Checks that `fastlane/Fastfile` uses the shared lanes. |
 | [armcknight/workflows: vapor-ci.yml](https://github.com/armcknight/workflows/blob/4/.github/workflows/vapor-ci.yml) | workflow | vapor-fly | Builds and tests the package on Linux in the swift image on each pull request, and builds the Docker image. |
@@ -103,7 +103,7 @@ The component's name, which is also its directory's name, and one sentence about
 
 ### `directory`, `blurb`, `base`
 
-`directory` is the project's subdirectory that the component's files are in, such as `server` for vapor-fly and `ios` for apple-app. It names the part's role, not its framework or how it is deployed, so that it stays right when those change, and so that a second app can have its own, such as `android`. A component has its own directory also when a project has no other component. Its `detect` and `infer` rules read files in it, but for those with `root = true`, and its steps run in it.
+`directory` is the project's subdirectory that the component's files are in, such as `server` for vapor-fly and `apple` for apple-app. It names the part's role, not its framework or how it is deployed, so that it stays right when those change, and so that a second app can have its own, such as `android`. A component has its own directory also when a project has no other component. Its `detect` and `infer` rules read files in it, but for those with `root = true`, and its steps run in it.
 
 `blurb` is a summary of the component's part of the project, with placeholders. `templatr bootstrap` writes it in the root README.md, with a link to the README.md in `directory`.
 
@@ -111,7 +111,7 @@ A component with `base = true` comes with every other component, so it has no `d
 
 ### Project layout
 
-Each component's scaffold has the files at the paths they have in the project: under its `directory`, such as `scaffold/server/fly.toml`, with its own `README.md`, `.gitignore` and `Brewfile` there, and its workflows in `scaffold/.github/workflows/`, each named with the component's name first, such as `vapor-fly-ci.yml`, because GitHub reads workflows only there. The tools run in the directory, or are told where it is: `fly deploy server`, `docker compose --file server/docker-compose.yml`, `cd ios && bundle exec fastlane`, and the shared workflows' `working-directory` input. No two components have a file at the same path.
+Each component's scaffold has the files at the paths they have in the project: under its `directory`, such as `scaffold/server/fly.toml`, with its own `README.md`, `.gitignore` and `Brewfile` there, and its workflows in `scaffold/.github/workflows/`, each named with the component's name first, such as `vapor-fly-ci.yml`, because GitHub reads workflows only there. The tools run in the directory, or are told where it is: `fly deploy server`, `docker compose --file server/docker-compose.yml`, `cd apple && bundle exec fastlane`, and the shared workflows' `working-directory` input. No two components have a file at the same path.
 
 The root Makefile, from the base component, has `TEMPLATES_TAG`, the rule that downloads the Makefile fragments, `help` and `templates-update`, and includes every `*/component.mk`. Each component's `component.mk` sets its values, adds its namespace to `NAMESPACES` and its fragment to `TEMPLATES_FRAGMENTS`, includes the fragment, and maps `make <namespace> <command>` to the fragment's targets, such as `make server deploy` to `vapor-fly-deploy`.
 
@@ -143,7 +143,7 @@ Values that differ for each project, such as the bundle ID or the team ID. Each 
 
 | `from` | Reads |
 | --- | --- |
-| `build-setting` | `key` from `xcodebuild -showBuildSettings` for the project's scheme, in the Release configuration when the project has one. |
+| `build-setting` | `key` from `xcodebuild -showBuildSettings` for the project's scheme, in the Release configuration when the project has one. With `separator`, the setting is a list separated by white space, such as `SUPPORTED_PLATFORMS`: `map` replaces each word, a value already in the list is dropped, and the values are joined with `separator`. |
 | `fastlane-config` | The first argument of the call `key` in `file`, such as `team_id("…")` in `fastlane/Appfile`. An array's values are joined with commas. |
 | `toml` | The dotted `key` in the TOML `file`, such as `app` in `fly.toml`. |
 | `yaml` | The dotted `key` in the YAML `file`, such as `global_secrets` in `.arkana.yml`. A list's values are joined with `separator`, a comma by default. |

@@ -222,7 +222,7 @@ struct DetectionTests {
     @Test func buildSettingIsNotRead() {
         let input = Input(
             name: "name", description: "The name.", example: "x", defaultValue: "x",
-            infer: [InferRule(from: .buildSetting(key: "PRODUCT_NAME"), map: nil, root: false)]
+            infer: [InferRule(from: .buildSetting(key: "PRODUCT_NAME", separator: nil), map: nil, root: false)]
         )
         #expect(Detection(root: repository.root).value(of: input) == "x")
     }

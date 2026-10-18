@@ -1,11 +1,12 @@
 name = "apple-app"
-description = "An iOS (with an optional embedded watch app), tvOS or macOS app, tested on each pull request, with staging builds on demand, and uploaded to TestFlight by hand with `make ios deploy-beta`."
+description = "An app for iOS (with an optional embedded watch app), tvOS, macOS or more than one of them, from one Xcode project, tested on each pull request, with staging builds on demand, and uploaded to TestFlight by hand with `make apple <platform> deploy-beta`."
 
 # The app's files, the Xcode project, the Gemfile and fastlane/ included, are
-# in ios/. The detect and infer rules read files there, and the steps run
-# there.
-directory = "ios"
-blurb = "The app, {{inputs.app_name}}. `make ios test` runs its tests, `/build-staging` on a pull request posts an install link, and the owner uploads it to TestFlight with `make ios deploy-beta`."
+# in apple/. It is apple/ and not ios/, because the one Xcode project there
+# builds the app for each platform in the platforms input. The detect and infer
+# rules read files there, and the steps run there.
+directory = "apple"
+blurb = "The app, {{inputs.app_name}}, for {{inputs.platforms}}. `make apple test` runs its tests on each platform and `make apple <platform> test` on one, `/build-staging` on a pull request posts an install link, and the owner uploads it to TestFlight with `make apple <platform> deploy-beta`."
 
 # An Xcode project, an XcodeGen spec or a Tuist manifest with an application
 # target. The product type also matches a watch app, which is always embedded in
@@ -36,20 +37,20 @@ infer = [
 
 [[inputs]]
 name = "project"
-description = "The Xcode project, relative to ios/. Leave empty when `workspace` is set."
+description = "The Xcode project, relative to apple/. Leave empty when `workspace` is set."
 example = "Babysittr.xcodeproj"
 infer = [{ from = "glob", glob = "*.xcodeproj" }]
 
 [[inputs]]
 name = "workspace"
-description = "The Xcode workspace, relative to ios/, when the app builds from one."
+description = "The Xcode workspace, relative to apple/, when the app builds from one."
 example = "Trgnmtry.xcworkspace"
 default = ""
 infer = [{ from = "glob", glob = "*.xcworkspace" }]
 
 [[inputs]]
 name = "xcconfig"
-description = "The xcconfig, relative to ios/, that sets MARKETING_VERSION and CURRENT_PROJECT_VERSION for every target."
+description = "The xcconfig, relative to apple/, that sets MARKETING_VERSION and CURRENT_PROJECT_VERSION for every target."
 example = "config/Babysittr.xcconfig"
 infer = [{ from = "glob", glob = "**/*.xcconfig", contains = "MARKETING_VERSION[ \\t]*=" }]
 
@@ -59,11 +60,14 @@ description = "Whether the Xcode project is generated from project.yml with Xcod
 example = "true"
 infer = [{ from = "glob", glob = "project.yml", exists = true }]
 
+# The one Xcode project in apple/ can build the app for more than one platform.
+# Each platform gets its own make commands, such as `make apple ios test` and
+# `make apple mac deploy-beta`. A simulator's platform is the same platform.
 [[inputs]]
-name = "platform"
-description = "The app's platform, as fastlane names it: ios, tvos or mac. An iOS app with an embedded watch app is ios."
-example = "ios"
-infer = [{ from = "build-setting", key = "PLATFORM_NAME", map = { iphoneos = "ios", appletvos = "tvos", macosx = "mac" } }]
+name = "platforms"
+description = "The platforms the app builds for, as fastlane names them, separated by spaces: ios, tvos and mac, such as `ios mac`. An iOS app with an embedded watch app is ios."
+example = "ios mac"
+infer = [{ from = "build-setting", key = "SUPPORTED_PLATFORMS", separator = " ", map = { iphoneos = "ios", iphonesimulator = "ios", appletvos = "tvos", appletvsimulator = "tvos", macosx = "mac" } }]
 
 [[inputs]]
 name = "bundle_id"
@@ -129,8 +133,8 @@ description = "The internal TestFlight group that gets each build."
 example = "Internal"
 default = "Internal"
 
-# The App Store Connect API key stays in the owner's Keychain. `make ios
-# deploy-beta` uses it when it is in the environment, and the app-record and
+# The App Store Connect API key stays in the owner's Keychain. `make apple
+# <platform> deploy-beta` uses it when it is in the environment, and the app-record and
 # tester-group checks need it. It is never a GitHub secret.
 [[secrets]]
 name = "ASC_KEY_ID"
@@ -176,7 +180,7 @@ fix = "bundle add fastlane"
 id = "shared-lanes"
 description = "fastlane/Fastfile imports the shared lanes at the pinned tag and does not define its own test, stage or beta lanes."
 check = "{{templates}}/components/apple-app/bin/check-shared-lanes {{templates.tag}}"
-fix = { human = { text = "Replace the test, stage and deploy lanes in fastlane/Fastfile with the shared ones: set the APPLE_APP_* values and call import_from_git as the apple-app scaffold's Fastfile does, then delete the local test, stage and beta lanes. The shared beta lane does what a local deploy lane did, so delete that too, and point `make ios deploy-beta` at it. Lanes the shared Fastfile does not have, such as build_dev, stay." } }
+fix = { human = { text = "Replace the test, stage and deploy lanes in fastlane/Fastfile with the shared ones: set the APPLE_APP_* values and call import_from_git as the apple-app scaffold's Fastfile does, then delete the local test, stage and beta lanes. The shared beta lane does what a local deploy lane did, so delete that too, and point `make apple deploy-beta` and `make apple <platform> deploy-beta` at it. Lanes the shared Fastfile does not have, such as build_dev, stay." } }
 
 [[steps]]
 id = "workflows"
@@ -186,9 +190,9 @@ fix = { human = { text = "Copy apple-app-ci.yml, apple-app-staging-build.yml, ap
 
 [[steps]]
 id = "make-fragment"
-description = "ios/component.mk includes make/apple-app.mk, with the app's commands, and adds the ios namespace."
-check = "grep -qs 'apple-app\\.mk' component.mk && grep -qs 'NAMESPACES *+= *ios' component.mk"
-fix = { human = { text = "Copy ios/component.mk from the apple-app scaffold, with its APPLE_APP_* values, the include and the ios-* targets, and move any test, stage, deploy-beta or version targets in the root Makefile to it, pointed at the apple-app-* targets." } }
+description = "apple/component.mk includes make/apple-app.mk, with the app's platforms and commands, and adds the apple namespace."
+check = "grep -qs 'apple-app\\.mk' component.mk && grep -qs 'NAMESPACES *+= *apple' component.mk && grep -qs 'APPLE_APP_PLATFORMS *=' component.mk"
+fix = { human = { text = "Copy apple/component.mk from the apple-app scaffold, with its APPLE_APP_* values (APPLE_APP_PLATFORMS is {{inputs.platforms}}), the include and the apple-* targets, and move any test, stage, deploy-beta or version targets in the root Makefile to it, pointed at the apple-app-* targets." } }
 
 [[steps]]
 id = "staging-variables"
@@ -247,11 +251,11 @@ description = "Deletes a pull request's staging builds when it closes."
 kind = "make"
 path = "make/apple-app.mk"
 version = "v1"
-description = "The apple-app-test, apple-app-stage, apple-app-deploy-beta, apple-app-patch, apple-app-minor and apple-app-major targets."
+description = "The apple-app-test and apple-app-deploy-beta targets for every platform, apple-app-<platform>-test and apple-app-<platform>-deploy-beta for each, apple-app-ios-stage, and apple-app-patch, apple-app-minor and apple-app-major."
 
 [[shared]]
 kind = "brewfile"
-path = "components/apple-app/scaffold/ios/Brewfile"
+path = "components/apple-app/scaffold/apple/Brewfile"
 version = "v1"
 description = "The tools the lanes use."
 

@@ -18,3 +18,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A `detect` or `infer` rule with `root = true` reads from the repository root
   instead of the component's directory, so that a component can be detected
   and its inputs found from another part of the project.
+- A `build-setting` infer rule with `separator` reads a list setting, such as
+  `SUPPORTED_PLATFORMS`: it maps each word, drops a value that is already in
+  the list, and joins the values with `separator`.
