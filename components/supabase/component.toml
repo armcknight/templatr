@@ -5,24 +5,29 @@ description = "A Postgres database on Supabase for a Vapor server on Fly.io, wit
 # config.toml and migrations, and the component's README.md, component.mk and
 # .gitignore. The detect and infer rules read files there, and the steps run
 # there. The server's files are in vapor-fly's directory, server/, which the
-# rules cannot read, so the steps that check the Dockerfile, fly.toml and the CA
-# certificate read them at ../server/.
+# rules with root = true read, and the steps that check the Dockerfile, fly.toml
+# and the CA certificate read at ../server/.
 directory = "supabase"
 blurb = "The server's Postgres database, on Supabase. `make local-db init` makes the local database, and `make local-db test-start` starts the isolated test database."
 
 # A Supabase CLI project, or a supabase/component.mk from this scaffold. A
-# fluent project, such as mtg, has neither until it has the component, so it
-# gets the component by name in .templatr.toml.
+# fluent project, such as mtg, has neither before it has the component, so it is
+# also detected from the root: a server that uses Postgres through Fluent, or a
+# .envrc.example with a Supabase host.
 [detect]
 any = [
   { glob = "config.toml" },
   { glob = "component.mk", contains = "supabase\\.mk" },
+  { glob = "server/Package.swift", contains = "fluent-postgres-driver", root = true },
+  { glob = ".envrc.example", contains = "supabase\\.co", root = true },
 ]
 
 # The reference ID of the Supabase project: the subdomain of its API URL, and
 # part of its database hosts. The CLI's config.toml has a project_id, but that
 # is only the local stack's name unless it is a reference ID, so only a value
-# of that form is read.
+# of that form is read. The root's .envrc.example has it in DATABASE_URL: the
+# pooler's user is postgres.<project_ref>, and the direct host is
+# db.<project_ref>.supabase.co.
 [[inputs]]
 name = "project_ref"
 description = "The Supabase project's reference ID, as in https://<project_ref>.supabase.co."
@@ -30,6 +35,7 @@ example = "abcdefghijklmnopqrst"
 infer = [
   { from = "regex", glob = ".temp/project-ref", pattern = "^([a-z0-9]{20})\\b" },
   { from = "regex", glob = "config.toml", pattern = "(?m)^\\s*project_id\\s*=\\s*\"([a-z0-9]{20})\"" },
+  { from = "regex", glob = ".envrc.example", pattern = "(?:postgres\\.|db\\.|https://)([a-z0-9]{20})\\b", root = true },
 ]
 
 # cli: SQL in supabase/migrations, which `supabase db push` applies before each
@@ -48,12 +54,16 @@ infer = [
 name = "product"
 description = "The executable product in server/Package.swift that runs the server. In the fluent style, `make local-db migrate` runs it with `migrate`."
 example = "mtg-server"
-infer = [{ from = "regex", glob = "component.mk", pattern = "(?m)^SUPABASE_PRODUCT\\s*=\\s*(\\S+)" }]
+infer = [
+  { from = "regex", glob = "component.mk", pattern = "(?m)^SUPABASE_PRODUCT\\s*=\\s*(\\S+)" },
+  { from = "regex", glob = "server/Package.swift", pattern = "\\.executable\\(\\s*name:\\s*\"([^\"]+)\"", root = true },
+]
 
 [[inputs]]
 name = "fly_app"
 description = "The Fly app that runs the server and has DATABASE_URL as a secret: the vapor-fly component's fly_app."
 example = "mtg-server"
+infer = [{ from = "toml", file = "server/fly.toml", key = "app", root = true }]
 
 # The Supabase CLI's local stack has one database, postgres.
 [[inputs]]
@@ -75,19 +85,26 @@ infer = [
   { from = "regex", glob = "component.mk", pattern = "(?m)^SUPABASE_PG_VERSION\\s*=\\s*([0-9]+)" },
 ]
 
-# The CA certificate is in server/, the Docker image's build context, which the
-# rules cannot read.
+# The CA certificate is in server/, the Docker image's build context. Its path
+# is the one that server/Dockerfile copies into the image; a glob would find
+# the file, but its path from the root, not from server/.
 [[inputs]]
 name = "ca_cert_path"
 description = "Where the server keeps Supabase's root CA certificate, which the Docker image copies in, relative to server/, the image's build context."
 example = "deploy/supabase-root-2021-ca.crt"
 default = "deploy/supabase-root-2021-ca.crt"
+infer = [
+  { from = "regex", glob = "server/Dockerfile", pattern = "(?m)^\\s*COPY\\s+(?:--\\S+\\s+)*(\\S*supabase-root-\\S*\\.crt)\\s", root = true },
+]
 
 [[inputs]]
 name = "ca_cert_env"
 description = "The environment variable, set in server/fly.toml's [env], that has the path of the CA certificate in the image. The server verifies the database's TLS certificate against it."
 example = "MTG_DB_CA_CERT"
 default = "DATABASE_CA_CERT"
+infer = [
+  { from = "regex", glob = "server/fly.toml", pattern = "(?m)^\\[env\\][^\\[]*?^\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*=\\s*[\"'][^\"'\\n]*\\.crt[\"']", root = true },
+]
 
 # DATABASE_URL is a Fly secret, set by the owner with `fly secrets import`.
 # It stays in the owner's Keychain for that, and for `make server
