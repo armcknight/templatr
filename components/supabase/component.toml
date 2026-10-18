@@ -132,9 +132,9 @@ fix = "for p in .envrc .test-pgdata/ status/ supabase/.temp/ supabase/.branches/
 
 [[steps]]
 id = "envrc-example"
-description = ".envrc.example names DATABASE_URL, which direnv exports from the real, ignored .envrc."
+description = ".envrc.example names DATABASE_URL, which direnv exports from the real, ignored .envrc. The fix adds it to the file that is there, or makes the file, so that it works with any other component's lines."
 check = "grep -qs 'DATABASE_URL' .envrc.example"
-fix = { human = { text = "Copy .envrc.example from the supabase scaffold, or add an `export DATABASE_URL=` line, with a placeholder and never a value, to the existing one." } }
+fix = '''grep -qs DATABASE_URL .envrc.example || { if [ -s .envrc.example ]; then printf '\n' >> .envrc.example; fi; printf '%s\n' '# The Supabase database'"'"'s pooled connection string (session mode, port 5432),' '# with ?sslmode=require. `make server status-diff` and `make server refresh-ca`' '# read it; the server reads it as a Fly secret. Copy this file to .envrc, which' '# git ignores, and fill in the value there; never commit it.' "# Keychain: superlinear.supabase."{{inputs.project_ref}}".database-url" "export DATABASE_URL='postgres://postgres."{{inputs.project_ref}}":<password>@aws-0-<region>.pooler.supabase.com:5432/postgres?sslmode=require'" >> .envrc.example; }'''
 
 [[steps]]
 id = "make-fragment"

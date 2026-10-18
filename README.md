@@ -192,6 +192,7 @@ The exit status is 0 when nothing is left to do, 1 when the report lists somethi
 ## Adding a component
 
 1. Make `components/<name>/` with `component.toml`, `CLAUDE.md` and `scaffold/README.md` with the markers.
+   A project can use the component with any others, and bootstrap copies a scaffold file only when the project does not have it, so do not put a file in the scaffold that another component's scaffold can also have, such as `Makefile`, `.gitignore` or `.envrc.example`. Make a step whose fix adds the component's lines to that file when they are not there, as the supabase component does. The supabase and github-repo scaffolds' `README.md` has only the markers.
 2. Put shared lanes, Makefile fragments and scripts at the top level, and reusable workflows in armcknight/workflows. Add them to the manifest's `shared` and to the table above.
 3. Add any new guide section to superlinear's `docs/`, with its anchor listed in `docs/anchors.md`, first.
 4. Run the checks below, then tag a release.

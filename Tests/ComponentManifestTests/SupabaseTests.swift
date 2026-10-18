@@ -189,6 +189,31 @@ struct SupabaseTests {
         #expect(inputs["pg_version"] == "17")
     }
 
+    /// Bootstrap copies a scaffold file only when the project does not have it
+    /// yet, so a file that two components' scaffolds have would come from
+    /// whichever runs first. The supabase scaffold has no such file but
+    /// README.md, and its README.md is only the generated section's markers,
+    /// so the result is the same in any order and with any other component.
+    @Test func scaffoldIsTheSameWithAnyOtherComponentInAnyOrder() throws {
+        let components = repositoryRoot.appending(path: "components")
+        func files(of component: String) -> Set<String> {
+            let scaffold = components.appending(path: "\(component)/scaffold")
+            guard let enumerator = FileManager.default.enumerator(atPath: scaffold.path) else { return [] }
+            var paths: Set<String> = []
+            while let path = enumerator.nextObject() as? String {
+                if enumerator.fileAttributes?[.type] as? FileAttributeType == .typeRegular { paths.insert(path) }
+            }
+            return paths
+        }
+        let own = files(of: "supabase")
+        #expect(own.contains("make/local-db.mk"))
+        for other in try FileManager.default.contentsOfDirectory(atPath: components.path) where other != "supabase" {
+            #expect(own.intersection(files(of: other)).subtracting(["README.md"]).isEmpty, "shared with \(other)")
+        }
+        let readme = try String(contentsOf: components.appending(path: "supabase/scaffold/README.md"), encoding: .utf8)
+        #expect(readme == "\(Validator.beginMarker)\n\(Validator.endMarker)\n")
+    }
+
     /// Set MTG_REPOSITORY to a checkout of mtg to run it. Only the project
     /// reference is asked for: mtg keeps it only in the ignored .envrc.
     @Test(.enabled(if: ProcessInfo.processInfo.environment["MTG_REPOSITORY"] != nil))
