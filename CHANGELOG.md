@@ -26,3 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `certificates`, whose `list` command prints each one with its expiry. The
   report's new `certificateExpiries` has them. The `apple-app` component lists
   the certificates and profiles in the fastlane match repository.
+- The `supabase` component is detected from the root also, before its
+  `supabase/` exists: from a `server/Package.swift` with
+  `fluent-postgres-driver`, or a `.envrc.example` with a Supabase host. It
+  infers `project_ref` from `.envrc.example`, `fly_app` from `server/fly.toml`,
+  `product` from `server/Package.swift`, `ca_cert_path` from the certificate
+  that `server/Dockerfile` copies, and `ca_cert_env` from `server/fly.toml`'s
+  `[env]`.
