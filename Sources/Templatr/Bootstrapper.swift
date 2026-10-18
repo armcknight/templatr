@@ -33,7 +33,7 @@ public struct Bootstrapper: Sendable {
         let repository = repository.standardizedFileURL
         let catalog = try templates.components()
         let byName = Dictionary(catalog.map { ($0.name, $0) }) { first, _ in first }
-        let files = RepositoryFiles(root: repository)
+        let files = RepositoryFiles(root: repository, runner: services.runner)
         let detected = catalog.filter { $0.manifest.detect.matches(files) }.map(\.name)
         let record = try Record.read(in: repository)
 
