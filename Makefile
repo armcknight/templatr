@@ -69,7 +69,7 @@ test:
 validate:
 	swift run validate-components
 
-# The same check as CI's links job. .lycheeignore lists the links to skip.
+# The same check as CI's links job.
 # The token raises GitHub's rate limit for the many github.com links.
 ## links: check the links in every Markdown file, as CI does
 links:
