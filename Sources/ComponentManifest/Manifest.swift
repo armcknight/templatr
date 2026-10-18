@@ -16,8 +16,8 @@ public struct Manifest: Codable, Equatable, Sendable {
     /// the root Makefile and README.md, are at the repository root.
     public var base: Bool
     /// The subdirectory of the project that the component's files are in, such
-    /// as `server`. Its `detect` and `infer` rules read files there, and its
-    /// steps run there. `nil` for a component whose files are at the root.
+    /// as `server`. Its `detect` and `infer` rules read files there, but for a
+    /// rule with `root`, and its steps run there. `nil` for a component whose files are at the root.
     public var directory: String?
     /// A summary of the component's part of the project, which bootstrap
     /// writes in the root README.md with a link to the README.md in
@@ -161,19 +161,23 @@ public struct Detect: Codable, Equatable, Sendable {
     }
 }
 
-/// A path glob, relative to the repository root, and a regular expression that
-/// the contents of at least one matching file must match.
+/// A path glob, relative to the component's directory, and a regular
+/// expression that the contents of at least one matching file must match.
 public struct DetectRule: Codable, Equatable, Sendable {
     public var glob: String
     public var contains: String?
+    /// Whether `glob` is relative to the repository root instead of the
+    /// component's directory, to read another part of the project.
+    public var root: Bool
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case glob, contains
+        case glob, contains, root
     }
 
-    public init(glob: String, contains: String?) {
+    public init(glob: String, contains: String?, root: Bool) {
         self.glob = glob
         self.contains = contains
+        self.root = root
     }
 
     public init(from decoder: Decoder) throws {
@@ -181,6 +185,14 @@ public struct DetectRule: Codable, Equatable, Sendable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         glob = try container.text(.glob)
         contains = try container.textIfPresent(.contains)
+        root = try container.decodeIfPresent(Bool.self, forKey: .root) ?? false
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(glob, forKey: .glob)
+        try container.encodeIfPresent(contains, forKey: .contains)
+        if root { try container.encode(root, forKey: .root) }
     }
 }
 
@@ -226,6 +238,10 @@ public struct Input: Codable, Equatable, Sendable {
 public struct InferRule: Codable, Equatable, Sendable {
     public var from: From
     public var map: [String: String]?
+    /// Whether the file or glob of `from` is relative to the repository root
+    /// instead of the component's directory, to read another part of the
+    /// project. A build setting reads no file, so it has no `root`.
+    public var root: Bool
 
     /// The sources, as `from` names them.
     public enum From: Equatable, Sendable {
@@ -272,26 +288,27 @@ public struct InferRule: Codable, Equatable, Sendable {
         var keys: Set<String> {
             switch self {
             case .buildSetting: ["key"]
-            case .fastlaneConfig: ["file", "key"]
-            case .toml: ["file", "key"]
-            case .yaml: ["file", "key", "separator"]
-            case .glob: ["glob", "contains", "exists", "stem"]
-            case .regex: ["glob", "pattern"]
+            case .fastlaneConfig: ["file", "key", "root"]
+            case .toml: ["file", "key", "root"]
+            case .yaml: ["file", "key", "separator", "root"]
+            case .glob: ["glob", "contains", "exists", "stem", "root"]
+            case .regex: ["glob", "pattern", "root"]
             }
         }
     }
 
     /// Every key a rule can have, over all the sources.
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case from, map, key, file, separator, glob, contains, exists, stem, pattern
+        case from, map, key, file, separator, glob, contains, exists, stem, pattern, root
     }
 
     /// The keys every rule can have.
     static let commonKeys: Set<String> = [CodingKeys.from.rawValue, CodingKeys.map.rawValue]
 
-    public init(from: From, map: [String: String]?) {
+    public init(from: From, map: [String: String]?, root: Bool) {
         self.from = from
         self.map = map
+        self.root = root
     }
 
     public init(from decoder: Decoder) throws {
@@ -320,6 +337,7 @@ public struct InferRule: Codable, Equatable, Sendable {
             from = .regex(glob: try container.text(.glob), pattern: try container.text(.pattern))
         }
         map = try container.decodeIfPresent([String: String].self, forKey: .map)
+        root = try container.decodeIfPresent(Bool.self, forKey: .root) ?? false
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -345,6 +363,7 @@ public struct InferRule: Codable, Equatable, Sendable {
             try container.encode(pattern, forKey: .pattern)
         }
         try container.encodeIfPresent(map, forKey: .map)
+        if root { try container.encode(root, forKey: .root) }
     }
 }
 

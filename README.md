@@ -103,7 +103,7 @@ The component's name, which is also its directory's name, and one sentence about
 
 ### `directory`, `blurb`, `base`
 
-`directory` is the project's subdirectory that the component's files are in, such as `server` for vapor-fly and `ios` for apple-app. It names the part's role, not its framework or how it is deployed, so that it stays right when those change, and so that a second app can have its own, such as `android`. A component has its own directory also when a project has no other component. Its `detect` and `infer` rules read files in it, and its steps run in it.
+`directory` is the project's subdirectory that the component's files are in, such as `server` for vapor-fly and `ios` for apple-app. It names the part's role, not its framework or how it is deployed, so that it stays right when those change, and so that a second app can have its own, such as `android`. A component has its own directory also when a project has no other component. Its `detect` and `infer` rules read files in it, but for those with `root = true`, and its steps run in it.
 
 `blurb` is a summary of the component's part of the project, with placeholders. `templatr bootstrap` writes it in the root README.md, with a link to the README.md in `directory`.
 
@@ -127,6 +127,16 @@ all = [
 ]
 ```
 
+A rule with `root = true` reads from the repository root instead, so that a component can be detected from another part of the project before its own directory exists, such as a database from the server's `Package.swift`. `root` is only for a component with a `directory`; the validator rejects it otherwise.
+
+```toml
+[detect]
+any = [
+  { glob = "component.mk" },
+  { glob = "server/Package.swift", contains = "fluent-postgres-driver", root = true },
+]
+```
+
 ### `inputs`
 
 Values that differ for each project, such as the bundle ID or the team ID. Each has a `name`, a `description`, an `example`, an optional `default`, and `infer`: where to read the value in the repository, tried in order.
@@ -140,7 +150,7 @@ Values that differ for each project, such as the bundle ID or the team ID. Each 
 | `glob` | The path of the first file that matches `glob` and, with `contains`, whose contents match that regular expression; with `stem = true`, that file's name without its directory and extension; with `exists = true`, `true` or `false`. |
 | `regex` | The first capture group of `pattern` in the first file that matches `glob`. |
 
-Any rule can have `map`, which replaces the value found with the value of its key, such as `{ iphoneos = "ios" }`. An input with no `infer`, or whose value is not found and has no `default`, is asked for one time.
+Any rule can have `map`, which replaces the value found with the value of its key, such as `{ iphoneos = "ios" }`. A rule that reads a file, every source but `build-setting`, can have `root = true`, as a `detect` rule can, to read its `file` or `glob` from the repository root instead of the component's `directory`, such as `{ from = "toml", file = "server/fly.toml", key = "app", root = true }`. An input with no `infer`, or whose value is not found and has no `default`, is asked for one time.
 
 ### `secrets`
 
@@ -201,7 +211,7 @@ swift run templatr check ~/Code/babysittr         # report what it still needs, 
 
 ### `templatr bootstrap [<repository>]`
 
-1. **Which components.** On the first run it matches each component's `detect` rules against the files in its directory; it can find more than one, and the base component comes with them. It reads each input from where its `infer` says, then shows the values it found to confirm, and asks for the ones it did not find. Leave an answer empty to skip it: the steps and scaffold files that need it wait for a later run.
+1. **Which components.** On the first run it matches each component's `detect` rules against the files in its directory, or the repository's for a rule with `root = true`; it can find more than one, and the base component comes with them. It reads each input from where its `infer` says, then shows the values it found to confirm, and asks for the ones it did not find. Leave an answer empty to skip it: the steps and scaffold files that need it wait for a later run.
 2. **The record.** It writes `.templatr.toml` at the repository's root: each component, the tag it is pinned to, and its inputs. Later runs read it instead of detecting again, and a change made to it by hand wins. A component that detection finds later, such as a watch app added to the project, is reported, not added: add it to the file to use it.
 
    ```toml
@@ -267,6 +277,7 @@ For each `components/<name>/component.toml`:
 * there is at most one base component, no two components have the same `directory`, no two scaffolds have a file at the same path, and no scaffold has a file in another component's directory;
 * each `{{placeholder}}` in the scaffold, the steps, the secrets' sources, the human texts and the blurb names a declared input, `templates` or `templates.tag`;
 * each regular expression compiles, and each `regex` infer rule has a capture group;
+* a `detect` or `infer` rule has `root = true` only in a component with a `directory`;
 * each shared path in this repository exists; a path in another `repo` is not checked;
 * each docs anchor is listed in superlinear's `docs/anchors.md`.
 
