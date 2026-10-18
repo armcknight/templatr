@@ -1,0 +1,176 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/armcknight/templatr/blob/main/schema/check-report.schema.json",
+  "title": "templatr check --json",
+  "description": "What a project still needs. A reader can rely on these keys while version is 1; a change that would break a reader raises it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version", "components", "newComponents", "unknownComponents", "missingInputs", "failedSteps", "blockedSteps",
+    "humanSteps", "missingSecrets", "expiries", "oldTags", "brokenLinks", "errors"
+  ],
+  "properties": {
+    "version": { "const": 1 },
+    "components": {
+      "description": "The components the project uses, with their pinned tags.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "tag"],
+        "properties": {
+          "name": { "type": "string" },
+          "tag": { "type": "string" },
+          "newestTag": { "type": "string", "description": "The templatr checkout's newest tag, when it has tags." }
+        }
+      }
+    },
+    "newComponents": {
+      "description": "Components that detection finds but .templatr.toml does not list. They are not added on their own.",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "unknownComponents": {
+      "description": "Components that .templatr.toml lists but the templatr checkout does not have.",
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "missingInputs": {
+      "description": "Inputs with no value: not recorded, not found and with no default.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["component", "name", "description", "example"],
+        "properties": {
+          "component": { "type": "string" },
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "example": { "type": "string" }
+        }
+      }
+    },
+    "failedSteps": {
+      "description": "Steps whose check fails and whose fix is a command that did not make it pass, or that check did not run.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["component", "id", "description", "output"],
+        "properties": {
+          "component": { "type": "string" },
+          "id": { "type": "string" },
+          "description": { "type": "string" },
+          "output": { "type": "string", "description": "The commands' standard output and error, shortened." }
+        }
+      }
+    },
+    "blockedSteps": {
+      "description": "Steps, and scaffold files as scaffold:<path>, not run or copied because they use missing inputs.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["component", "id", "description", "missingInputs"],
+        "properties": {
+          "component": { "type": "string" },
+          "id": { "type": "string" },
+          "description": { "type": "string" },
+          "missingInputs": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    },
+    "humanSteps": {
+      "description": "What a person must do, each one time: failed steps whose fix is human, and secret:<name> for a missing secret's human text.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["component", "id", "description", "text", "twoFactor", "manifest", "guide"],
+        "properties": {
+          "component": { "type": "string" },
+          "id": { "type": "string" },
+          "description": { "type": "string" },
+          "text": { "type": "string" },
+          "twoFactor": { "type": "boolean" },
+          "manifest": { "type": "string", "format": "uri" },
+          "guide": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["title", "url"],
+              "properties": {
+                "title": { "type": "string" },
+                "url": { "type": "string", "format": "uri" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "missingSecrets": {
+      "description": "Secrets that are not set, by name: GitHub secrets, or Keychain items for local ones. Never their values.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["component", "name", "scope", "source"],
+        "properties": {
+          "component": { "type": "string" },
+          "name": { "type": "string" },
+          "scope": { "enum": ["team", "app", "repo", "local"] },
+          "source": { "type": "string" }
+        }
+      }
+    },
+    "expiries": {
+      "description": "Secrets due for a new value, from their rotateEvery, within 30 days or past due.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["component", "secret", "rotateEvery", "lastSet", "due"],
+        "properties": {
+          "component": { "type": "string" },
+          "secret": { "type": "string" },
+          "rotateEvery": { "type": "string" },
+          "lastSet": { "type": "string", "format": "date-time" },
+          "due": { "type": "string", "format": "date-time" }
+        }
+      }
+    },
+    "oldTags": {
+      "description": "Components pinned to a tag older than the templatr checkout's newest.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["component", "tag", "newest"],
+        "properties": {
+          "component": { "type": "string" },
+          "tag": { "type": "string" },
+          "newest": { "type": "string" }
+        }
+      }
+    },
+    "brokenLinks": {
+      "description": "Links in README.md that no longer resolve.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["file", "link"],
+        "properties": {
+          "file": { "type": "string" },
+          "link": { "type": "string" }
+        }
+      }
+    },
+    "errors": {
+      "description": "What could not be checked, such as gh failing to list the secrets.",
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}
