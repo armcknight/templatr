@@ -11,6 +11,7 @@ The one Xcode project in `apple/` builds the app for each platform in `APPLE_APP
 * `make apple <platform> test`, or `bundle exec fastlane <platform> test` in `apple/`, runs the tests for one platform. `make apple test` runs them for every platform. CI runs the `ios` lane on each pull request through `ios-ci.yml` from [armcknight/workflows](https://github.com/armcknight/workflows).
 * `make apple ios stage`, or `bundle exec fastlane ios stage` in `apple/`, builds an ad-hoc IPA for staging. Only `ios` has a staging build. A person asks CI for a staging build of a pull request by commenting `/build-staging` on it; CI then posts an install link.
 * An iOS app's embedded watch app builds with `ios`.
+* When `apple/project.yml` exists, XcodeGen makes the Xcode project from it before each build: change `project.yml`, not the `.xcodeproj`. A platform added to `APPLE_APP_PLATFORMS` also goes in each target's `supportedDestinations` there.
 
 ## Rules
 

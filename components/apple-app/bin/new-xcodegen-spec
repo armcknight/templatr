@@ -1,0 +1,161 @@
+#!/bin/sh
+# Usage: new-xcodegen-spec <app_name> <scheme> <project> <bundle_id> <team_id> <xcconfig> <platforms>
+#
+# Writes the XcodeGen spec of a new app's one Xcode project, project.yml, in the
+# current directory, which is apple/. Its app target and its test target build
+# for each platform in <platforms>, as fastlane names them and separated by
+# spaces, such as "ios mac": ios is iOS, tvos is tvOS and mac is macOS, in
+# XcodeGen's supportedDestinations. The targets are named <scheme>, and so is
+# the scheme that builds and tests the app. <project> is the .xcodeproj that
+# xcodegen makes.
+#
+# It also writes the files the spec needs: the xcconfig with MARKETING_VERSION
+# and CURRENT_PROJECT_VERSION, a SwiftUI app in <scheme>/, and a test in
+# <scheme>Tests/. It changes no file that exists, and writes nothing when
+# project.yml exists.
+
+if [ "$#" -ne 7 ]; then
+  echo "Usage: new-xcodegen-spec <app_name> <scheme> <project> <bundle_id> <team_id> <xcconfig> <platforms>" >&2
+  exit 2
+fi
+
+app_name="$1"
+scheme="$2"
+project="$3"
+bundle_id="$4"
+team_id="$5"
+xcconfig="$6"
+platforms="$7"
+
+if [ -e project.yml ]; then
+  echo "project.yml exists." >&2
+  exit 1
+fi
+
+case "$project" in
+  *.xcodeproj) name="${project%.xcodeproj}" ;;
+  *)
+    echo "The project, $project, is not an .xcodeproj." >&2
+    exit 2
+    ;;
+esac
+case "$name" in
+  */*)
+    echo "The project, $project, is not in apple/ itself." >&2
+    exit 2
+    ;;
+esac
+
+# XcodeGen's names for the platforms, and the oldest version of each that the
+# app runs on.
+destinations=""
+deployment=""
+for platform in $platforms; do
+  case "$platform" in
+    ios) destination=iOS version=18.0 ;;
+    tvos) destination=tvOS version=18.0 ;;
+    mac) destination=macOS version=15.0 ;;
+    *)
+      echo "Unknown platform: $platform. The platforms are ios, tvos and mac." >&2
+      exit 2
+      ;;
+  esac
+  case " $destinations " in
+    *" $destination "*) continue ;;
+  esac
+  destinations="${destinations:+$destinations }$destination"
+  deployment="$deployment
+    $destination: \"$version\""
+done
+if [ -z "$destinations" ]; then
+  echo "No platforms." >&2
+  exit 2
+fi
+destination_list="[$(printf '%s' "$destinations" | sed 's/ /, /g')]"
+
+# A YAML string in double quotes.
+quote() {
+  printf '"%s"' "$(printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g')"
+}
+
+cat > project.yml <<EOF
+# The XcodeGen spec of the app's one Xcode project, $(quote "$project"). The
+# make commands run xcodegen before each build. Each target builds for every
+# platform in APPLE_APP_PLATFORMS in component.mk: add a platform to both.
+name: $(quote "$name")
+options:
+  deploymentTarget:$deployment
+configFiles:
+  Debug: $(quote "$xcconfig")
+  Release: $(quote "$xcconfig")
+settings:
+  base:
+    DEVELOPMENT_TEAM: $(quote "$team_id")
+targets:
+  $(quote "$scheme"):
+    type: application
+    supportedDestinations: $destination_list
+    sources:
+      - $(quote "$scheme")
+    settings:
+      base:
+        PRODUCT_NAME: $(quote "$app_name")
+        PRODUCT_BUNDLE_IDENTIFIER: $(quote "$bundle_id")
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+    scheme:
+      testTargets:
+        - $(quote "${scheme}Tests")
+  $(quote "${scheme}Tests"):
+    type: bundle.unit-test
+    supportedDestinations: $destination_list
+    sources:
+      - $(quote "${scheme}Tests")
+    dependencies:
+      - target: $(quote "$scheme")
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(quote "$bundle_id.tests")
+        GENERATE_INFOPLIST_FILE: YES
+        # The app's product name is not its target's name, and a Mac app's
+        # executable is in Contents/MacOS.
+        TEST_HOST: $(quote "\$(BUILT_PRODUCTS_DIR)/$app_name.app/$app_name")
+        TEST_HOST[sdk=macosx*]: $(quote "\$(BUILT_PRODUCTS_DIR)/$app_name.app/Contents/MacOS/$app_name")
+EOF
+
+# The build number is CURRENT_PROJECT_VERSION, which deploy-beta raises, and
+# the generated Info.plist's CFBundleVersion is it.
+if [ ! -e "$xcconfig" ]; then
+  mkdir -p "$(dirname "$xcconfig")"
+  cat > "$xcconfig" <<EOF
+MARKETING_VERSION = 1.0
+CURRENT_PROJECT_VERSION = 1
+EOF
+fi
+
+if [ ! -e "$scheme" ]; then
+  mkdir -p "$scheme"
+  cat > "$scheme/App.swift" <<'EOF'
+import SwiftUI
+
+@main
+struct MainApp: App {
+    var body: some Scene {
+        WindowGroup {
+            Text("Hello")
+        }
+    }
+}
+EOF
+fi
+
+if [ ! -e "${scheme}Tests" ]; then
+  mkdir -p "${scheme}Tests"
+  cat > "${scheme}Tests/Tests.swift" <<'EOF'
+import Testing
+
+@Test func runs() {
+    #expect(true)
+}
+EOF
+fi
