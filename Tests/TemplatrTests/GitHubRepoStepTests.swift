@@ -2,16 +2,6 @@ import Foundation
 import Testing
 @testable import Templatr
 
-/// Runs commands with a directory of stand-in programs first on `PATH`.
-struct StubPathRunner: CommandRunner {
-    let bin: URL
-
-    func run(_ arguments: [String], input: Data?, in directory: URL?) throws -> CommandResult {
-        let path = bin.path + ":" + (ProcessInfo.processInfo.environment["PATH"] ?? "/usr/bin:/bin")
-        return try ProcessRunner().run(["PATH=\(path)"] + arguments, input: input, in: directory)
-    }
-}
-
 /// The github-repo component's steps, with a stand-in `gh` whose answer to the
 /// rules API is `rules`.
 @Suite struct GitHubRepoStepTests {
@@ -44,7 +34,8 @@ struct StubPathRunner: CommandRunner {
 
     var bootstrapper: Bootstrapper {
         var services = stubs.services()
-        services.runner = StubPathRunner(bin: bin.root)
+        let path = bin.root.path + ":" + (ProcessInfo.processInfo.environment["PATH"] ?? "/usr/bin:/bin")
+        services.runner = ProcessRunner(environment: ["PATH": path])
         return Bootstrapper(templates: Templates(root: repositoryRoot, tag: "v1", tags: []), services: services)
     }
 
