@@ -1,0 +1,46 @@
+# The Fly app. `make server deploy` and fly-deploy.yml deploy with it.
+#
+# Runtime secrets, such as DATABASE_URL, are Fly secrets, never values here:
+# `fly secrets list --app {{inputs.fly_app}}` names them.
+
+app = "{{inputs.fly_app}}"
+primary_region = "{{inputs.primary_region}}"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  LOG_LEVEL = "info"
+
+# Process groups, for a server that also runs a worker. Each group runs the
+# image's entrypoint with its own arguments; [http_service] then serves only
+# the api group:
+#
+# [processes]
+#   api = "serve --env production --hostname 0.0.0.0 --port {{inputs.internal_port}}"
+#   worker = "queues --env production"
+
+[http_service]
+  internal_port = {{inputs.internal_port}}
+  force_https = true
+  # Scale to zero: the machines stop when idle and start on a request.
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  # processes = ["api"]
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 200
+    hard_limit = 250
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "15s"
+    method = "GET"
+    path = "{{inputs.health_check_path}}"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

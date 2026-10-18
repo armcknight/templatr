@@ -1,0 +1,42 @@
+#!/bin/sh
+# Usage: check-fly-config <app> <health-check-path>
+#
+# Exits 0 when fly.toml names the app, forces HTTPS, scales to zero and has an
+# HTTP health check at the path. It reads the file's lines, not its TOML, so
+# each setting must be on a line of its own, as `fly launch` writes them.
+
+app="$1"
+path="$2"
+config=fly.toml
+
+if [ -z "$app" ] || [ -z "$path" ]; then
+  echo "Usage: check-fly-config <app> <health-check-path>" >&2
+  exit 2
+fi
+
+if [ ! -f "$config" ]; then
+  echo "$config does not exist." >&2
+  exit 1
+fi
+
+status=0
+
+has() {
+  if ! grep -Eq "$1" "$config"; then
+    echo "$config: $2" >&2
+    status=1
+  fi
+}
+
+# The app and path are matched as text, not as regular expressions.
+app_pattern=$(printf '%s' "$app" | sed 's/[][\.*^$/]/\\&/g')
+path_pattern=$(printf '%s' "$path" | sed 's/[][\.*^$/]/\\&/g')
+
+has "^app[[:space:]]*=[[:space:]]*[\"']${app_pattern}[\"']" "app is not \"$app\"."
+has "^[[:space:]]*force_https[[:space:]]*=[[:space:]]*true" "force_https is not true."
+has "^[[:space:]]*auto_stop_machines[[:space:]]*=[[:space:]]*(\"stop\"|\"suspend\"|true)" "auto_stop_machines is not \"stop\" or \"suspend\"."
+has "^[[:space:]]*auto_start_machines[[:space:]]*=[[:space:]]*true" "auto_start_machines is not true."
+has "^[[:space:]]*min_machines_running[[:space:]]*=[[:space:]]*0([^0-9]|$)" "min_machines_running is not 0."
+has "^[[:space:]]*path[[:space:]]*=[[:space:]]*[\"']${path_pattern}[\"']" "no health check has the path $path."
+
+exit $status

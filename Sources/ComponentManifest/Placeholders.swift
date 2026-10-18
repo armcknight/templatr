@@ -1,6 +1,6 @@
 import Foundation
 
-/// `{{name}}` in scaffold files, step commands and human texts. GitHub Actions'
+/// `{{name}}` in scaffold files, step commands, secrets' sources and human texts. GitHub Actions'
 /// `${{ expression }}` is not one.
 public enum Placeholders {
     /// The placeholders every component can use, besides `inputs.<name>`:

@@ -1,0 +1,204 @@
+name = "vapor-fly"
+description = "A Swift server built with Vapor and run on Fly.io, built and tested on Linux on each pull request, and deployed by the owner, by hand or on a merge."
+
+# A Package.swift with an executable product that depends on Vapor. fly.toml
+# and the Dockerfile are not needed: a new server has neither until the
+# scaffold gives them. A package that only uses Vapor as a library has no
+# executable product, so it is not detected.
+[detect]
+all = [
+  { glob = "Package.swift", contains = "github\\.com/vapor/vapor" },
+  { glob = "Package.swift", contains = "\\.executable\\(" },
+]
+
+[[inputs]]
+name = "product"
+description = "The executable product in Package.swift that runs the server."
+example = "mtg-server"
+infer = [
+  { from = "regex", glob = "Dockerfile", pattern = "swift build[^\\n]*--product[ =]+\"?([A-Za-z0-9_.-]+)" },
+  { from = "regex", glob = "Package.swift", pattern = "\\.executable\\(\\s*name:\\s*\"([^\"]+)\"" },
+]
+
+[[inputs]]
+name = "fly_app"
+description = "The Fly app's name. The server is at https://<fly_app>.fly.dev."
+example = "mtg-server"
+infer = [{ from = "toml", file = "fly.toml", key = "app" }]
+
+[[inputs]]
+name = "fly_org"
+description = "The Fly organization that owns the app."
+example = "personal"
+default = "personal"
+
+[[inputs]]
+name = "primary_region"
+description = "The Fly region the app's machines run in."
+example = "sjc"
+infer = [{ from = "toml", file = "fly.toml", key = "primary_region" }]
+
+[[inputs]]
+name = "health_check_path"
+description = "The path that Fly's health check and the deploy request. It answers 200 when the server is ready, with the GIT_SHA the image was built with."
+example = "/healthz"
+default = "/healthz"
+infer = [
+  { from = "regex", glob = "fly.toml", pattern = "\\[\\[http_service\\.checks\\]\\][^\\[]*?\\bpath\\s*=\\s*[\"']([^\"']+)[\"']" },
+  { from = "regex", glob = "fly.toml", pattern = "\\[\\[services\\.http_checks\\]\\][^\\[]*?\\bpath\\s*=\\s*[\"']([^\"']+)[\"']" },
+]
+
+[[inputs]]
+name = "internal_port"
+description = "The port the server listens on in its machine."
+example = "8080"
+default = "8080"
+infer = [{ from = "toml", file = "fly.toml", key = "http_service.internal_port" }]
+
+[[inputs]]
+name = "swift_version"
+description = "The Swift version of the build and runtime images, as the swift image tags name it. Keep it in step with the local toolchain."
+example = "6.0"
+infer = [
+  { from = "regex", glob = "Dockerfile", pattern = "(?m)^FROM\\s+(?:--platform=\\S+\\s+)?swift:([0-9]+(?:\\.[0-9]+)*)" },
+  { from = "regex", glob = "Package.swift", pattern = "swift-tools-version:\\s*([0-9]+\\.[0-9]+)" },
+]
+
+[[inputs]]
+name = "linux_distribution"
+description = "The Ubuntu release of the swift images, such as jammy or noble."
+example = "noble"
+default = "noble"
+infer = [{ from = "regex", glob = "Dockerfile", pattern = "(?m)^FROM\\s+(?:--platform=\\S+\\s+)?swift:[0-9.]+-([a-z]+)" }]
+
+[[inputs]]
+name = "fly_secrets"
+description = "The names of the app's runtime secrets, set as Fly secrets, separated by spaces. Empty for none."
+example = "DATABASE_URL"
+default = ""
+
+[[inputs]]
+name = "default_branch"
+description = "The branch that deploys come from."
+example = "main"
+default = "main"
+
+[[secrets]]
+name = "FLY_API_TOKEN"
+description = "A deploy token for the one Fly app, which fly-deploy.yml deploys with."
+source = "keychain:superlinear.fly.{{inputs.fly_app}}.deploy-token"
+scope = "repo"
+human = { text = "Run `fly tokens create deploy --app {{inputs.fly_app}} --expiry 8760h`, and store the token in the Keychain item superlinear.fly.{{inputs.fly_app}}.deploy-token. The token can deploy only this app." }
+rotateEvery = "1y"
+
+[[steps]]
+id = "fly-cli"
+description = "flyctl is installed."
+check = "command -v fly >/dev/null"
+fix = "brew install flyctl"
+
+[[steps]]
+id = "fly-account"
+description = "flyctl is logged in to a Fly.io account with billing and the organization."
+check = "fly auth whoami >/dev/null 2>&1 && fly orgs show {{inputs.fly_org}} >/dev/null 2>&1"
+fix = { human = { text = "Make a Fly.io account at https://fly.io and add a payment method in its billing settings, make the organization {{inputs.fly_org}} if it does not exist, then run `fly auth login` on this Mac." } }
+
+[[steps]]
+id = "fly-app"
+description = "The Fly app exists."
+check = "fly status --app {{inputs.fly_app}} >/dev/null 2>&1"
+fix = "fly apps create {{inputs.fly_app}} --org {{inputs.fly_org}}"
+
+[[steps]]
+id = "fly-config"
+description = "fly.toml names the app, forces HTTPS, scales to zero and has a health check."
+check = "{{templates}}/components/vapor-fly/bin/check-fly-config {{inputs.fly_app}} {{inputs.health_check_path}}"
+fix = { human = { text = "Copy fly.toml from the vapor-fly scaffold, or change the existing one: set app to {{inputs.fly_app}}, and in [http_service] set force_https = true, auto_stop_machines = \"stop\", auto_start_machines = true and min_machines_running = 0, with an [[http_service.checks]] whose path is {{inputs.health_check_path}}." } }
+
+[[steps]]
+id = "dockerfile"
+description = "The Dockerfile builds the product in release and passes the GIT_SHA build argument to the server."
+check = "grep -Eq '^ARG[[:space:]]+GIT_SHA' Dockerfile && grep -q -- '--product' Dockerfile"
+fix = { human = { text = "Copy the Dockerfile from the vapor-fly scaffold, or change the existing one so that it builds with `swift build -c release --product {{inputs.product}}` and has `ARG GIT_SHA` and `ENV GIT_SHA=$GIT_SHA` in its runtime stage. The server returns GIT_SHA from {{inputs.health_check_path}}." } }
+
+[[steps]]
+id = "make-fragment"
+description = "The Makefile includes make/vapor-fly.mk at the pinned tag, with the server commands."
+check = "grep -qs 'vapor-fly\\.mk' Makefile"
+fix = { human = { text = "Add the TEMPLATES_TAG, VAPOR_FLY_* values, the include and the `server` namespace from the vapor-fly scaffold's Makefile to the project's Makefile, and point any existing server build, serve or deploy targets at the vapor-fly-* targets." } }
+
+[[steps]]
+id = "workflows"
+description = "The repository calls armcknight/workflows' vapor-ci.yml on each pull request, and fly-deploy.yml to deploy."
+check = "grep -qs 'armcknight/workflows/.github/workflows/vapor-ci.yml@' .github/workflows/*.yml && grep -qs 'armcknight/workflows/.github/workflows/fly-deploy.yml@' .github/workflows/*.yml"
+fix = { human = { text = "Copy ci.yml and deploy.yml in .github/workflows/ from the vapor-fly scaffold, and remove the workflows they replace, including any that deploy to Fly." } }
+
+[[steps]]
+id = "fly-secrets"
+description = "The app has each of its runtime secrets as a Fly secret."
+check = "{{templates}}/components/vapor-fly/bin/check-fly-secrets {{inputs.fly_app}} {{inputs.fly_secrets}}"
+fix = { human = { text = "Set each missing runtime secret of {{inputs.fly_app}} ({{inputs.fly_secrets}}) from its source with `fly secrets import --stage --app {{inputs.fly_app}}`, which reads NAME=VALUE lines from standard input, so that no value is in the shell history or the log. --stage keeps the machines as they are until the next deploy." } }
+
+[[steps]]
+id = "first-deploy"
+description = "The app is deployed and its health check answers."
+check = "curl -fsS --max-time 30 -o /dev/null https://{{inputs.fly_app}}.fly.dev{{inputs.health_check_path}}"
+fix = { human = { text = "Deploy {{inputs.fly_app}} for the first time with `make server deploy` from a clean checkout of {{inputs.default_branch}}, or by running the deploy workflow in GitHub Actions. Only the owner deploys." } }
+
+[[shared]]
+kind = "workflow"
+repo = "armcknight/workflows"
+path = ".github/workflows/vapor-ci.yml"
+version = "4"
+description = "Builds and tests the package on Linux in the swift image on each pull request, and builds the Docker image."
+
+[[shared]]
+kind = "workflow"
+repo = "armcknight/workflows"
+path = ".github/workflows/fly-deploy.yml"
+version = "4"
+description = "Deploys the default branch's tip to Fly with its GIT_SHA, by hand or on a merge, then waits for the health check to answer."
+
+[[shared]]
+kind = "make"
+path = "make/vapor-fly.mk"
+version = "v1"
+description = "The vapor-fly-build, vapor-fly-serve, vapor-fly-serve-docker, vapor-fly-deploy and vapor-fly-status targets."
+
+[[shared]]
+kind = "brewfile"
+path = "components/vapor-fly/scaffold/Brewfile"
+version = "v1"
+description = "The tools the Makefile targets use."
+
+[[shared]]
+kind = "script"
+path = "components/vapor-fly/bin/check-fly-config"
+version = "v1"
+description = "Checks that fly.toml names the app, forces HTTPS, scales to zero and has the health check."
+
+[[shared]]
+kind = "script"
+path = "components/vapor-fly/bin/check-fly-secrets"
+version = "v1"
+description = "Checks that the Fly app has each runtime secret, by name."
+
+[[docs]]
+title = "Components"
+anchor = "bootstrap.md#components"
+
+[[docs]]
+title = "Manifests"
+anchor = "bootstrap.md#manifests"
+
+[[docs]]
+title = "Secrets"
+anchor = "bootstrap.md#secrets"
+
+[[docs]]
+title = "CI"
+anchor = "builds.md#ci"
+
+[[docs]]
+title = "The release rule"
+anchor = "builds.md#release-rule"

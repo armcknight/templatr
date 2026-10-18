@@ -22,7 +22,7 @@ let package = Package(
         ),
         .testTarget(
             name: "ComponentManifestTests",
-            dependencies: ["ComponentManifest"]
+            dependencies: ["ComponentManifest", .product(name: "TOMLKit", package: "TOMLKit")]
         ),
     ]
 )

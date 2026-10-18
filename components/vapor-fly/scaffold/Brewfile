@@ -1,0 +1,4 @@
+# The tools the vapor-fly Makefile targets use.
+brew "flyctl"                # fly: deploy, status and secrets
+cask "docker"                # docker compose, for `make server serve-docker`
+cask "armcknight/tools/tools" # check-release-ready, which `make server deploy` runs first
