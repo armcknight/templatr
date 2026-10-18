@@ -15,3 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `templatr --version` prints the version.
 - `make patch`, `minor` and `major` bump the version, and `make deploy` and
   `make deploy-beta` tag a release and make its GitHub release.
+- A component's `directory` can come from an input's value, and scaffold
+  paths, steps, blurbs and the component's `CLAUDE.md` can use
+  `{{directory}}`. apple-app uses it to put a tvOS app in `tvos/` and a
+  macOS app in `macos/`, not `ios/`.

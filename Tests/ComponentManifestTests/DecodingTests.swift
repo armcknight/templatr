@@ -123,6 +123,34 @@ struct DecodingTests {
         #expect(error?.message.contains("'script' was unexpected") == true)
     }
 
+    @Test func aDirectoryIsASlugOrATableThatAnInputNames() throws {
+        #expect(try Manifest(toml: manifest).directory == .fixed("server"))
+        let named = try Manifest(toml: manifest.replacingOccurrences(
+            of: #"directory = "server""#, with: #"directory = { input = "region", names = { sjc = "west", iad = "east" } }"#
+        ))
+        #expect(named.directory == .input("region", names: ["sjc": "west", "iad": "east"]))
+        #expect(named.directory?.candidates == ["east", "west"])
+        #expect(named.directory?.scaffoldName == "{{directory}}")
+        #expect(named.directory?.name(for: ["region": "iad"]) == "east")
+        #expect(named.directory?.name(for: ["region": "ord"]) == nil)
+        #expect(named.directory?.name(for: [:]) == nil)
+        #expect(try Manifest(toml: named.toml()) == named)
+    }
+
+    @Test func aDirectoryNamedByAnInputIsChecked() {
+        func directoryError(_ value: String) -> ManifestError? {
+            error(decoding: manifest.replacingOccurrences(of: #"directory = "server""#, with: "directory = \(value)"))
+        }
+        #expect(directoryError(#""Server""#)?.message.contains("is not lowercase words") == true)
+        #expect(directoryError(#"{ input = "region", names = {} }"#)?.message == "has no values")
+        let badName = directoryError(#"{ input = "region", names = { sjc = "West" } }"#)
+        #expect(badName?.path == "directory/names")
+        #expect(badName?.message.contains("'West', for 'sjc', is not lowercase words") == true)
+        #expect(directoryError(#"{ input = "region", names = { sjc = "west" }, default = "west" }"#)?
+            .message.contains("'default' was unexpected") == true)
+        #expect(directoryError(#"{ names = { sjc = "west" } }"#)?.message == "'input' is required")
+    }
+
     @Test func tomlThatDoesNotParseIsAnError() {
         let error = error(decoding: "name = \n")
         #expect(error?.path == nil)

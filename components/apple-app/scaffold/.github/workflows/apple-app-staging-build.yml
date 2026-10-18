@@ -27,7 +27,7 @@ jobs:
       # Keep these inputs in step with apple-app-ci.yml.
       ipa-name: "{{inputs.app_name}}-staging"
       arkana-keys: "{{inputs.arkana_keys}}"
-      # The Xcode project, the Gemfile and fastlane/ are in ios/.
-      working-directory: ios
+      # The Xcode project, the Gemfile and fastlane/ are in {{directory}}/.
+      working-directory: {{directory}}
       pr-number: ${{ github.event.issue.number }}
     secrets: inherit

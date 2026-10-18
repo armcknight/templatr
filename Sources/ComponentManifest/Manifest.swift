@@ -16,9 +16,10 @@ public struct Manifest: Codable, Equatable, Sendable {
     /// the root Makefile and README.md, are at the repository root.
     public var base: Bool
     /// The subdirectory of the project that the component's files are in, such
-    /// as `server`. Its `detect` and `infer` rules read files there, and its
-    /// steps run there. `nil` for a component whose files are at the root.
-    public var directory: String?
+    /// as `server`, or the one an input's value names. Its `detect` and `infer`
+    /// rules read files there, and its steps run there. `nil` for a component
+    /// whose files are at the root.
+    public var directory: ComponentDirectory?
     /// A summary of the component's part of the project, which bootstrap
     /// writes in the root README.md with a link to the README.md in
     /// `directory`.
@@ -36,7 +37,7 @@ public struct Manifest: Codable, Equatable, Sendable {
     }
 
     public init(
-        name: String, description: String, base: Bool = false, directory: String? = nil, blurb: String? = nil,
+        name: String, description: String, base: Bool = false, directory: ComponentDirectory? = nil, blurb: String? = nil,
         detect: Detect?, inputs: [Input], secrets: [Secret], steps: [Step], shared: [Shared], docs: [Doc]
     ) {
         self.name = name
@@ -58,7 +59,7 @@ public struct Manifest: Codable, Equatable, Sendable {
         name = try container.text(.name, .slug)
         description = try container.text(.description)
         base = try container.decodeIfPresent(Bool.self, forKey: .base) ?? false
-        directory = try container.textIfPresent(.directory, .slug)
+        directory = try container.decodeIfPresent(ComponentDirectory.self, forKey: .directory)
         blurb = try container.textIfPresent(.blurb)
         detect = try container.decodeIfPresent(Detect.self, forKey: .detect)
         if base {
@@ -97,6 +98,83 @@ public struct Manifest: Codable, Equatable, Sendable {
     /// The manifest as TOML text.
     public func toml() throws -> String {
         try TOMLEncoder().encode(self)
+    }
+}
+
+/// The subdirectory of a project that a component's files are in.
+public enum ComponentDirectory: Codable, Equatable, Sendable {
+    /// Always this subdirectory, such as `server`.
+    case fixed(String)
+    /// The subdirectory that `names` gives for the value of the input named
+    /// `input`, such as `tvos` for an app whose `platform` is `tvos`, so that
+    /// the directory names the part's role on its platform.
+    case input(String, names: [String: String])
+
+    /// The name of the scaffold's subdirectory that has the component's files:
+    /// the directory's name, or `{{directory}}` when an input names it.
+    public var scaffoldName: String {
+        switch self {
+        case .fixed(let name): name
+        case .input: "{{\(Placeholders.directory)}}"
+        }
+    }
+
+    /// Every subdirectory the component's files can be in, sorted.
+    public var candidates: [String] {
+        switch self {
+        case .fixed(let name): [name]
+        case .input(_, let names): Set(names.values).sorted()
+        }
+    }
+
+    /// The input that names the directory, if one does.
+    public var inputName: String? {
+        if case .input(let name, _) = self { return name }
+        return nil
+    }
+
+    /// The subdirectory for the inputs' `values`, or `nil` when the input that
+    /// names it has no value, or one that `names` does not have.
+    public func name(for values: [String: String]) -> String? {
+        switch self {
+        case .fixed(let name): name
+        case .input(let input, let names): values[input].flatMap { names[$0] }
+        }
+    }
+
+    enum CodingKeys: String, CodingKey, CaseIterable {
+        case input, names
+    }
+
+    public init(from decoder: Decoder) throws {
+        if let container = try? decoder.singleValueContainer(), let name = try? container.decode(String.self) {
+            if !Format.slug.matches(name) {
+                throw DecodingError.dataCorruptedError(in: container, debugDescription: "'\(name)' is not \(Format.slug.expectation)")
+            }
+            self = .fixed(name)
+            return
+        }
+        try decoder.rejectKeys(unknownTo: CodingKeys.self)
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let input = try container.text(.input, .identifier)
+        let names = try container.decode([String: String].self, forKey: .names)
+        if names.isEmpty { throw container.corrupted(at: .names, "has no values") }
+        for (value, name) in names.sorted(by: { $0.key < $1.key }) where !Format.slug.matches(name) {
+            throw container.corrupted(at: .names, "'\(name)', for '\(value)', is not \(Format.slug.expectation)")
+        }
+        self = .input(input, names: names)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        switch self {
+        case .fixed(let name):
+            var container = encoder.singleValueContainer()
+            try container.encode(name)
+        case .input(let input, let names):
+            var container = encoder.container(keyedBy: CodingKeys.self)
+            try container.encode(input, forKey: .input)
+            try container.encode(names, forKey: .names)
+        }
     }
 }
 

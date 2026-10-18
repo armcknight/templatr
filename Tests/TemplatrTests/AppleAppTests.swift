@@ -51,6 +51,35 @@ import Testing
         #expect(!resolution.recorded)
     }
 
+    @Test func anIOSAppIsInIos() throws {
+        let resolution = try bootstrapper.resolve(repository: project.root, answers: [:])
+        #expect(resolution.components.last?.directory == "ios")
+    }
+
+    @Test func aTvOSAppIsInTvos() throws {
+        let tv = try Directory()
+        try tv.write("tvos/Demo.xcodeproj/project.pbxproj", "productType = \"com.apple.product-type.application\";\n")
+        stubs.settings?["PLATFORM_NAME"] = "appletvos"
+        let app = try #require(try bootstrapper.resolve(repository: tv.root, answers: [:]).components.last)
+        #expect(app.directory == "tvos")
+        #expect(app.values["platform"] == "tvos")
+        #expect(app.values["project"] == "Demo.xcodeproj")
+    }
+
+    @Test func aNewMacAppIsInMacos() throws {
+        let mac = try Directory()
+        try mac.write(Record.fileName, """
+            [components.apple-app]
+            tag = "v1"
+
+            [components.apple-app.inputs]
+            platform = "mac"
+
+            """)
+        let app = try #require(try bootstrapper.resolve(repository: mac.root, answers: [:]).components.last)
+        #expect(app.directory == "macos")
+    }
+
     @Test func readsTheFilesInItsDirectory() throws {
         let root = try Directory()
         try root.write("Demo.xcodeproj/project.pbxproj", "productType = \"com.apple.product-type.application\";\n")

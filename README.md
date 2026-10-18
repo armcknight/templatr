@@ -12,7 +12,7 @@ This repository holds no secrets: only their names and where to get them.
 
 | Component | What it sets up |
 | --- | --- |
-| [apple-app](components/apple-app) | An iOS (with an optional embedded watch app), tvOS or macOS app in `ios/`, tested on each pull request, with staging builds on demand, and uploaded to TestFlight by hand with `make ios deploy-beta`. |
+| [apple-app](components/apple-app) | An iOS (with an optional embedded watch app), tvOS or macOS app in `ios/`, `tvos/` or `macos/`, for its platform, tested on each pull request, with staging builds on demand, and uploaded to TestFlight by hand with `make <directory> deploy-beta`, such as `make ios deploy-beta`. |
 | [base](components/base) | The root files that every project has with its other components: the Makefile that includes each component's targets, and the README.md that links to each component's README. |
 | [github-repo](components/github-repo) | A repository on GitHub whose pull requests are squashed when they merge, with their branches deleted, and whose default branch cannot be deleted or force-pushed except by the owner. |
 | [linear-workspace](components/linear-workspace) | A Linear workspace that superlinear works from: each team has an In Review state after In Progress, a Todo state, Triage, and superlinear's labels; the owner has a "superlinear proposals" view in their favorites; and no onboarding issue is open. See [The linear-workspace component](#the-linear-workspace-component). |
@@ -55,8 +55,8 @@ The `templatr` command has releases of its own, with three-part tags such as `0.
 | [armcknight/workflows: ios-ci.yml](https://github.com/armcknight/workflows/blob/4/.github/workflows/ios-ci.yml) | workflow | apple-app | Runs the `test` lane on each pull request, and on a `/build-staging` comment the `stage` lane, with an install link. |
 | [armcknight/workflows: ota-refresh.yml](https://github.com/armcknight/workflows/blob/4/.github/workflows/ota-refresh.yml) | workflow | apple-app | Signs a staging build's install link again on a `/refresh-staging` comment, and asks for a new build when the old one is gone. |
 | [armcknight/workflows: ota-cleanup.yml](https://github.com/armcknight/workflows/blob/4/.github/workflows/ota-cleanup.yml) | workflow | apple-app | Deletes a pull request's staging builds when it closes. |
-| [make/apple-app.mk](make/apple-app.mk) | make | apple-app | The `apple-app-test`, `apple-app-stage`, `apple-app-deploy-beta`, `apple-app-patch`, `apple-app-minor` and `apple-app-major` targets, which `ios/component.mk` runs as `make ios <command>`. |
-| [components/apple-app/scaffold/ios/Brewfile](components/apple-app/scaffold/ios/Brewfile) | brewfile | apple-app | The tools the lanes use. |
+| [make/apple-app.mk](make/apple-app.mk) | make | apple-app | The `apple-app-test`, `apple-app-stage`, `apple-app-deploy-beta`, `apple-app-patch`, `apple-app-minor` and `apple-app-major` targets, which the app directory's `component.mk`, such as `ios/component.mk`, runs as `make ios <command>`. |
+| [components/apple-app/scaffold/{{directory}}/Brewfile](components/apple-app/scaffold/%7B%7Bdirectory%7D%7D/Brewfile) | brewfile | apple-app | The tools the lanes use. |
 | [components/apple-app/bin/check-app-store-connect](components/apple-app/bin/check-app-store-connect) | script | apple-app | Checks the app record and its tester group in App Store Connect. |
 | [components/apple-app/bin/check-shared-lanes](components/apple-app/bin/check-shared-lanes) | script | apple-app | Checks that `fastlane/Fastfile` uses the shared lanes. |
 | [armcknight/workflows: vapor-ci.yml](https://github.com/armcknight/workflows/blob/4/.github/workflows/vapor-ci.yml) | workflow | vapor-fly | Builds and tests the package on Linux in the swift image on each pull request, and builds the Docker image. |
@@ -105,13 +105,15 @@ The component's name, which is also its directory's name, and one sentence about
 
 `directory` is the project's subdirectory that the component's files are in, such as `server` for vapor-fly and `ios` for apple-app. It names the part's role, not its framework or how it is deployed, so that it stays right when those change, and so that a second app can have its own, such as `android`. A component has its own directory also when a project has no other component. Its `detect` and `infer` rules read files in it, and its steps run in it.
 
+When the right name depends on an input, `directory` is a table that names the input and a directory for each of its values: apple-app has `directory = { input = "platform", names = { ios = "ios", tvos = "tvos", mac = "macos" } }`, so that a tvOS app is in `tvos/`, not `ios/`, and an iOS app can come later in its own. The `detect` rules look in each of those directories; the component's directory is the first one they match, and its `infer` rules read files there. When none has the component's files yet, the directory is the one the input's value names, given, recorded, inferred or default. The scaffold has the component's files under `scaffold/{{directory}}/`. Until the input has a value that names a directory, the steps and those scaffold files wait for it.
+
 `blurb` is a summary of the component's part of the project, with placeholders. `templatr bootstrap` writes it in the root README.md, with a link to the README.md in `directory`.
 
 A component with `base = true` comes with every other component, so it has no `detect` and no `directory`: [base](components/base) has the root Makefile and README.md. There is at most one.
 
 ### Project layout
 
-Each component's scaffold has the files at the paths they have in the project: under its `directory`, such as `scaffold/server/fly.toml`, with its own `README.md`, `.gitignore` and `Brewfile` there, and its workflows in `scaffold/.github/workflows/`, each named with the component's name first, such as `vapor-fly-ci.yml`, because GitHub reads workflows only there. The tools run in the directory, or are told where it is: `fly deploy server`, `docker compose --file server/docker-compose.yml`, `cd ios && bundle exec fastlane`, and the shared workflows' `working-directory` input. No two components have a file at the same path.
+Each component's scaffold has the files at the paths they have in the project: under its `directory`, such as `scaffold/server/fly.toml`, with its own `README.md`, `.gitignore` and `Brewfile` there, and its workflows in `scaffold/.github/workflows/`, each named with the component's name first, such as `vapor-fly-ci.yml`, because GitHub reads workflows only there. The tools run in the directory, or are told where it is: `fly deploy server`, `docker compose --file server/docker-compose.yml`, `cd {{directory}} && bundle exec fastlane`, and the shared workflows' `working-directory` input. No two components have a file at the same path.
 
 The root Makefile, from the base component, has `TEMPLATES_TAG`, the rule that downloads the Makefile fragments, `help` and `templates-update`, and includes every `*/component.mk`. Each component's `component.mk` sets its values, adds its namespace to `NAMESPACES` and its fragment to `TEMPLATES_FRAGMENTS`, includes the fragment, and maps `make <namespace> <command>` to the fragment's targets, such as `make server deploy` to `vapor-fly-deploy`.
 
@@ -160,11 +162,12 @@ Sections of the superlinear guide that explain the component, each with a `title
 
 ### Placeholders
 
-Scaffold files, step commands, secrets' sources, human texts and blurbs can contain:
+Scaffold files, step commands, secrets' sources, human texts, blurbs and the component's `CLAUDE.md` can contain:
 
 * `{{inputs.<name>}}`: an input's value. In `check` and `fix` commands, the value is quoted for the shell.
 * `{{templates}}`: the path of a checkout of this repository at the project's tag, for the scripts in `components/<name>/bin/`.
 * `{{templates.tag}}`: the project's tag, such as `v1`.
+* `{{directory}}`: the directory of a component with a `directory`, such as `tvos`. Scaffold paths can contain it too, and the make namespace can be it, as in `NAMESPACES += {{directory}}`.
 
 GitHub Actions expressions, `${{ … }}`, are not placeholders.
 
@@ -215,7 +218,7 @@ swift run templatr check ~/Code/babysittr         # report what it still needs, 
 3. **Scaffold.** It copies each scaffold file that the project does not have yet, with its placeholders filled in. It never overwrites a file. A path that two components' scaffolds have is an error, and neither file is copied.
 4. **Steps.** It runs each step's `check`, and its `fix` command when the check fails, then the check again. A failing step whose fix is `human` is reported with its text, whether it needs two-factor, and links to the manifest and the guide. A step that is done one time for each app (`scope = "app"`) runs one time.
 5. **Secrets.** It reads the repository's secret names with `gh secret list`. For each missing one, after it asks, it reads the value from its `source` and gives it to `gh secret set` on standard input. A `generate:` secret is made on this Mac and stored first in the Keychain item `superlinear.<name>`, such as `superlinear.match-deploy-key`, with an SSH key's public half in `superlinear.<name>.pub`. A `local` secret is only looked for in the Keychain, and never set in GitHub. Values never go to a log, the output or a file.
-6. **README and CLAUDE.md.** It writes the root README's "How this project is built" section between its markers, adding them at the end when the README does not have them, and each component's blurb between its own markers, adding them above that section; it changes nothing outside them. It copies each component's `CLAUDE.md` to `.templatr/<name>/CLAUDE.md` and imports those copies in the project's `CLAUDE.md`, between `<!-- templatr:begin components -->` and `<!-- templatr:end -->`.
+6. **README and CLAUDE.md.** It writes the root README's "How this project is built" section between its markers, adding them at the end when the README does not have them, and each component's blurb between its own markers, adding them above that section; it changes nothing outside them. It copies each component's `CLAUDE.md`, with its placeholders filled in, to `.templatr/<name>/CLAUDE.md` and imports those copies in the project's `CLAUDE.md`, between `<!-- templatr:begin components -->` and `<!-- templatr:end -->`.
 
 It then reports what is left, as `check` does. Running it again changes nothing that is already done.
 
@@ -231,7 +234,7 @@ The exit status is 0 when nothing is left to do, 1 when the report lists somethi
 
 ## Adding a component
 
-1. Make `components/<name>/` with `component.toml`, with its `directory` and `blurb`, `CLAUDE.md`, and `scaffold/<directory>/README.md`, without the markers. Put its files under `scaffold/<directory>/`, its Makefile targets in `scaffold/<directory>/component.mk`, and its workflows in `scaffold/.github/workflows/<name>-*.yml`.
+1. Make `components/<name>/` with `component.toml`, with its `directory` and `blurb`, `CLAUDE.md`, and `scaffold/<directory>/README.md`, without the markers. Put its files under `scaffold/<directory>/` (`scaffold/{{directory}}/` when an input names the directory), its Makefile targets in `scaffold/<directory>/component.mk`, and its workflows in `scaffold/.github/workflows/<name>-*.yml`.
 2. Put shared lanes, Makefile fragments and scripts at the top level, and reusable workflows in armcknight/workflows. Add them to the manifest's `shared` and to the table above.
 3. Add any new guide section to superlinear's `docs/`, with its anchor listed in `docs/anchors.md`, first.
 4. Run the checks below, then tag a release.
@@ -262,10 +265,11 @@ For each `components/<name>/component.toml`:
 * input names, secret names and step IDs are unique;
 * a `local` secret's source is a Keychain item;
 * `CLAUDE.md` exists;
-* a component with a `directory` has `scaffold/<directory>/README.md`, without the generated section's markers, and its other scaffold files are under `scaffold/<directory>/` or are workflows named `.github/workflows/<name>-*`; a component with neither has only such workflows;
+* a `directory` that an input names names a declared input;
+* a component with a `directory` has `scaffold/<directory>/README.md` (`scaffold/{{directory}}/README.md` when an input names it), without the generated section's markers, and its other scaffold files are under `scaffold/<directory>/` or are workflows named `.github/workflows/<name>-*`; a component with neither has only such workflows;
 * the base component has `scaffold/README.md`, with the generated section's markers, one time each and in order;
-* there is at most one base component, no two components have the same `directory`, no two scaffolds have a file at the same path, and no scaffold has a file in another component's directory;
-* each `{{placeholder}}` in the scaffold, the steps, the secrets' sources, the human texts and the blurb names a declared input, `templates` or `templates.tag`;
+* there is at most one base component, no two components can have the same `directory`, no two scaffolds have a file at the same path, and no scaffold has a file in another component's directory;
+* each `{{placeholder}}` in the scaffold's files and paths, the steps, the secrets' sources, the human texts, the blurb and `CLAUDE.md` names a declared input, `templates`, `templates.tag` or, in a component with a `directory`, `directory`;
 * each regular expression compiles, and each `regex` infer rule has a capture group;
 * each shared path in this repository exists; a path in another `repo` is not checked;
 * each docs anchor is listed in superlinear's `docs/anchors.md`.

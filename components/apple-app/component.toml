@@ -1,11 +1,15 @@
 name = "apple-app"
-description = "An iOS (with an optional embedded watch app), tvOS or macOS app, tested on each pull request, with staging builds on demand, and uploaded to TestFlight by hand with `make ios deploy-beta`."
+description = "An iOS (with an optional embedded watch app), tvOS or macOS app, tested on each pull request, with staging builds on demand, and uploaded to TestFlight by hand with `make <directory> deploy-beta`, such as `make ios deploy-beta`."
 
 # The app's files, the Xcode project, the Gemfile and fastlane/ included, are
-# in ios/. The detect and infer rules read files there, and the steps run
-# there.
-directory = "ios"
-blurb = "The app, {{inputs.app_name}}. `make ios test` runs its tests, `/build-staging` on a pull request posts an install link, and the owner uploads it to TestFlight with `make ios deploy-beta`."
+# in the directory for its platform: ios/ (with an embedded watch app or not),
+# tvos/ or macos/, so that an app for another platform can have its own. The
+# detect rules look in each, and the infer rules read files in the one they
+# match; the steps run there. A new app's directory comes from its platform
+# input. {{directory}} is that directory's name, which is also the make
+# namespace.
+directory = { input = "platform", names = { ios = "ios", tvos = "tvos", mac = "macos" } }
+blurb = "The app, {{inputs.app_name}}. `make {{directory}} test` runs its tests, `/build-staging` on a pull request posts an install link, and the owner uploads it to TestFlight with `make {{directory}} deploy-beta`."
 
 # An Xcode project, an XcodeGen spec or a Tuist manifest with an application
 # target. The product type also matches a watch app, which is always embedded in
@@ -36,20 +40,20 @@ infer = [
 
 [[inputs]]
 name = "project"
-description = "The Xcode project, relative to ios/. Leave empty when `workspace` is set."
+description = "The Xcode project, relative to the app's directory. Leave empty when `workspace` is set."
 example = "Babysittr.xcodeproj"
 infer = [{ from = "glob", glob = "*.xcodeproj" }]
 
 [[inputs]]
 name = "workspace"
-description = "The Xcode workspace, relative to ios/, when the app builds from one."
+description = "The Xcode workspace, relative to the app's directory, when the app builds from one."
 example = "Trgnmtry.xcworkspace"
 default = ""
 infer = [{ from = "glob", glob = "*.xcworkspace" }]
 
 [[inputs]]
 name = "xcconfig"
-description = "The xcconfig, relative to ios/, that sets MARKETING_VERSION and CURRENT_PROJECT_VERSION for every target."
+description = "The xcconfig, relative to the app's directory, that sets MARKETING_VERSION and CURRENT_PROJECT_VERSION for every target."
 example = "config/Babysittr.xcconfig"
 infer = [{ from = "glob", glob = "**/*.xcconfig", contains = "MARKETING_VERSION[ \\t]*=" }]
 
@@ -129,7 +133,7 @@ description = "The internal TestFlight group that gets each build."
 example = "Internal"
 default = "Internal"
 
-# The App Store Connect API key stays in the owner's Keychain. `make ios
+# The App Store Connect API key stays in the owner's Keychain. `make <directory>
 # deploy-beta` uses it when it is in the environment, and the app-record and
 # tester-group checks need it. It is never a GitHub secret.
 [[secrets]]
@@ -176,7 +180,7 @@ fix = "bundle add fastlane"
 id = "shared-lanes"
 description = "fastlane/Fastfile imports the shared lanes at the pinned tag and does not define its own test, stage or beta lanes."
 check = "{{templates}}/components/apple-app/bin/check-shared-lanes {{templates.tag}}"
-fix = { human = { text = "Replace the test, stage and deploy lanes in fastlane/Fastfile with the shared ones: set the APPLE_APP_* values and call import_from_git as the apple-app scaffold's Fastfile does, then delete the local test, stage and beta lanes. The shared beta lane does what a local deploy lane did, so delete that too, and point `make ios deploy-beta` at it. Lanes the shared Fastfile does not have, such as build_dev, stay." } }
+fix = { human = { text = "Replace the test, stage and deploy lanes in fastlane/Fastfile with the shared ones: set the APPLE_APP_* values and call import_from_git as the apple-app scaffold's Fastfile does, then delete the local test, stage and beta lanes. The shared beta lane does what a local deploy lane did, so delete that too, and point `make {{directory}} deploy-beta` at it. Lanes the shared Fastfile does not have, such as build_dev, stay." } }
 
 [[steps]]
 id = "workflows"
@@ -186,9 +190,9 @@ fix = { human = { text = "Copy apple-app-ci.yml, apple-app-staging-build.yml, ap
 
 [[steps]]
 id = "make-fragment"
-description = "ios/component.mk includes make/apple-app.mk, with the app's commands, and adds the ios namespace."
-check = "grep -qs 'apple-app\\.mk' component.mk && grep -qs 'NAMESPACES *+= *ios' component.mk"
-fix = { human = { text = "Copy ios/component.mk from the apple-app scaffold, with its APPLE_APP_* values, the include and the ios-* targets, and move any test, stage, deploy-beta or version targets in the root Makefile to it, pointed at the apple-app-* targets." } }
+description = "The app directory's component.mk includes make/apple-app.mk, with the app's commands, and adds the directory's make namespace."
+check = "grep -qs 'apple-app\\.mk' component.mk && grep -qs \"NAMESPACES *+= *\"{{directory}} component.mk"
+fix = { human = { text = "Copy {{directory}}/component.mk from the apple-app scaffold, with its APPLE_APP_* values, the include and the {{directory}}-* targets, and move any test, stage, deploy-beta or version targets in the root Makefile to it, pointed at the apple-app-* targets." } }
 
 [[steps]]
 id = "staging-variables"
@@ -251,7 +255,7 @@ description = "The apple-app-test, apple-app-stage, apple-app-deploy-beta, apple
 
 [[shared]]
 kind = "brewfile"
-path = "components/apple-app/scaffold/ios/Brewfile"
+path = "components/apple-app/scaffold/{{directory}}/Brewfile"
 version = "v1"
 description = "The tools the lanes use."
 

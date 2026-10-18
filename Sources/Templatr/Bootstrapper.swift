@@ -34,17 +34,31 @@ public struct Bootstrapper: Sendable {
         let catalog = try templates.components()
         let byName = Dictionary(catalog.map { ($0.name, $0) }) { first, _ in first }
         // Each component's rules read the files in its own directory.
-        var cache: [URL: RepositoryFiles] = [:]
-        func files(of component: Component) -> RepositoryFiles {
-            let root = component.root(in: repository)
-            if let found = cache[root] { return found }
-            let found = RepositoryFiles(root: root, runner: services.runner)
-            cache[root] = found
+        var cache: [String: RepositoryFiles] = [:]
+        func files(in directory: String?) -> RepositoryFiles {
+            let key = directory ?? ""
+            if let found = cache[key] { return found }
+            let found = RepositoryFiles(
+                root: directory.map { repository.appending(path: $0) } ?? repository, runner: services.runner
+            )
+            cache[key] = found
             return found
         }
-        var detected = catalog.filter { component in
-            component.manifest.detect.map { $0.matches(files(of: component)) } ?? false
-        }.map(\.name)
+        // A component whose directory an input names is found in the first
+        // of its directories that its rules match.
+        var foundIn: [String: String] = [:]
+        var detected: [String] = []
+        for component in catalog {
+            guard let detect = component.manifest.detect else { continue }
+            guard let directory = component.manifest.directory else {
+                if detect.matches(files(in: nil)) { detected.append(component.name) }
+                continue
+            }
+            if let found = directory.candidates.first(where: { detect.matches(files(in: $0)) }) {
+                foundIn[component.name] = found
+                detected.append(component.name)
+            }
+        }
         // The base components come with any other, first.
         if !detected.isEmpty {
             detected = catalog.filter(\.manifest.base).map(\.name) + detected
@@ -62,10 +76,17 @@ public struct Bootstrapper: Sendable {
 
         resolution.components = names.map { name in
             let component = byName[name]!
-            let inferrer = Inferrer(files: files(of: component), buildSettings: services.buildSettings)
             let entry = record?.components[name]
             let known = (entry?.inputs ?? [:]).merging(answers[name] ?? [:]) { $1 }
-            let inferred = inferrer.infer(component.manifest.inputs, known: known)
+            // The directory the files are in wins, then the one the given or
+            // recorded inputs name, then the one the inferred or default
+            // inputs name.
+            var directory = foundIn[name] ?? component.manifest.directory?.name(for: known)
+            var inferred: [String: String] = [:]
+            if directory != nil || component.manifest.directory == nil {
+                let inferrer = Inferrer(files: files(in: directory), buildSettings: services.buildSettings)
+                inferred = inferrer.infer(component.manifest.inputs, known: known)
+            }
             var values = known.merging(inferred) { first, _ in first }
             var missing: [Input] = []
             for input in component.manifest.inputs where values[input.name] == nil {
@@ -75,8 +96,10 @@ public struct Bootstrapper: Sendable {
                     missing.append(input)
                 }
             }
+            directory = directory ?? component.manifest.directory?.name(for: values)
             return ResolvedComponent(
-                component: component, tag: entry?.tag ?? templates.tag, values: values, inferred: inferred, missing: missing
+                component: component, tag: entry?.tag ?? templates.tag, directory: directory, values: values,
+                inferred: inferred, missing: missing
             )
         }
         return resolution
@@ -116,7 +139,9 @@ public struct Bootstrapper: Sendable {
         for resolved in components {
             // A step runs in the component's directory, which the scaffold
             // makes unless an input that it needs is missing.
-            try FileManager.default.createDirectory(at: resolved.component.root(in: repository), withIntermediateDirectories: true)
+            if !resolved.directoryUnresolved {
+                try FileManager.default.createDirectory(at: resolved.root(in: repository), withIntermediateDirectories: true)
+            }
             for step in resolved.component.manifest.steps {
                 run(step, of: resolved, in: repository, fixing: true, result: &result, report: &report)
             }
@@ -136,7 +161,8 @@ public struct Bootstrapper: Sendable {
         for resolved in components {
             let source = resolved.component.directory.appending(path: "CLAUDE.md")
             if let text = try? String(contentsOf: source, encoding: .utf8) {
-                try write(text, to: Self.vendoredClaudePath(resolved.component.name), in: repository, result: &result)
+                let rendered = resolved.placeholders(templates: templates.root).render(text, quoted: false).text
+                try write(rendered, to: Self.vendoredClaudePath(resolved.component.name), in: repository, result: &result)
             }
         }
         let claude = (try? String(contentsOf: repository.appending(path: "CLAUDE.md"), encoding: .utf8)) ?? ""
@@ -187,6 +213,14 @@ public struct Bootstrapper: Sendable {
                 MissingInput(component: resolved.component.name, name: $0.name, description: $0.description, example: $0.example)
             }
         }
+        for resolved in resolution.components where resolved.directoryUnresolved {
+            guard case .input(let input, let names) = resolved.component.manifest.directory,
+                  let value = resolved.values[input]
+            else { continue }
+            report.errors.append(
+                "\(resolved.component.name): \(input) '\(value)' names no directory; it can be \(names.keys.sorted().joined(separator: ", "))."
+            )
+        }
     }
 
     /// The reports every run ends with: old tags, expiries and broken links.
@@ -205,8 +239,9 @@ public struct Bootstrapper: Sendable {
     private func scaffoldConflicts(_ components: [ResolvedComponent]) -> [String: [String]] {
         var owners: [String: [String]] = [:]
         for resolved in components {
+            let values = resolved.placeholders(templates: templates.root)
             for path in Validator.scaffoldPaths(in: resolved.component.scaffold) {
-                owners[path, default: []].append(resolved.component.name)
+                owners[values.render(path, quoted: false).text, default: []].append(resolved.component.name)
             }
         }
         return owners.filter { $0.value.count > 1 }
@@ -217,20 +252,30 @@ public struct Bootstrapper: Sendable {
         result: inout BootstrapResult, report: inout Report
     ) throws {
         let scaffold = resolved.component.scaffold
-        let values = PlaceholderValues(inputs: resolved.values, templates: templates.root, tag: resolved.tag)
+        let values = resolved.placeholders(templates: templates.root)
         let manager = FileManager.default
-        for path in Validator.scaffoldPaths(in: scaffold) where !skipping.contains(path) {
+        for scaffoldPath in Validator.scaffoldPaths(in: scaffold) {
+            // A path can have the directory's placeholder.
+            let (path, missingInPath) = values.render(scaffoldPath, quoted: false)
+            guard !skipping.contains(path) else { continue }
+            func block(_ missing: [String]) {
+                report.blockedSteps.append(BlockedStep(
+                    component: resolved.component.name, id: "scaffold:\(scaffoldPath)",
+                    description: "Copy \(scaffoldPath) from the scaffold.", missingInputs: resolved.inputNames(missing)
+                ))
+            }
+            guard missingInPath.isEmpty else {
+                block(missingInPath)
+                continue
+            }
             let target = repository.appending(path: path)
             guard !manager.fileExists(atPath: target.path) else { continue }
-            let source = scaffold.appending(path: path)
+            let source = scaffold.appending(path: scaffoldPath)
             var data = try Data(contentsOf: source)
             if let text = String(data: data, encoding: .utf8) {
                 let rendered = values.render(text, quoted: false)
                 if !rendered.missing.isEmpty {
-                    report.blockedSteps.append(BlockedStep(
-                        component: resolved.component.name, id: "scaffold:\(path)",
-                        description: "Copy \(path) from the scaffold.", missingInputs: rendered.missing
-                    ))
+                    block(rendered.missing)
                     continue
                 }
                 data = Data(rendered.text.utf8)
@@ -249,21 +294,23 @@ public struct Bootstrapper: Sendable {
         result: inout BootstrapResult, report: inout Report
     ) {
         let name = resolved.component.name
-        let values = PlaceholderValues(inputs: resolved.values, templates: templates.root, tag: resolved.tag)
+        let values = resolved.placeholders(templates: templates.root)
         let check = values.render(step.check, quoted: true)
         var fixCommand: (text: String, missing: [String])?
         if case .command(let command) = step.fix {
             fixCommand = values.render(command, quoted: true)
         }
-        let missing = check.missing + (fixing ? fixCommand?.missing ?? [] : [])
+        var missing = check.missing + (fixing ? fixCommand?.missing ?? [] : [])
+        // A step runs in the component's directory, so it waits for it.
+        if resolved.directoryUnresolved { missing.append(Placeholders.directory) }
         guard missing.isEmpty else {
             report.blockedSteps.append(BlockedStep(
                 component: name, id: step.id, description: step.description,
-                missingInputs: Array(Set(missing.map { $0.replacingOccurrences(of: "inputs.", with: "") })).sorted()
+                missingInputs: Array(Set(resolved.inputNames(missing).map { $0.replacingOccurrences(of: "inputs.", with: "") })).sorted()
             ))
             return
         }
-        let directory = resolved.component.root(in: repository)
+        let directory = resolved.root(in: repository)
         let checked = shell(check.text, in: directory)
         if checked.succeeded { return }
 
@@ -317,7 +364,7 @@ public struct Bootstrapper: Sendable {
         var seen: Set<String> = []
         for resolved in components {
             let name = resolved.component.name
-            let values = PlaceholderValues(inputs: resolved.values, templates: templates.root, tag: resolved.tag)
+            let values = resolved.placeholders(templates: templates.root)
             for declared in resolved.component.manifest.secrets where seen.insert(declared.name).inserted {
                 // A source with a placeholder that has no value is not read:
                 // the input is reported as missing.
@@ -462,6 +509,9 @@ public struct ResolvedComponent: Sendable {
     public var component: Component
     /// The tag the component is pinned to.
     public var tag: String
+    /// The subdirectory of the project that its files are in, or `nil` when
+    /// they are at the root or `directoryUnresolved`.
+    public var directory: String?
     /// Every input with a value: given, recorded, inferred or default.
     public var values: [String: String]
     /// The values found in the repository on this run, which the CLI shows to
@@ -469,6 +519,35 @@ public struct ResolvedComponent: Sendable {
     public var inferred: [String: String]
     /// Inputs with no value, to ask for.
     public var missing: [Input]
+
+    /// Whether the component has a directory that an input names, and that
+    /// input has no value, or one that names no directory. Its steps and the
+    /// scaffold files in its directory wait for it.
+    public var directoryUnresolved: Bool {
+        component.manifest.directory != nil && directory == nil
+    }
+
+    /// Where the component's files are in `repository`: its directory, or the
+    /// root.
+    public func root(in repository: URL) -> URL {
+        directory.map { repository.appending(path: $0) } ?? repository
+    }
+
+    /// The values of the component's placeholders.
+    func placeholders(templates: URL) -> PlaceholderValues {
+        PlaceholderValues(inputs: values, templates: templates, tag: tag, directory: directory)
+    }
+
+    /// `missing` placeholders with `directory` replaced by the input that
+    /// names it, as `inputs.<name>`.
+    func inputNames(_ missing: [String]) -> [String] {
+        let input = component.manifest.directory?.inputName.map { "inputs.\($0)" } ?? Placeholders.directory
+        var names: [String] = []
+        for name in missing.map({ $0 == Placeholders.directory ? input : $0 }) where !names.contains(name) {
+            names.append(name)
+        }
+        return names
+    }
 }
 
 public struct BootstrapOptions: Sendable {

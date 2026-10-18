@@ -8,6 +8,11 @@ public enum Placeholders {
     /// tag, and `templates.tag`, that tag.
     public static let builtin: Set<String> = ["templates", "templates.tag"]
 
+    /// The placeholder for the project's subdirectory that a component with a
+    /// `directory` has its files in, such as `tvos`. Only those components can
+    /// use it.
+    public static let directory = "directory"
+
     /// The names in each `{{…}}` in `text`, trimmed.
     public static func names(in text: String) -> Set<String> {
         // A `$` before the braces makes it a GitHub Actions expression.

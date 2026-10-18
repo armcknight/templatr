@@ -24,8 +24,28 @@
       "type": "boolean"
     },
     "directory": {
-      "description": "The project's subdirectory that the component's files are in, such as `server`. The `detect` and `infer` rules read files there, and the steps run there. The scaffold has the component's files under it, and its workflows in .github/workflows/, named with the component's name first.",
-      "$ref": "#/$defs/slug"
+      "description": "The project's subdirectory that the component's files are in, such as `server`, or a table that names it from an input's value. The `detect` and `infer` rules read files there, and the steps run there. The scaffold has the component's files under it, or under `{{directory}}` when an input names it, and its workflows in .github/workflows/, named with the component's name first.",
+      "oneOf": [
+        { "$ref": "#/$defs/slug" },
+        {
+          "type": "object",
+          "description": "The directory for each value of an input, such as `{ input = \"platform\", names = { ios = \"ios\", tvos = \"tvos\" } }`. The detect rules look in each; the component's directory is the first they match, or else the one the input's value names.",
+          "additionalProperties": false,
+          "required": ["input", "names"],
+          "properties": {
+            "input": {
+              "description": "The name of the input whose value names the directory.",
+              "$ref": "#/$defs/identifier"
+            },
+            "names": {
+              "description": "The directory for each of the input's values.",
+              "type": "object",
+              "minProperties": 1,
+              "additionalProperties": { "$ref": "#/$defs/slug" }
+            }
+          }
+        }
+      ]
     },
     "blurb": {
       "description": "A summary of the component's part of the project, which bootstrap writes in the root README.md between the component's markers, with a link to the README.md in `directory`.",
