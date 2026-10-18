@@ -22,8 +22,11 @@
 # project before every project pinned to the alias gets it. Only a change that
 # a project must act on is `templates-major`.
 #
-# vrsn and prepare-release come from the armcknight/tools cask.
+# vrsn and prepare-release come from the armcknight/tools cask: `make init`
+# installs it with the rest of the Brewfile.
 
+BINARY       = .build/release/templatr
+INSTALL_PATH = $(HOME)/.local/bin/templatr
 VERSION_FILE = Sources/TemplatrCLI/Version.swift
 VRSN_KEY     = version
 
@@ -31,7 +34,7 @@ TEMPLATES_VERSION_FILE = components/VERSION
 TEMPLATES_CHANGELOG    = components/CHANGELOG.md
 
 .DEFAULT_GOAL = help
-.PHONY: help build test validate patch minor major deploy deploy-beta \
+.PHONY: help init build test validate links install patch minor major deploy deploy-beta \
 	templates-patch templates-minor templates-major templates-deploy templates-deploy-beta
 
 # Targets document themselves with a `## name: description` line above them,
@@ -40,6 +43,18 @@ TEMPLATES_CHANGELOG    = components/CHANGELOG.md
 ## help: list these targets
 help:
 	@awk '/^## /{ t = substr($$0, 4); c = index(t, ":"); printf "  make %-22s %s\n", substr(t, 1, c - 1), substr(t, c + 2) }' $(MAKEFILE_LIST)
+
+# Both taps are third-party, and Homebrew refuses to load formulae or casks from
+# an untrusted tap. `brew bundle` aborts on the first one it meets and installs
+# nothing at all, including the entries after it, so trust precedes the bundle.
+# All three commands are idempotent: `work start` runs this in every new
+# worktree, so it has to stay that way.
+## init: trust the taps and install everything in the Brewfile
+init:
+	@command -v brew >/dev/null 2>&1 || { echo "Homebrew is required: https://brew.sh"; exit 1; }
+	brew trust --tap armcknight/tools
+	brew trust --tap dorkitude/linctl
+	brew bundle --file=Brewfile
 
 ## build: build the release binaries
 build:
@@ -53,6 +68,28 @@ test:
 ## validate: check the component manifests
 validate:
 	swift run validate-components
+
+# The same check as CI's links job. .lycheeignore lists the links to skip.
+# The token raises GitHub's rate limit for the many github.com links.
+## links: check the links in every Markdown file, as CI does
+links:
+	GITHUB_TOKEN="$$(gh auth token 2>/dev/null)" lychee --no-progress --include-fragments './**/*.md'
+
+# The binary finds the components through this checkout's path, compiled in,
+# so an installed `templatr` runs against the checkout it was built from.
+# A new file rather than one overwritten in place, so a running templatr is
+# not killed by macOS when it is replaced.
+## install: build the release binary and copy it into ~/.local/bin
+install:
+	swift build -c release
+	mkdir -p $(HOME)/.local/bin
+	cp $(BINARY) $(INSTALL_PATH).new
+	mv -f $(INSTALL_PATH).new $(INSTALL_PATH)
+	@echo "Installed $$($(INSTALL_PATH) --version) at $(INSTALL_PATH)"
+	@found="$$(command -v templatr)"; \
+	if [ -n "$$found" ] && [ "$$found" != "$(INSTALL_PATH)" ]; then \
+		echo "warning: templatr resolves to $$found in this shell. Put $(dir $(INSTALL_PATH)) before it in PATH to run this build by name."; \
+	fi
 
 ## patch: bump the patch version (x.y.Z) and commit (also: minor, major)
 patch:
