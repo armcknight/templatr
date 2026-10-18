@@ -13,6 +13,7 @@ This repository holds no secrets: only their names and where to get them.
 | Component | What it sets up |
 | --- | --- |
 | [apple-app](components/apple-app) | An iOS (with an optional embedded watch app), tvOS or macOS app, tested on each pull request, with staging builds on demand, and uploaded to TestFlight by hand with `make deploy-beta`. |
+| [github-repo](components/github-repo) | A repository on GitHub whose pull requests are squashed when they merge, with their branches deleted, and whose default branch cannot be deleted or force-pushed except by the owner. |
 | [vapor-fly](components/vapor-fly) | A Swift server built with Vapor and run on Fly.io, built and tested on Linux on each pull request, and deployed by the owner, by hand with `make server deploy` or on a merge. |
 | [supabase](components/supabase) | A Postgres database on Supabase for a Vapor server on Fly.io, with local and test databases, Supabase's root CA in the server's image, a local and remote parity check, and migrations with the Supabase CLI before each deploy or with Fluent when the server starts. |
 
@@ -64,6 +65,9 @@ Releases are tags: `v1`, `v1.1`, `v2`. Projects refer to a tag — in `import_fr
 | [components/supabase/bin/supabase-ca](components/supabase/bin/supabase-ca) | script | supabase | Downloads the database's root CA certificate and verifies the database's TLS certificate against it. |
 | [components/supabase/bin/db-snapshot](components/supabase/bin/db-snapshot) | script | supabase | Writes a database's tables, columns, row counts and applied migrations as JSON. |
 | [components/supabase/bin/db-snapshot-diff](components/supabase/bin/db-snapshot-diff) | script | supabase | Compares two snapshots, and exits 1 when the databases differ. |
+| [components/github-repo/bin/check-merge-options](components/github-repo/bin/check-merge-options) | script | github-repo | Checks that pull requests merge only by squashing, titled with the pull request's title, that GitHub offers to update their branches, and that it deletes them after a merge. |
+| [components/github-repo/bin/check-default-branch-protection](components/github-repo/bin/check-default-branch-protection) | script | github-repo | Checks that a ruleset that the owner can bypass stops the default branch from being deleted or force-pushed. |
+| [components/github-repo/bin/protect-default-branch](components/github-repo/bin/protect-default-branch) | script | github-repo | Makes or updates the `Default branch` ruleset, which stops the default branch from being deleted or force-pushed, with a bypass for the repository's admins. |
 
 ## The manifest
 

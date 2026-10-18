@@ -1,0 +1,40 @@
+#!/bin/sh
+# Usage: check-default-branch-protection
+#
+# Exits 0 when the default branch of the GitHub repository of the current
+# directory cannot be deleted or force-pushed, by an active ruleset that the
+# repository's admins, which include the owner of a personal repository, or the
+# organization's admins can always bypass. Classic branch protection does not
+# count: it cannot let the owner bypass those two rules.
+
+if ! branch=$(gh repo view --json defaultBranchRef --jq .defaultBranchRef.name) || [ -z "$branch" ]; then
+  echo "Could not read the default branch." >&2
+  exit 1
+fi
+
+# The active rules for the branch, from every ruleset, as "<type> <ruleset ID>".
+if ! rules=$(gh api "repos/{owner}/{repo}/rules/branches/$branch" --paginate \
+  --jq '.[] | select(.type == "deletion" or .type == "non_fast_forward") | "\(.type) \(.ruleset_id)"'); then
+  echo "Could not read the rules for $branch." >&2
+  exit 1
+fi
+
+status=0
+for type in deletion non_fast_forward; do
+  found=
+  for id in $(printf '%s\n' "$rules" | awk -v type="$type" '$1 == type { print $2 }'); do
+    bypass=$(gh api "repos/{owner}/{repo}/rulesets/$id" --jq '[.bypass_actors[]? | select(.bypass_mode == "always" and ((.actor_type == "RepositoryRole" and .actor_id == 5) or .actor_type == "OrganizationAdmin"))] | length') || continue
+    if [ "${bypass:-0}" -gt 0 ]; then
+      found=1
+      break
+    fi
+  done
+  if [ -z "$found" ]; then
+    case $type in
+      deletion) echo "No ruleset that the owner can bypass stops $branch from being deleted." >&2 ;;
+      non_fast_forward) echo "No ruleset that the owner can bypass stops force pushes to $branch." >&2 ;;
+    esac
+    status=1
+  fi
+done
+exit $status
