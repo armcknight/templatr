@@ -1,17 +1,12 @@
-import ComponentManifest
 import Foundation
 
 /// The values of a component's placeholders in one project.
 struct PlaceholderValues {
-    /// By placeholder name: `inputs.<name>`, `templates`, `templates.tag` and
-    /// `directory`.
+    /// By placeholder name: `inputs.<name>`, `templates` and `templates.tag`.
     var values: [String: String]
 
-    init(inputs: [String: String], templates: URL, tag: String, directory: String? = nil) {
+    init(inputs: [String: String], templates: URL, tag: String) {
         values = ["templates": templates.path, "templates.tag": tag]
-        if let directory {
-            values[Placeholders.directory] = directory
-        }
         for (name, value) in inputs {
             values["inputs.\(name)"] = value
         }

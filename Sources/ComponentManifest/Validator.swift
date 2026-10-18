@@ -123,12 +123,7 @@ public struct Validator: Sendable {
             }
         }
 
-        if let input = manifest.directory?.inputName, !manifest.inputs.contains(where: { $0.name == input }) {
-            problems.append("\(`where`): directory input '\(input)' is not a declared input")
-        }
-
-        let claude = directory.appending(path: "CLAUDE.md")
-        if !claude.isFile {
+        if !directory.appending(path: "CLAUDE.md").isFile {
             problems.append("\(component): CLAUDE.md is missing")
         }
 
@@ -145,7 +140,7 @@ public struct Validator: Sendable {
             } else {
                 problems.append("\(component): scaffold/README.md is missing")
             }
-        } else if let subdirectory = manifest.directory?.scaffoldName {
+        } else if let subdirectory = manifest.directory {
             // The component's own README.md. The project-wide section is in the
             // base component's root README.md only.
             let readme = scaffold.appending(path: "\(subdirectory)/README.md")
@@ -161,7 +156,7 @@ public struct Validator: Sendable {
         }
         if !manifest.base {
             let workflows = ".github/workflows/\(manifest.name)-"
-            let inside = manifest.directory.map { "\($0.scaffoldName)/" }
+            let inside = manifest.directory.map { "\($0)/" }
             for path in Self.scaffoldPaths(in: scaffold) {
                 if path.hasPrefix(workflows) || inside.map(path.hasPrefix) == true { continue }
                 let allowed = inside.map { "under \($0) or " } ?? ""
@@ -171,17 +166,10 @@ public struct Validator: Sendable {
             }
         }
 
-        var allowed = Placeholders.builtin.union(manifest.inputs.map { "inputs.\($0.name)" })
-        if manifest.directory != nil { allowed.insert(Placeholders.directory) }
+        let allowed = Placeholders.builtin.union(manifest.inputs.map { "inputs.\($0.name)" })
         var sources: [(label: String, text: String)] = []
-        for path in Self.scaffoldPaths(in: scaffold) {
-            sources.append(("\(component)/scaffold/\(path): path", path))
-        }
         for file in textFiles(under: scaffold) {
             sources.append((relative(file.url), file.text))
-        }
-        if let text = try? String(contentsOf: claude, encoding: .utf8) {
-            sources.append((relative(claude), text))
         }
         for step in manifest.steps {
             sources.append(("\(`where`): step \(step.id) check", step.check))
@@ -235,12 +223,11 @@ public struct Validator: Sendable {
         }
         var directories: [String: String] = [:]
         for (name, manifest) in manifests {
-            for directory in manifest.directory?.candidates ?? [] {
-                if let other = directories[directory] {
-                    problems.append("components/\(name)/component.toml: directory '\(directory)' is also \(other)'s")
-                } else {
-                    directories[directory] = name
-                }
+            guard let directory = manifest.directory else { continue }
+            if let other = directories[directory] {
+                problems.append("components/\(name)/component.toml: directory '\(directory)' is also \(other)'s")
+            } else {
+                directories[directory] = name
             }
         }
         var owners: [String: String] = [:]
@@ -286,9 +273,7 @@ public struct Validator: Sendable {
     /// `/`.
     static func links(in markdown: String) -> [String] {
         markdown.matches(of: /\]\(([^)\s]+)\)/).map { match in
-            // A link to a path with a placeholder, such as
-            // scaffold/{{directory}}/, has its braces percent-encoded.
-            var link = String(match.1).removingPercentEncoding ?? String(match.1)
+            var link = String(match.1)
             if link.hasPrefix("./") { link.removeFirst(2) }
             while link.hasSuffix("/") { link.removeLast() }
             return link

@@ -17,27 +17,19 @@ struct Detection {
 
     static let skippedDirectories: Set<String> = [".git", ".build", ".swiftpm", "DerivedData", "node_modules"]
 
-    /// The rules of a component with a `directory` read the files there: in
-    /// the first of its directories that its detect rules match, when an input
-    /// names it.
+    /// The rules of a component with a `directory` read the files there.
     func scoped(to manifest: Manifest) -> Detection {
-        guard let candidates = manifest.directory?.candidates else { return self }
-        let scoped = candidates.map { Detection(root: root.appending(path: $0)) }
-        return scoped.first { $0.matchesRules(of: manifest) } ?? scoped[0]
+        manifest.directory.map { Detection(root: root.appending(path: $0)) } ?? self
     }
 
     /// Whether the repository uses the component. A base component has no
     /// rules: it comes with the others.
     func detects(_ manifest: Manifest) -> Bool {
-        scoped(to: manifest).matchesRules(of: manifest)
-    }
-
-    /// Whether the files here match the component's detect rules.
-    private func matchesRules(of manifest: Manifest) -> Bool {
         guard let detect = manifest.detect else { return false }
+        let scoped = scoped(to: manifest)
         let all = detect.all ?? []
         let any = detect.any ?? []
-        return all.allSatisfy(matches) && (any.isEmpty || any.contains(where: matches))
+        return all.allSatisfy(scoped.matches) && (any.isEmpty || any.contains(where: scoped.matches))
     }
 
     /// Each input's value: the first one an `infer` rule finds, else its

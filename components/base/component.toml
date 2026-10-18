@@ -3,7 +3,7 @@ description = "The project's root files, which every project has with its other 
 
 # Every project gets this component with the others: it has no detect rules.
 # Its files are at the root; each other component's files are in its own
-# directory, such as server/ or ios/.
+# directory, such as server/ or apple/.
 base = true
 secrets = []
 shared = []

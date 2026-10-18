@@ -184,62 +184,6 @@ struct ValidatorTests {
         expectProblem("directory 'server' is also demo's")
     }
 
-    /// The demo component with its directory named by its `app` input.
-    func nameTheDirectoryByAnInput() throws {
-        try repository.editManifest(#"directory = "server""#, #"directory = { input = "app", names = { a = "server", b = "api" } }"#)
-        try repository.delete("components/demo/scaffold/server")
-        try repository.write("components/demo/scaffold/{{directory}}/README.md", scaffoldReadme)
-        try repository.write("components/demo/scaffold/{{directory}}/component.mk", "NAMESPACES += {{directory}}\n")
-        try repository.write("components/demo/CLAUDE.md", "# demo, in {{directory}}/\n")
-    }
-
-    @Test func aDirectoryAnInputNamesHasItsScaffoldUnderThePlaceholder() throws {
-        try nameTheDirectoryByAnInput()
-        #expect(repository.problems() == [])
-        try repository.write("components/demo/scaffold/server/fly.toml", "")
-        expectProblem("components/demo/scaffold/server/fly.toml: must be under {{directory}}/ or a workflow")
-    }
-
-    @Test func aDirectoryAnInputNamesNeedsItsReadme() throws {
-        try nameTheDirectoryByAnInput()
-        try repository.delete("components/demo/scaffold/{{directory}}/README.md")
-        expectProblem("components/demo: scaffold/{{directory}}/README.md is missing")
-    }
-
-    @Test func theInputThatNamesTheDirectoryIsDeclared() throws {
-        try nameTheDirectoryByAnInput()
-        try repository.editManifest(#"input = "app""#, #"input = "flavor""#)
-        expectProblem("directory input 'flavor' is not a declared input")
-    }
-
-    @Test func everyDirectoryAnInputNamesIsTheComponentsOwn() throws {
-        try nameTheDirectoryByAnInput()
-        try repository.write(
-            "components/other/component.toml",
-            manifest.replacingOccurrences(of: "name = \"demo\"", with: "name = \"other\"")
-                .replacingOccurrences(of: #"directory = "server""#, with: #"directory = "api""#)
-        )
-        try repository.write("components/other/CLAUDE.md", "# other\n")
-        try repository.write("components/other/scaffold/api/README.md", "# other\n")
-        expectProblem("directory 'api' is also demo's")
-    }
-
-    @Test func onlyAComponentWithADirectoryHasTheDirectoryPlaceholder() throws {
-        try repository.addBase()
-        try repository.write("components/base/scaffold/Makefile", "include {{directory}}/component.mk\n")
-        try repository.write("components/base/CLAUDE.md", "# base, in {{directory}}\n")
-        expectProblem("components/base/scaffold/Makefile: unknown placeholder {{directory}}")
-        expectProblem("components/base/CLAUDE.md: unknown placeholder {{directory}}")
-        // The demo component has a directory.
-        try repository.write("components/demo/scaffold/server/component.mk", "NAMESPACES += {{directory}}\n")
-        #expect(!repository.problems().contains { $0.contains("components/demo") })
-    }
-
-    @Test func aPlaceholderInAScaffoldPathIsChecked() throws {
-        try repository.write("components/demo/scaffold/server/{{inputs.nope}}.md", "")
-        expectProblem("components/demo/scaffold/server/{{inputs.nope}}.md: path: unknown placeholder {{inputs.nope}}")
-    }
-
     @Test func missingClaudeMd() throws {
         try repository.delete("components/demo/CLAUDE.md")
         expectProblem("CLAUDE.md is missing")

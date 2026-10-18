@@ -9,28 +9,28 @@ import Testing
 
     init() throws {
         project = try Directory()
-        try project.write("ios/Demo.xcodeproj/project.pbxproj", """
+        try project.write("apple/Demo.xcodeproj/project.pbxproj", """
             /* Begin PBXNativeTarget section */
             productType = "com.apple.product-type.application";
             """)
         // The scheme's file name, not the product it builds, is its name. A
         // framework's scheme comes first by name, but does not build an app.
-        try project.write("ios/Demo.xcodeproj/xcshareddata/xcschemes/Demo.xcscheme", """
+        try project.write("apple/Demo.xcodeproj/xcshareddata/xcschemes/Demo.xcscheme", """
             <BuildableReference BuildableName = "Demo Dev.app" BlueprintName = "Demo">
             """)
-        try project.write("ios/Demo.xcodeproj/xcshareddata/xcschemes/Common.xcscheme", """
+        try project.write("apple/Demo.xcodeproj/xcshareddata/xcschemes/Common.xcscheme", """
             <BuildableReference BuildableName = "Common.framework" BlueprintName = "Common">
             """)
-        try project.write("ios/config/Demo.xcconfig", "MARKETING_VERSION = 1.2\nCURRENT_PROJECT_VERSION = 7\n")
-        try project.write("ios/fastlane/Appfile", """
+        try project.write("apple/config/Demo.xcconfig", "MARKETING_VERSION = 1.2\nCURRENT_PROJECT_VERSION = 7\n")
+        try project.write("apple/fastlane/Appfile", """
             app_identifier("io.example.demo")
             team_id "ABCDE12345"
             """)
-        try project.write("ios/fastlane/Matchfile", """
+        try project.write("apple/fastlane/Matchfile", """
             git_url("git@github.com:example/match.git")
             app_identifier(["io.example.demo", "io.example.demo.adhoc", 'io.example.demo.watchkitapp'])
             """)
-        try project.write("ios/.arkana.yml", "global_secrets:\n  - SentryDSN\n  - FeedbackEmail\n")
+        try project.write("apple/.arkana.yml", "global_secrets:\n  - SentryDSN\n  - FeedbackEmail\n")
         stubs.settings = [
             "PRODUCT_NAME": "Demo",
             // xcodebuild prints SDKROOT as a path.
@@ -51,35 +51,6 @@ import Testing
         #expect(!resolution.recorded)
     }
 
-    @Test func anIOSAppIsInIos() throws {
-        let resolution = try bootstrapper.resolve(repository: project.root, answers: [:])
-        #expect(resolution.components.last?.directory == "ios")
-    }
-
-    @Test func aTvOSAppIsInTvos() throws {
-        let tv = try Directory()
-        try tv.write("tvos/Demo.xcodeproj/project.pbxproj", "productType = \"com.apple.product-type.application\";\n")
-        stubs.settings?["PLATFORM_NAME"] = "appletvos"
-        let app = try #require(try bootstrapper.resolve(repository: tv.root, answers: [:]).components.last)
-        #expect(app.directory == "tvos")
-        #expect(app.values["platform"] == "tvos")
-        #expect(app.values["project"] == "Demo.xcodeproj")
-    }
-
-    @Test func aNewMacAppIsInMacos() throws {
-        let mac = try Directory()
-        try mac.write(Record.fileName, """
-            [components.apple-app]
-            tag = "v1"
-
-            [components.apple-app.inputs]
-            platform = "mac"
-
-            """)
-        let app = try #require(try bootstrapper.resolve(repository: mac.root, answers: [:]).components.last)
-        #expect(app.directory == "macos")
-    }
-
     @Test func readsTheFilesInItsDirectory() throws {
         let root = try Directory()
         try root.write("Demo.xcodeproj/project.pbxproj", "productType = \"com.apple.product-type.application\";\n")
@@ -89,8 +60,8 @@ import Testing
 
     @Test func doesNotDetectAPackage() throws {
         let package = try Directory()
-        try package.write("ios/Package.swift", "// swift-tools-version: 6.0\n")
-        try package.write("ios/Demo.xcodeproj/project.pbxproj", "productType = \"com.apple.product-type.tool\";\n")
+        try package.write("apple/Package.swift", "// swift-tools-version: 6.0\n")
+        try package.write("apple/Demo.xcodeproj/project.pbxproj", "productType = \"com.apple.product-type.tool\";\n")
         let resolution = try bootstrapper.resolve(repository: package.root, answers: [:])
         #expect(resolution.components.isEmpty)
     }
@@ -132,7 +103,7 @@ import Testing
     }
 
     @Test func aSchemeThatBuildsNoAppIsChosenWhenNoneDoes() throws {
-        try FileManager.default.removeItem(at: project.root.appending(path: "ios/Demo.xcodeproj/xcshareddata/xcschemes/Demo.xcscheme"))
+        try FileManager.default.removeItem(at: project.root.appending(path: "apple/Demo.xcodeproj/xcshareddata/xcschemes/Demo.xcscheme"))
         let resolution = try bootstrapper.resolve(repository: project.root, answers: [:])
         #expect(resolution.components.last?.values["scheme"] == "Common")
     }

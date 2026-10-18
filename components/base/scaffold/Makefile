@@ -1,5 +1,5 @@
 # The project's Makefile. Each component's targets are in its directory's
-# component.mk, such as server/component.mk or ios/component.mk, which this
+# component.mk, such as server/component.mk or apple/component.mk, which this
 # file includes. Their Makefile fragments come from armcknight/templatr at
 # TEMPLATES_TAG: each is downloaded on first use, and `make templates-update`
 # downloads them again, as after changing the tag.

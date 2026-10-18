@@ -53,7 +53,7 @@ enum Markdown {
         ]
         for resolved in components {
             let component = resolved.component
-            let place = resolved.directory.map { ", in `\($0)/`" } ?? ""
+            let place = component.manifest.directory.map { ", in `\($0)/`" } ?? ""
             lines.append(
                 "* [\(component.name)](\(component.link(tag: resolved.tag))) at `\(resolved.tag)`\(place): \(component.manifest.description)"
             )
@@ -63,8 +63,7 @@ enum Markdown {
         var seenShared: Set<String> = []
         for resolved in components {
             for piece in resolved.component.manifest.shared {
-                let path = piece.path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? piece.path
-                let url = piece.repo == nil ? "\(Templates.url)/blob/\(resolved.tag)/\(path)" : piece.link
+                let url = piece.repo == nil ? "\(Templates.url)/blob/\(resolved.tag)/\(piece.path)" : piece.link
                 guard seenShared.insert(url).inserted else { continue }
                 let name = piece.repo.map { "\($0): \(piece.path)" } ?? piece.path
                 shared.append("* [\(name)](\(url)), \(piece.kind.rawValue): \(piece.description)")
@@ -77,7 +76,7 @@ enum Markdown {
         var secrets: [String] = []
         var seenSecrets: Set<String> = []
         for resolved in components {
-            let values = resolved.placeholders(templates: URL(fileURLWithPath: "/"))
+            let values = PlaceholderValues(inputs: resolved.values, templates: URL(fileURLWithPath: "/"), tag: resolved.tag)
             for declared in resolved.component.manifest.secrets where seenSecrets.insert(declared.name).inserted {
                 let secret = declared.filled(values).secret
                 var line = "* `\(secret.name)` (\(secret.scope.rawValue)): \(secret.description) \(origin(of: secret))"
@@ -93,7 +92,7 @@ enum Markdown {
 
         var humanSteps: [String] = []
         for resolved in components {
-            let values = resolved.placeholders(templates: URL(fileURLWithPath: "/"))
+            let values = PlaceholderValues(inputs: resolved.values, templates: URL(fileURLWithPath: "/"), tag: resolved.tag)
             for step in resolved.component.manifest.steps {
                 guard case .human(let human) = step.fix else { continue }
                 humanSteps.append("* \(step.description) If not: \(values.render(human.text, quoted: false).text)")
@@ -129,9 +128,9 @@ enum Markdown {
     /// README.md in its directory, or `nil` when it has none.
     static func blurb(_ resolved: ResolvedComponent) -> String? {
         guard let blurb = resolved.component.manifest.blurb else { return nil }
-        let values = resolved.placeholders(templates: URL(fileURLWithPath: "/"))
+        let values = PlaceholderValues(inputs: resolved.values, templates: URL(fileURLWithPath: "/"), tag: resolved.tag)
         let text = values.render(blurb, quoted: false).text
-        guard let directory = resolved.directory else { return text + "\n" }
+        guard let directory = resolved.component.manifest.directory else { return text + "\n" }
         return "[\(directory)/](\(directory)/README.md): \(text)\n"
     }
 

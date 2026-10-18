@@ -1,9 +1,8 @@
-# The apple-app component's Makefile targets. The component.mk in a project's
-# app directory, such as ios/component.mk (or tvos/ or macos/ for those
-# platforms), includes this file, downloaded at its pinned tag, and maps
-# `make ios <command>` to them; the root Makefile includes ios/component.mk.
-# The targets are namespaced so that the project's own `ios-test`, `ios-stage`
-# and `ios-deploy-beta` can depend on them, or do more. They run fastlane,
+# The apple-app component's Makefile targets. A project's apple/component.mk
+# includes this file, downloaded at its pinned tag, and maps `make apple
+# <command>` to them; the root Makefile includes apple/component.mk. The targets
+# are namespaced so that the project's own `apple-test`, `apple-stage` and
+# `apple-deploy-beta` can depend on them, or do more. They run fastlane,
 # prepare-release and vrsn in APPLE_APP_DIR, so the changelog that
 # prepare-release reads and the shared beta lane's "What to Test" text are both
 # APPLE_APP_DIR/CHANGELOG.md.
