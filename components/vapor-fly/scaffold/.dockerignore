@@ -1,0 +1,19 @@
+# What the image does not need. A smaller build context is a faster deploy.
+.build/
+.swiftpm/
+.git/
+.github/
+.superlinear/
+*.xcodeproj
+*.xcworkspace
+DerivedData/
+.env
+.env.*
+.envrc
+*.log
+docker-compose.yml
+fly.toml
+Makefile
+Brewfile
+README.md
+CHANGELOG.md

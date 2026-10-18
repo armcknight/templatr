@@ -13,6 +13,7 @@ This repository holds no secrets: only their names and where to get them.
 | Component | What it sets up |
 | --- | --- |
 | [apple-app](components/apple-app) | An iOS (with an optional embedded watch app), tvOS or macOS app, tested on each pull request, with staging builds on demand, and uploaded to TestFlight by hand with `make deploy-beta`. |
+| [vapor-fly](components/vapor-fly) | A Swift server built with Vapor and run on Fly.io, built and tested on Linux on each pull request, and deployed by the owner, by hand with `make server deploy` or on a merge. |
 
 ## Layout
 
@@ -47,6 +48,12 @@ Releases are tags: `v1`, `v1.1`, `v2`. Projects refer to a tag — in `import_fr
 | [components/apple-app/scaffold/Brewfile](components/apple-app/scaffold/Brewfile) | brewfile | apple-app | The tools the lanes use. |
 | [components/apple-app/bin/check-app-store-connect](components/apple-app/bin/check-app-store-connect) | script | apple-app | Checks the app record and its tester group in App Store Connect. |
 | [components/apple-app/bin/check-shared-lanes](components/apple-app/bin/check-shared-lanes) | script | apple-app | Checks that `fastlane/Fastfile` uses the shared lanes. |
+| [armcknight/workflows: vapor-ci.yml](https://github.com/armcknight/workflows/blob/4/.github/workflows/vapor-ci.yml) | workflow | vapor-fly | Builds and tests the package on Linux in the swift image on each pull request, and builds the Docker image. |
+| [armcknight/workflows: fly-deploy.yml](https://github.com/armcknight/workflows/blob/4/.github/workflows/fly-deploy.yml) | workflow | vapor-fly | Deploys the default branch's tip to Fly with its `GIT_SHA`, by hand or on a merge, then waits for the health check to answer. |
+| [make/vapor-fly.mk](make/vapor-fly.mk) | make | vapor-fly | The `vapor-fly-build`, `vapor-fly-serve`, `vapor-fly-serve-docker`, `vapor-fly-deploy` and `vapor-fly-status` targets, which the scaffold's Makefile runs as `make server <command>`. |
+| [components/vapor-fly/scaffold/Brewfile](components/vapor-fly/scaffold/Brewfile) | brewfile | vapor-fly | The tools the Makefile targets use. |
+| [components/vapor-fly/bin/check-fly-config](components/vapor-fly/bin/check-fly-config) | script | vapor-fly | Checks that `fly.toml` names the app, forces HTTPS, scales to zero and has the health check. |
+| [components/vapor-fly/bin/check-fly-secrets](components/vapor-fly/bin/check-fly-secrets) | script | vapor-fly | Checks that the Fly app has each runtime secret, by name. |
 
 ## The manifest
 
@@ -85,7 +92,7 @@ Any rule can have `map`, which replaces the value found with the value of its ke
 
 ### `secrets`
 
-Secrets, by name. Each has a `description`, a `source` — `keychain:<item>`, `1password:op://<vault>/<item>/<field>`, or `generate:<kind>`, where `<kind>` is `ssh-key`, `password` or `hex32` — and a `scope`: `team` (one value for every project), `app` or `repo`, each set as a GitHub Actions secret; or `local`, a value kept only in the owner's Keychain for commands run on their Mac, such as `make deploy-beta`, and never set as a GitHub secret. A `local` secret's source is a Keychain item. `human` is a step a person must do to get the value, with `twoFactor = true` when it needs a two-factor prompt. `rotateEvery`, such as `90d` or `1y`, is how often to make a new value.
+Secrets, by name. Each has a `description`, a `source` — `keychain:<item>`, `1password:op://<vault>/<item>/<field>`, or `generate:<kind>`, where `<kind>` is `ssh-key`, `password` or `hex32` — and a `scope`: `team` (one value for every project), `app` or `repo`, each set as a GitHub Actions secret; or `local`, a value kept only in the owner's Keychain for commands run on their Mac, such as `make deploy-beta`, and never set as a GitHub secret. A `local` secret's source is a Keychain item. A source can name an input, such as `keychain:superlinear.fly.{{inputs.fly_app}}.deploy-token` for a value that each app has. `human` is a step a person must do to get the value, with `twoFactor = true` when it needs a two-factor prompt. `rotateEvery`, such as `90d` or `1y`, is how often to make a new value.
 
 ### `steps`
 
@@ -101,7 +108,7 @@ Sections of the superlinear guide that explain the component, each with a `title
 
 ### Placeholders
 
-Scaffold files, step commands and human texts can contain:
+Scaffold files, step commands, secrets' sources and human texts can contain:
 
 * `{{inputs.<name>}}`: an input's value. In `check` and `fix` commands, the value is quoted for the shell.
 * `{{templates}}`: the path of a checkout of this repository at the project's tag, for the scripts in `components/<name>/bin/`.
@@ -137,7 +144,7 @@ Each component's `scaffold/README.md` has a section between these markers:
 
 [Package.swift](Package.swift) has two products:
 
-* `ComponentManifest`, a library: `Manifest` and its `Codable` types for `component.toml`, and `Validator`, the checks below. Decoding is strict: an unknown key, an empty text, a value that does not match its pattern, or an empty list is an error with its path in the file, such as `secrets/0/source`. The library does not run `detect` rules or `infer` rules; superlinear does that on these types.
+* `ComponentManifest`, a library: `Manifest` and its `Codable` types for `component.toml`, and `Validator`, the checks below. Decoding is strict: an unknown key, an empty text, a value that does not match its pattern, or an empty list is an error with its path in the file, such as `secrets/0/source`. The library does not run `detect` rules or `infer` rules; superlinear does that on these types. The tests have a reference that runs them, `Tests/ComponentManifestTests/Detection.swift`, to test each component's rules against fixtures taken from the projects it comes from; set `MTG_REPOSITORY` to a checkout of mtg to also test `vapor-fly` against it.
 * `validate-components`, a command: `validate-components [--root DIR] [--anchors PATH_OR_URL|none]`. The root is the current directory by default. The anchors come from superlinear's `docs/anchors.md` on `main` by default; a path or a URL replaces that, and `none` skips the check. It prints each problem to stderr and exits 1 when there are any.
 
 The package builds on macOS and Linux. [TOMLKit](https://github.com/LebJe/TOMLKit) parses the TOML.
@@ -157,7 +164,7 @@ For each `components/<name>/component.toml`:
 * input names, secret names and step IDs are unique;
 * a `local` secret's source is a Keychain item;
 * `CLAUDE.md` and `scaffold/README.md` exist, and the README has the generated section's markers, one time each and in order;
-* each `{{placeholder}}` in the scaffold, the steps and the human texts names a declared input, `templates` or `templates.tag`;
+* each `{{placeholder}}` in the scaffold, the steps, the secrets' sources and the human texts names a declared input, `templates` or `templates.tag`;
 * each regular expression compiles, and each `regex` infer rule has a capture group;
 * each shared path in this repository exists; a path in another `repo` is not checked;
 * each docs anchor is listed in superlinear's `docs/anchors.md`.
@@ -170,7 +177,7 @@ CI runs these on each pull request and push, in the `swift` Docker image on Linu
 
 ```sh
 swift build
-swift test                                    # the validator's tests
+swift test                                    # the validator's tests, and the components' detect and infer rules against fixtures
 swift run validate-components                 # the manifests, and the guide's docs/anchors.md
 ```
 

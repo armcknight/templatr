@@ -1,0 +1,16 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [{{inputs.default_branch}}]
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    uses: armcknight/workflows/.github/workflows/vapor-ci.yml@4
+    with:
+      swift-image: swift:{{inputs.swift_version}}-{{inputs.linux_distribution}}
+      product: {{inputs.product}}
