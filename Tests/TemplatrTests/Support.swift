@@ -247,3 +247,18 @@ final class Stubs: Keychain, PasswordManager, SecretStore, BuildSettingsProvider
 }
 
 let setEverySecret: @Sendable (Secret) -> Bool = { _ in true }
+
+/// The component `name` of this repository, resolved in `repository` as
+/// bootstrap resolves it, or `nil` when its `detect` rules do not match.
+func resolve(_ name: String, in repository: URL) throws -> ResolvedComponent? {
+    let bootstrapper = Bootstrapper(templates: Templates(root: repositoryRoot, tag: "v1", tags: []), services: Stubs().services())
+    return try bootstrapper.resolve(repository: repository, answers: [:]).components.first { $0.component.name == name }
+}
+
+extension ResolvedComponent {
+    /// Each input's value: inferred, else its default, else `nil`, which
+    /// bootstrap asks for.
+    var inputs: [String: String?] {
+        values.mapValues { $0 }.merging(missing.map { ($0.name, nil) }) { value, _ in value }
+    }
+}

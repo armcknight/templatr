@@ -1,30 +1,26 @@
 import Foundation
 import Testing
-@testable import ComponentManifest
+import ComponentManifest
+@testable import Templatr
 
 @Suite("github-repo")
 struct GitHubRepoTests {
-    let repository: Repository
+    let repository: Directory
     let githubRepo: Manifest
 
     init() throws {
-        repository = try Repository()
+        repository = try Directory()
         githubRepo = try Manifest(contentsOf: repositoryRoot.appending(path: "components/github-repo/component.toml"))
     }
 
-    var detection: Detection { Detection(root: repository.root) }
-
     @Test func repositoryWithWorkflows() throws {
-        try repository.delete(".github")
         try repository.write(".github/workflows/ci.yml", "name: ci\n")
-        #expect(detection.detects(githubRepo))
-        #expect(detection.inputs(of: githubRepo).isEmpty)
+        #expect(try #require(try resolve("github-repo", in: repository.root)).inputs.isEmpty)
     }
 
     @Test func repositoryWithoutGitHubDirectory() throws {
-        try repository.delete(".github")
         try repository.write("Package.swift", mtgPackage)
-        #expect(!detection.detects(githubRepo))
+        #expect(try resolve("github-repo", in: repository.root) == nil)
     }
 
     /// Each step's check and fix that runs a script names one in the
