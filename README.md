@@ -177,7 +177,7 @@ The checks only; it changes nothing. It reports the steps whose checks fail, the
 
 With `--json`, it prints the report in the format of [schema/check-report.schema.json](schema/check-report.schema.json), which superlinear reads. Its `version` changes only when a change would break a reader.
 
-The exit status is 0 when nothing is left to do, 1 when the report lists something, and 2 for a usage error.
+The exit status is 0 when nothing is left to do, 1 when the report lists something or an error stops the run, and 64 for a usage error. `templatr --help` and `templatr <subcommand> --help` show all the options.
 
 ## Adding a component
 

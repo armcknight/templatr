@@ -11,6 +11,7 @@ let package = Package(
         .executable(name: "templatr", targets: ["TemplatrCLI"]),
     ],
     dependencies: [
+        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.5.0"),
         .package(url: "https://github.com/LebJe/TOMLKit", from: "0.6.0"),
         .package(url: "https://github.com/jpsim/Yams", from: "5.1.0"),
     ],
@@ -35,7 +36,10 @@ let package = Package(
             // The product is `templatr`. On a case-insensitive file system, a
             // target of that name would share its directories with Templatr's.
             name: "TemplatrCLI",
-            dependencies: ["Templatr"]
+            dependencies: [
+                "Templatr",
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+            ]
         ),
         .testTarget(
             name: "ComponentManifestTests",

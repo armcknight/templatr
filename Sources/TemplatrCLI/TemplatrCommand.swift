@@ -1,3 +1,4 @@
+import ArgumentParser
 import ComponentManifest
 import Foundation
 import Templatr
@@ -5,101 +6,125 @@ import Templatr
 /// `templatr bootstrap` and `templatr check`: a thin command line on the
 /// Templatr library.
 @main
-struct TemplatrCommand {
-    static let usage = """
-        Usage: templatr bootstrap [<repository>] [--templates DIR] [--tag TAG] [--yes] [--link TITLE=URL]...
-               templatr check [<repository>] [--templates DIR] [--tag TAG] [--json] [--offline]
-
-          <repository>     The project's root. The current directory by default.
-          --templates DIR  A checkout of armcknight/templatr. This checkout by default.
-          --tag TAG        The tag new components are pinned to. The checkout's
-                           newest v* tag by default.
-          --yes            Accept the inferred inputs and set missing secrets without
-                           asking. Without a terminal, nothing is asked: inferred
-                           inputs are kept, and secrets are set only with --yes.
-          --link T=URL     A link for the README section, such as the project's
-                           Linear team. Can be given more than one time.
-          --json           Print the report as JSON (schema/check-report.schema.json).
-          --offline        Do not check web links in the README.
-
-        Exit status: 0 when nothing is left to do, 1 when the report lists
-        something, 2 for a usage error.
-        """
+struct TemplatrCommand: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "templatr",
+        abstract: "Set a project up from its templatr components, or check what it still needs.",
+        discussion: """
+            Exit status: 0 when nothing is left to do, 1 when the report lists \
+            something or an error stops the run, 64 for a usage error.
+            """,
+        subcommands: [Bootstrap.self, Check.self]
+    )
 
     /// This checkout, from this file's path: Sources/TemplatrCLI/<file>.
     static let defaultTemplates = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
 
-    static func main() async {
-        var arguments = CommandLine.arguments.dropFirst()[...]
-        guard let command = arguments.popFirst(), ["bootstrap", "check"].contains(command) else {
-            if let first = CommandLine.arguments.dropFirst().first, ["-h", "--help"].contains(first) {
-                print(usage)
-                return
-            }
-            fail("needs bootstrap or check")
-        }
+    /// The options that both subcommands take.
+    struct Options: ParsableArguments {
+        @Argument(help: "The project's root. The current directory by default.")
+        var repository: String?
 
-        var repository = FileManager.default.currentDirectoryPath
-        var templatesRoot = defaultTemplates
+        @Option(help: ArgumentHelp("A checkout of armcknight/templatr. This checkout by default.", valueName: "dir"))
+        var templates: String?
+
+        @Option(help: "The tag new components are pinned to. The checkout's newest v* tag by default.")
         var tag: String?
-        var yes = false
-        var json = false
-        var offline = false
-        var links: [Link] = []
-        var gotRepository = false
-        while let argument = arguments.popFirst() {
-            switch argument {
-            case "--templates":
-                guard let value = arguments.popFirst() else { fail("--templates needs a directory") }
-                templatesRoot = URL(fileURLWithPath: value)
-            case "--tag":
-                guard let value = arguments.popFirst() else { fail("--tag needs a tag") }
-                tag = value
-            case "--yes" where command == "bootstrap":
-                yes = true
-            case "--link" where command == "bootstrap":
-                guard let value = arguments.popFirst(), let equals = value.firstIndex(of: "=") else {
-                    fail("--link needs TITLE=URL")
-                }
-                links.append(Link(title: String(value[..<equals]), url: String(value[value.index(after: equals)...])))
-            case "--json" where command == "check":
-                json = true
-            case "--offline" where command == "check":
-                offline = true
-            case "-h", "--help":
-                print(usage)
-                return
-            default:
-                guard !argument.hasPrefix("-"), !gotRepository else { fail("unknown argument '\(argument)'") }
-                repository = argument
-                gotRepository = true
-            }
+
+        var repositoryURL: URL {
+            URL(fileURLWithPath: repository ?? FileManager.default.currentDirectoryPath)
         }
 
-        var services = Services.system()
-        if offline {
-            services.links = OfflineLinkChecker()
+        func bootstrapper(services: Services) throws -> Bootstrapper {
+            let root = templates.map { URL(fileURLWithPath: $0) } ?? TemplatrCommand.defaultTemplates
+            let templates = try Templates.checkout(at: root, tag: tag, runner: services.runner)
+            return Bootstrapper(templates: templates, services: services)
         }
-        let repositoryURL = URL(fileURLWithPath: repository)
-        do {
-            let templates = try Templates.checkout(at: templatesRoot, tag: tag, runner: services.runner)
-            let bootstrapper = Bootstrapper(templates: templates, services: services)
-            let report: Report
-            if command == "check" {
-                report = try await bootstrapper.check(repository: repositoryURL)
+    }
+
+    struct Bootstrap: AsyncParsableCommand {
+        static let configuration = CommandConfiguration(
+            abstract: "Set the project up, and report what is left. Running it again changes nothing that is already done."
+        )
+
+        @OptionGroup var options: Options
+
+        @Flag(help: """
+            Accept the inferred inputs and set missing secrets without asking. Without a terminal, \
+            nothing is asked: inferred inputs are kept, and secrets are set only with --yes.
+            """)
+        var yes = false
+
+        @Option(
+            name: .customLong("link"),
+            help: ArgumentHelp(
+                "A link for the README section, such as the project's Linear team. Can be given more than one time.",
+                valueName: "title=url"
+            ),
+            transform: Bootstrap.link
+        )
+        var links: [Link] = []
+
+        static func link(_ value: String) throws -> Link {
+            guard let equals = value.firstIndex(of: "=") else {
+                throw ValidationError("--link needs TITLE=URL, not '\(value)'")
+            }
+            return Link(title: String(value[..<equals]), url: String(value[value.index(after: equals)...]))
+        }
+
+        func run() async throws {
+            try await TemplatrCommand.finish {
+                let bootstrapper = try options.bootstrapper(services: .system())
+                return try await TemplatrCommand.bootstrap(
+                    bootstrapper, repository: options.repositoryURL, yes: yes, links: links
+                )
+            }
+        }
+    }
+
+    struct Check: AsyncParsableCommand {
+        static let configuration = CommandConfiguration(
+            abstract: "Report what the project still needs, and change nothing."
+        )
+
+        @OptionGroup var options: Options
+
+        @Flag(help: "Print the report as JSON (schema/check-report.schema.json).")
+        var json = false
+
+        @Flag(help: "Do not check web links in the README.")
+        var offline = false
+
+        func run() async throws {
+            try await TemplatrCommand.finish {
+                var services = Services.system()
+                if offline {
+                    services.links = OfflineLinkChecker()
+                }
+                let report = try await options.bootstrapper(services: services).check(repository: options.repositoryURL)
                 if json {
                     print(String(decoding: try report.json(), as: UTF8.self))
                 } else {
-                    print(describe(report))
+                    print(TemplatrCommand.describe(report))
                 }
-            } else {
-                report = try await bootstrap(bootstrapper, repository: repositoryURL, yes: yes, links: links)
+                return report
             }
-            exit(report.isClean ? 0 : 1)
+        }
+    }
+
+    /// Runs a subcommand's work, and exits with 1 when its report lists
+    /// something or it fails.
+    static func finish(_ work: () async throws -> Report) async throws {
+        let report: Report
+        do {
+            report = try await work()
         } catch {
             printError("templatr: \(error)")
-            exit(1)
+            throw ExitCode.failure
+        }
+        if !report.isClean {
+            throw ExitCode.failure
         }
     }
 
@@ -192,11 +217,6 @@ struct TemplatrCommand {
     static func ask(_ prompt: String) -> String? {
         FileHandle.standardOutput.write(Data(prompt.utf8))
         return readLine()?.trimmingCharacters(in: .whitespaces)
-    }
-
-    static func fail(_ message: String) -> Never {
-        printError("templatr: \(message)\n\(usage)")
-        exit(2)
     }
 
     static func printError(_ message: String) {
