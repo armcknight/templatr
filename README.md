@@ -4,7 +4,7 @@ Components: reusable parts of a project, such as an Apple app, a Swift command-l
 
 Shared lanes and Makefile fragments are here. Reusable GitHub workflows are in [armcknight/workflows](https://github.com/armcknight/workflows), and the components' scaffolds call them.
 
-[superlinear](https://github.com/armcknight/superlinear)'s `bootstrap` command reads the components and sets projects up with them. People can also follow a manifest by hand.
+The `templatr` command, and the `Templatr` library under it, read the components and set projects up with them: see [Setting up a project](#setting-up-a-project). [superlinear](https://github.com/armcknight/superlinear)'s `bootstrap` command uses the library. People can also follow a manifest by hand.
 
 This repository holds no secrets: only their names and where to get them.
 
@@ -26,10 +26,14 @@ components/<name>/bin/             scripts the manifest's steps run
 fastlane/                          shared lanes, imported with import_from_git
 make/                              Makefile fragments
 schema/component.schema.json       the manifest's JSON Schema, for editors
-Package.swift                      the ComponentManifest library and the validator
+schema/check-report.schema.json    the format of `templatr check --json`
+Package.swift                      the libraries and the commands
 Sources/ComponentManifest/         the manifest's types and the checks
 Sources/validate-components/       the validator command
+Sources/Templatr/                  the library that sets projects up
+Sources/TemplatrCLI/               the templatr command
 Tests/ComponentManifestTests/      the validator's tests
+Tests/TemplatrTests/               the Templatr library's tests
 ```
 
 ## Releases
@@ -125,13 +129,55 @@ Each component's `scaffold/README.md` has a section between these markers:
 <!-- superlinear:end -->
 ```
 
-`superlinear bootstrap` writes it from the manifests of the components the project uses, and changes nothing outside the markers. It has a "How this project is built" heading and:
+`templatr bootstrap` writes it from the manifests of the components the project uses, and changes nothing outside the markers. It has a "How this project is built" heading and:
 
 * the components the project uses, each linked to `components/<name>` here at the pinned tag;
 * each shared workflow, lane, Makefile fragment and Brewfile the project uses, linked here at the pinned tag, or in its own repository at its `version`;
 * the secrets by name, never their values, with where each comes from, and the human steps;
 * links to the superlinear guide's [life of an issue](https://github.com/armcknight/superlinear/blob/main/docs/lifecycle.md#overview), [planning](https://github.com/armcknight/superlinear/blob/main/docs/planning.md#proposals), [bootstrap](https://github.com/armcknight/superlinear/blob/main/docs/bootstrap.md#components) and [builds](https://github.com/armcknight/superlinear/blob/main/docs/builds.md#ci) sections, and to the components' own `docs` anchors;
 * a link to the project's Linear team and, when it has one, its spec document.
+
+## Setting up a project
+
+Run `templatr` from a checkout of this repository. It is not in a Homebrew tap.
+
+```sh
+git clone https://github.com/armcknight/templatr && cd templatr
+swift run templatr bootstrap ~/Code/babysittr     # set the project up
+swift run templatr check ~/Code/babysittr         # report what it still needs, and change nothing
+```
+
+`bootstrap` needs `gh`, logged in, in the project's directory to read and set its secrets; `security` for the Keychain; `op` for 1Password secrets; and `xcodebuild` for build settings. `{{templates}}` in the steps is the checkout it runs from.
+
+### `templatr bootstrap [<repository>]`
+
+1. **Which components.** On the first run it matches each component's `detect` rules against the repository; it can find more than one. It reads each input from where its `infer` says, then shows the values it found to confirm, and asks for the ones it did not find. Leave an answer empty to skip it: the steps and scaffold files that need it wait for a later run.
+2. **The record.** It writes `.templatr.toml` at the repository's root: each component, the tag it is pinned to, and its inputs. Later runs read it instead of detecting again, and a change made to it by hand wins. A component that detection finds later, such as a watch app added to the project, is reported, not added: add it to the file to use it.
+
+   ```toml
+   [components.apple-app]
+   tag = "v1"
+
+   [components.apple-app.inputs]
+   bundle_id = "io.mcknight.babysittr"
+   ```
+
+3. **Scaffold.** It copies each scaffold file that the project does not have yet, with its placeholders filled in. It never overwrites a file.
+4. **Steps.** It runs each step's `check`, and its `fix` command when the check fails, then the check again. A failing step whose fix is `human` is reported with its text, whether it needs two-factor, and links to the manifest and the guide. A step that is done one time for each app (`scope = "app"`) runs one time.
+5. **Secrets.** It reads the repository's secret names with `gh secret list`. For each missing one, after it asks, it reads the value from its `source` and gives it to `gh secret set` on standard input. A `generate:` secret is made on this Mac and stored first in the Keychain item `superlinear.<name>`, such as `superlinear.match-deploy-key`, with an SSH key's public half in `superlinear.<name>.pub`. A `local` secret is only looked for in the Keychain, and never set in GitHub. Values never go to a log, the output or a file.
+6. **README and CLAUDE.md.** It writes the README's "How this project is built" section between its markers, adding them at the end when the README does not have them, and changes nothing outside them. It copies each component's `CLAUDE.md` to `.templatr/<name>/CLAUDE.md` and imports those copies in the project's `CLAUDE.md`, between `<!-- templatr:begin components -->` and `<!-- templatr:end -->`.
+
+It then reports what is left, as `check` does. Running it again changes nothing that is already done.
+
+Options: `--yes` accepts the inputs found and sets missing secrets without asking; without a terminal, nothing is asked, and secrets are set only with `--yes`. `--link TITLE=URL`, which can be given more than one time, adds a link to the README section, such as the project's Linear team or spec document. `--tag TAG` is the tag new components are pinned to, the checkout's newest `v*` tag by default, and `--templates DIR` another checkout of this repository.
+
+### `templatr check [<repository>] [--json]`
+
+The checks only; it changes nothing. It reports the steps whose checks fail, the human steps, the inputs and the secrets that are missing (by name), secrets due for a new value within 30 days of their `rotateEvery`, components pinned to a tag older than the newest, and links in the README that no longer resolve. `--offline` skips the web links.
+
+With `--json`, it prints the report in the format of [schema/check-report.schema.json](schema/check-report.schema.json), which superlinear reads. Its `version` changes only when a change would break a reader.
+
+The exit status is 0 when nothing is left to do, 1 when the report lists something or an error stops the run, and 64 for a usage error. `templatr --help` and `templatr <subcommand> --help` show all the options.
 
 ## Adding a component
 
@@ -142,12 +188,14 @@ Each component's `scaffold/README.md` has a section between these markers:
 
 ## The package
 
-[Package.swift](Package.swift) has two products:
+[Package.swift](Package.swift) has four products:
 
-* `ComponentManifest`, a library: `Manifest` and its `Codable` types for `component.toml`, and `Validator`, the checks below. Decoding is strict: an unknown key, an empty text, a value that does not match its pattern, or an empty list is an error with its path in the file, such as `secrets/0/source`. The library does not run `detect` rules or `infer` rules; superlinear does that on these types. The tests have a reference that runs them, `Tests/ComponentManifestTests/Detection.swift`, to test each component's rules against fixtures taken from the projects it comes from; set `MTG_REPOSITORY` to a checkout of mtg to also test `vapor-fly` against it.
+* `ComponentManifest`, a library: `Manifest` and its `Codable` types for `component.toml`, and `Validator`, the checks below. Decoding is strict: an unknown key, an empty text, a value that does not match its pattern, or an empty list is an error with its path in the file, such as `secrets/0/source`. The library does not run `detect` rules or `infer` rules; the `Templatr` library below does that on these types. The validator's tests have their own reference that runs them, `Tests/ComponentManifestTests/Detection.swift`, to test each component's rules against fixtures taken from the projects it comes from; set `MTG_REPOSITORY` to a checkout of mtg to also test `vapor-fly` against it.
 * `validate-components`, a command: `validate-components [--root DIR] [--anchors PATH_OR_URL|none]`. The root is the current directory by default. The anchors come from superlinear's `docs/anchors.md` on `main` by default; a path or a URL replaces that, and `none` skips the check. It prints each problem to stderr and exits 1 when there are any.
+* `Templatr`, a library on the `ComponentManifest` types: `Bootstrapper`'s `resolve`, `bootstrap` and `check` do what [Setting up a project](#setting-up-a-project) says, and return a `Report`, the same values that `check --json` prints. It knows nothing of Linear: superlinear turns the report into issues. The programs it runs, the Keychain, 1Password and GitHub are behind the protocols in `Services`, which the tests replace.
+* `templatr`, a command: a thin layer on the library, which asks the questions.
 
-The package builds on macOS and Linux. [TOMLKit](https://github.com/LebJe/TOMLKit) parses the TOML.
+The package builds on macOS and Linux. [TOMLKit](https://github.com/LebJe/TOMLKit) parses the TOML, and [Yams](https://github.com/jpsim/Yams) the YAML.
 
 superlinear uses the library at a release tag. The tags are not three-part versions, so a `Package.swift` pins one as a revision:
 
@@ -177,7 +225,7 @@ CI runs these on each pull request and push, in the `swift` Docker image on Linu
 
 ```sh
 swift build
-swift test                                    # the validator's tests, and the components' detect and infer rules against fixtures
+swift test                                    # the validator's and the Templatr library's tests, and the components' detect and infer rules against fixtures
 swift run validate-components                 # the manifests, and the guide's docs/anchors.md
 ```
 

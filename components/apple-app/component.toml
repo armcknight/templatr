@@ -152,7 +152,7 @@ name = "MATCH_DEPLOY_KEY"
 description = "The private half of a read-only deploy key on the fastlane match repository."
 source = "generate:ssh-key"
 scope = "team"
-human = { text = "Add the public half of the generated key (the Keychain item superlinear.match.deploy-key.pub) to the fastlane match repository as a read-only deploy key." }
+human = { text = "Add the public half of the generated key (the Keychain item superlinear.match-deploy-key.pub) to the fastlane match repository as a read-only deploy key." }
 rotateEvery = "1y"
 
 [[steps]]

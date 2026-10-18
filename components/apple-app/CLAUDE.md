@@ -1,6 +1,6 @@
 # apple-app
 
-This project is an Apple app built with the `apple-app` component from [armcknight/templatr](https://github.com/armcknight/templatr). `.superlinear/components.toml` has the tag it is pinned to.
+This project is an Apple app built with the `apple-app` component from [armcknight/templatr](https://github.com/armcknight/templatr). `.templatr.toml` has the tag it is pinned to.
 
 ## Building and testing
 
