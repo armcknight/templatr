@@ -1,5 +1,4 @@
 .build/
 .swiftpm/
-.superlinear/make/
 .env
 *.log

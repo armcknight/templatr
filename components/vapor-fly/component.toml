@@ -1,6 +1,11 @@
 name = "vapor-fly"
 description = "A Swift server built with Vapor and run on Fly.io, built and tested on Linux on each pull request, and deployed by the owner, by hand or on a merge."
 
+# The server's files, its Swift package included, are in server/. The detect
+# and infer rules read files there, and the steps run there.
+directory = "server"
+blurb = "The server, built with Vapor and run on Fly.io at https://{{inputs.fly_app}}.fly.dev. `make server serve` runs it on this Mac, and the owner deploys it with `make server deploy`."
+
 # A Package.swift with an executable product that depends on Vapor. fly.toml
 # and the Dockerfile are not needed: a new server has neither until the
 # scaffold gives them. A package that only uses Vapor as a library has no
@@ -113,25 +118,25 @@ fix = "fly apps create {{inputs.fly_app}} --org {{inputs.fly_org}}"
 id = "fly-config"
 description = "fly.toml names the app, forces HTTPS, scales to zero and has a health check."
 check = "{{templates}}/components/vapor-fly/bin/check-fly-config {{inputs.fly_app}} {{inputs.health_check_path}}"
-fix = { human = { text = "Copy fly.toml from the vapor-fly scaffold, or change the existing one: set app to {{inputs.fly_app}}, and in [http_service] set force_https = true, auto_stop_machines = \"stop\", auto_start_machines = true and min_machines_running = 0, with an [[http_service.checks]] whose path is {{inputs.health_check_path}}." } }
+fix = { human = { text = "Copy server/fly.toml from the vapor-fly scaffold, or change the existing one: set app to {{inputs.fly_app}}, and in [http_service] set force_https = true, auto_stop_machines = \"stop\", auto_start_machines = true and min_machines_running = 0, with an [[http_service.checks]] whose path is {{inputs.health_check_path}}." } }
 
 [[steps]]
 id = "dockerfile"
 description = "The Dockerfile builds the product in release and passes the GIT_SHA build argument to the server."
 check = "grep -Eq '^ARG[[:space:]]+GIT_SHA' Dockerfile && grep -q -- '--product' Dockerfile"
-fix = { human = { text = "Copy the Dockerfile from the vapor-fly scaffold, or change the existing one so that it builds with `swift build -c release --product {{inputs.product}}` and has `ARG GIT_SHA` and `ENV GIT_SHA=$GIT_SHA` in its runtime stage. The server returns GIT_SHA from {{inputs.health_check_path}}." } }
+fix = { human = { text = "Copy server/Dockerfile from the vapor-fly scaffold, or change the existing one so that it builds with `swift build -c release --product {{inputs.product}}` and has `ARG GIT_SHA` and `ENV GIT_SHA=$GIT_SHA` in its runtime stage. The server returns GIT_SHA from {{inputs.health_check_path}}." } }
 
 [[steps]]
 id = "make-fragment"
-description = "The Makefile includes make/vapor-fly.mk at the pinned tag, with the server commands."
-check = "grep -qs 'vapor-fly\\.mk' Makefile"
-fix = { human = { text = "Add the TEMPLATES_TAG, VAPOR_FLY_* values, the include and the `server` namespace from the vapor-fly scaffold's Makefile to the project's Makefile, and point any existing server build, serve or deploy targets at the vapor-fly-* targets." } }
+description = "server/component.mk includes make/vapor-fly.mk, with the server commands, and adds the server namespace."
+check = "grep -qs 'vapor-fly\\.mk' component.mk && grep -qs 'NAMESPACES *+= *server' component.mk"
+fix = { human = { text = "Copy server/component.mk from the vapor-fly scaffold, with its VAPOR_FLY_* values, the include and the server-* targets, and move any server build, serve or deploy targets in the root Makefile to it, pointed at the vapor-fly-* targets." } }
 
 [[steps]]
 id = "workflows"
 description = "The repository calls armcknight/workflows' vapor-ci.yml on each pull request, and fly-deploy.yml to deploy."
-check = "grep -qs 'armcknight/workflows/.github/workflows/vapor-ci.yml@' .github/workflows/*.yml && grep -qs 'armcknight/workflows/.github/workflows/fly-deploy.yml@' .github/workflows/*.yml"
-fix = { human = { text = "Copy ci.yml and deploy.yml in .github/workflows/ from the vapor-fly scaffold, and remove the workflows they replace, including any that deploy to Fly." } }
+check = "grep -qs 'armcknight/workflows/.github/workflows/vapor-ci.yml@' ../.github/workflows/*.yml && grep -qs 'armcknight/workflows/.github/workflows/fly-deploy.yml@' ../.github/workflows/*.yml"
+fix = { human = { text = "Copy vapor-fly-ci.yml and vapor-fly-deploy.yml in .github/workflows/ from the vapor-fly scaffold, and remove the workflows they replace, including any that deploy to Fly." } }
 
 [[steps]]
 id = "fly-secrets"
@@ -167,7 +172,7 @@ description = "The vapor-fly-build, vapor-fly-serve, vapor-fly-serve-docker, vap
 
 [[shared]]
 kind = "brewfile"
-path = "components/vapor-fly/scaffold/Brewfile"
+path = "components/vapor-fly/scaffold/server/Brewfile"
 version = "v1"
 description = "The tools the Makefile targets use."
 

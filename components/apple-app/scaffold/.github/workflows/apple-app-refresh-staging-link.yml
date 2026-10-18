@@ -1,4 +1,4 @@
-name: Refresh staging link
+name: iOS refresh staging link
 
 # Comment `/refresh-staging` on a pull request, or run this by hand, to sign the
 # staging install link again without a new build. If the staging bucket has
@@ -39,7 +39,7 @@ jobs:
     secrets: inherit
 
   # Runs only when the refresh found the build deleted by the bucket's
-  # lifecycle rule. Keep these inputs in step with ci.yml.
+  # lifecycle rule. Keep these inputs in step with apple-app-ci.yml.
   rebuild:
     needs: refresh
     if: needs.refresh.outputs.rebuild == 'true'
@@ -47,6 +47,8 @@ jobs:
     with:
       ipa-name: "{{inputs.app_name}}-staging"
       arkana-keys: "{{inputs.arkana_keys}}"
+      # The Xcode project, the Gemfile and fastlane/ are in ios/.
+      working-directory: ios
       # The pull request's code ran its tests when it was first built.
       run-tests: false
       # Lets the `/refresh-staging` comment start the build.

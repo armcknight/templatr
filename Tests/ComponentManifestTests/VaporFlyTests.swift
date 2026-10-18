@@ -105,16 +105,21 @@ struct VaporFlyTests {
 
     var detection: Detection { Detection(root: repository.root) }
 
-    @Test func mtg() throws {
+    @Test func readsTheFilesInItsDirectory() throws {
         try repository.write("Package.swift", mtgPackage)
-        try repository.write("fly.toml", mtgFlyToml)
-        try repository.write("Dockerfile", mtgDockerfile)
+        #expect(!detection.detects(vaporFly))
+    }
+
+    @Test func mtg() throws {
+        try repository.write("server/Package.swift", mtgPackage)
+        try repository.write("server/fly.toml", mtgFlyToml)
+        try repository.write("server/Dockerfile", mtgDockerfile)
         #expect(detection.detects(vaporFly))
         #expect(detection.inputs(of: vaporFly) == mtgInputs)
     }
 
     @Test func newServerHasOnlyAPackage() throws {
-        try repository.write("Package.swift", mtgPackage)
+        try repository.write("server/Package.swift", mtgPackage)
         #expect(detection.detects(vaporFly))
         let inputs = detection.inputs(of: vaporFly)
         #expect(inputs["product"] == "mtg-server")
@@ -129,7 +134,7 @@ struct VaporFlyTests {
 
     @Test func packageWithoutVapor() throws {
         try repository.write(
-            "Package.swift",
+            "server/Package.swift",
             mtgPackage.replacingOccurrences(of: "github.com/vapor/vapor", with: "github.com/hummingbird-project/hummingbird")
         )
         #expect(!detection.detects(vaporFly))
@@ -137,28 +142,28 @@ struct VaporFlyTests {
 
     @Test func libraryThatUsesVapor() throws {
         try repository.write(
-            "Package.swift", mtgPackage.replacingOccurrences(of: #".executable(name: "mtg-server""#, with: #".library(name: "mtg-server""#)
+            "server/Package.swift", mtgPackage.replacingOccurrences(of: #".executable(name: "mtg-server""#, with: #".library(name: "mtg-server""#)
         )
         #expect(!detection.detects(vaporFly))
     }
 
     @Test func healthCheckInServices() throws {
-        try repository.write("Package.swift", mtgPackage)
+        try repository.write("server/Package.swift", mtgPackage)
         try repository.write(
-            "fly.toml", "app = \"demo\"\n\n[[services]]\n  internal_port = 8080\n\n  [[services.http_checks]]\n    path = \"/status\"\n"
+            "server/fly.toml", "app = \"demo\"\n\n[[services]]\n  internal_port = 8080\n\n  [[services.http_checks]]\n    path = \"/status\"\n"
         )
         #expect(detection.inputs(of: vaporFly)["health_check_path"] == "/status")
     }
 
     @Test func dockerfileProductComesFirst() throws {
         try repository.write(
-            "Package.swift",
+            "server/Package.swift",
             mtgPackage.replacingOccurrences(
                 of: #".executable(name: "mtg-server""#,
                 with: #".executable(name: "migrate", targets: ["migrate"]),"# + "\n" + #"        .executable(name: "mtg-server""#
             )
         )
-        try repository.write("Dockerfile", mtgDockerfile)
+        try repository.write("server/Dockerfile", mtgDockerfile)
         #expect(detection.inputs(of: vaporFly)["product"] == "mtg-server")
     }
 

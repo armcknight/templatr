@@ -39,6 +39,12 @@ import Testing
         return Bootstrapper(templates: Templates(root: repositoryRoot, tag: "v1", tags: []), services: services)
     }
 
+    /// The report's failed and human steps of github-repo, without the base
+    /// component's, which come with it.
+    func steps(_ report: Report) -> (failed: [FailedStep], human: [HumanStep]) {
+        (report.failedSteps.filter { $0.component == "github-repo" }, report.humanSteps.filter { $0.component == "github-repo" })
+    }
+
     var calls: [String] {
         (bin.read("gh.log") ?? "").split(separator: "\n").map(String.init)
     }
@@ -48,9 +54,9 @@ import Testing
     @Test func privateRepositoryOnTheFreePlanIsAHumanStep() async throws {
         try stubGitHub(rules: freePlan)
         let report = try await bootstrapper.check(repository: project.root)
-        #expect(report.failedSteps.map(\.id) == [])
-        #expect(report.humanSteps.map(\.id) == ["rulesets-available"])
-        #expect(report.humanSteps.first?.text.contains("accept the risk") == true)
+        #expect(steps(report).failed.map(\.id) == [])
+        #expect(steps(report).human.map(\.id) == ["rulesets-available"])
+        #expect(steps(report).human.first?.text.contains("accept the risk") == true)
     }
 
     @Test func bootstrapDoesNotTryToMakeARulesetOnTheFreePlan() async throws {
@@ -58,16 +64,16 @@ import Testing
         let result = try await bootstrapper.bootstrap(
             repository: project.root, options: BootstrapOptions(answers: [:], links: [], setSecret: setEverySecret)
         )
-        #expect(result.report.failedSteps.map(\.id) == [])
-        #expect(result.report.humanSteps.map(\.id) == ["rulesets-available"])
+        #expect(steps(result.report).failed.map(\.id) == [])
+        #expect(steps(result.report).human.map(\.id) == ["rulesets-available"])
         #expect(!calls.contains { $0.contains("rulesets") })
     }
 
     @Test func otherErrorsFromTheRulesAPIFail() async throws {
         try stubGitHub(rules: #"echo 'gh: Not Found (HTTP 404)' >&2; exit 1"#)
         let report = try await bootstrapper.check(repository: project.root)
-        #expect(report.humanSteps.map(\.id) == [])
-        let failed = try #require(report.failedSteps.first { $0.id == "default-branch-protection" })
+        #expect(steps(report).human.map(\.id) == [])
+        let failed = try #require(steps(report).failed.first { $0.id == "default-branch-protection" })
         #expect(failed.output.contains("Not Found (HTTP 404)"))
         #expect(failed.output.contains("Could not read the rules for main."))
     }

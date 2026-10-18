@@ -1,0 +1,33 @@
+name = "base"
+description = "The project's root files, which every project has with its other components: the Makefile that includes each component's targets, and the README.md that links to each component's README."
+
+# Every project gets this component with the others: it has no detect rules.
+# Its files are at the root; each other component's files are in its own
+# directory, such as server/ or ios/.
+base = true
+secrets = []
+shared = []
+
+[[inputs]]
+name = "project_name"
+description = "The project's name, the root README.md's title."
+example = "Babysittr"
+infer = [{ from = "regex", glob = "README.md", pattern = "(?m)^#[ \\t]+(.+?)[ \\t]*$" }]
+
+
+[[steps]]
+id = "root-makefile"
+description = "The root Makefile includes each component's component.mk, and has the help and templates-update targets."
+check = "grep -qs 'wildcard \\*/component\\.mk' Makefile"
+fix = { human = { text = "Copy the Makefile from the base scaffold, or add its TEMPLATES_TAG, NAMESPACES, TEMPLATES_FRAGMENTS, the include of */component.mk, the namespace rule, the fragment download rule, help and templates-update to the project's Makefile. Move the targets that were in it for one component, such as its VAPOR_FLY_* or APPLE_APP_* values, into that component's component.mk." } }
+
+[[steps]]
+id = "root-gitignore"
+description = "Git ignores the Makefile fragments that the root Makefile downloads to .superlinear/make/."
+check = "git check-ignore -q .superlinear/make/fragment.mk"
+fix = "printf '\\n# Downloaded Makefile fragments; see the Makefile.\\n/.superlinear/make/\\n' >> .gitignore"
+
+
+[[docs]]
+title = "Components"
+anchor = "bootstrap.md#components"

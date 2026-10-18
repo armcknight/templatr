@@ -56,6 +56,15 @@ public struct Component: Sendable {
 
     public var name: String { manifest.name }
 
+    /// The files copied into a project, at the paths they have there.
+    public var scaffold: URL { directory.appending(path: "scaffold") }
+
+    /// Where the component's files are in `repository`: its `directory`, or
+    /// the root.
+    public func root(in repository: URL) -> URL {
+        manifest.directory.map { repository.appending(path: $0) } ?? repository
+    }
+
     /// The manifest on GitHub at `tag`.
     public func manifestLink(tag: String) -> String {
         "\(Templates.url)/blob/\(tag)/components/\(name)/component.toml"

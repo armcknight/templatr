@@ -8,6 +8,8 @@ let repositoryRoot = URL(fileURLWithPath: #filePath)
 let manifest = #"""
     name = "demo"
     description = "A demonstration component."
+    directory = "server"
+    blurb = "The demo server, {{inputs.app}}."
 
     [detect]
     all = [{ glob = "fly.toml" }]
@@ -68,6 +70,27 @@ let readme = """
 let scaffoldReadme = """
     # {{inputs.app}}
 
+    The demo server.
+
+    """
+
+let baseManifest = """
+    name = "base"
+    description = "The root files."
+    base = true
+    inputs = []
+    secrets = []
+    steps = []
+    shared = []
+
+    [[docs]]
+    title = "Builds"
+    anchor = "builds.md#ci"
+    """
+
+let baseReadme = """
+    # Project
+
     <!-- superlinear:begin how-this-is-built -->
     <!-- superlinear:end -->
 
@@ -107,8 +130,8 @@ final class Repository {
         try write("README.md", readme)
         try write("components/demo/component.toml", manifest)
         try write("components/demo/CLAUDE.md", "# demo\n")
-        try write("components/demo/scaffold/README.md", scaffoldReadme)
-        try write("components/demo/scaffold/.github/workflows/deploy.yml", workflow)
+        try write("components/demo/scaffold/server/README.md", scaffoldReadme)
+        try write("components/demo/scaffold/.github/workflows/demo-deploy.yml", workflow)
     }
 
     deinit {
@@ -131,6 +154,14 @@ final class Repository {
         let text = try String(contentsOf: url, encoding: .utf8)
         precondition(text.contains(old), "the manifest does not contain \(old)")
         try text.replacingOccurrences(of: old, with: new).write(to: url, atomically: true, encoding: .utf8)
+    }
+
+    /// Adds a valid base component.
+    func addBase() throws {
+        try write("components/base/component.toml", baseManifest)
+        try write("components/base/CLAUDE.md", "# base\n")
+        try write("components/base/scaffold/README.md", baseReadme)
+        try write("README.md", readme + "* [base](components/base)\n")
     }
 
     func problems() -> [String] {

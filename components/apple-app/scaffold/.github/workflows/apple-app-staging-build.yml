@@ -1,4 +1,4 @@
-name: Staging build
+name: iOS staging build
 
 # Comment `/build-staging` on a pull request to build its newest commit and post
 # an install link. A push to a pull request does not make a staging build by
@@ -24,8 +24,10 @@ jobs:
     # write to the repository.
     uses: armcknight/workflows/.github/workflows/ios-ci.yml@4
     with:
-      # Keep these inputs in step with ci.yml.
+      # Keep these inputs in step with apple-app-ci.yml.
       ipa-name: "{{inputs.app_name}}-staging"
       arkana-keys: "{{inputs.arkana_keys}}"
+      # The Xcode project, the Gemfile and fastlane/ are in ios/.
+      working-directory: ios
       pr-number: ${{ github.event.issue.number }}
     secrets: inherit

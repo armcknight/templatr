@@ -5,7 +5,10 @@
   "description": "The format of components/<name>/component.toml. See README.md#the-manifest for the meaning of each field.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["name", "description", "detect", "inputs", "secrets", "steps", "shared", "docs"],
+  "required": ["name", "description", "inputs", "secrets", "steps", "shared", "docs"],
+  "if": { "properties": { "base": { "const": true } }, "required": ["base"] },
+  "then": { "not": { "anyOf": [{ "required": ["detect"] }, { "required": ["directory"] }] } },
+  "else": { "required": ["detect"] },
   "properties": {
     "name": {
       "description": "The component's name. It is the same as its directory under components/.",
@@ -16,8 +19,21 @@
       "type": "string",
       "minLength": 1
     },
+    "base": {
+      "description": "Whether every project gets the component, with the others. A base component has no `detect` and no `directory`: its files, such as the root Makefile and README.md, are at the repository root.",
+      "type": "boolean"
+    },
+    "directory": {
+      "description": "The project's subdirectory that the component's files are in, such as `server`. The `detect` and `infer` rules read files there, and the steps run there. The scaffold has the component's files under it, and its workflows in .github/workflows/, named with the component's name first.",
+      "$ref": "#/$defs/slug"
+    },
+    "blurb": {
+      "description": "A summary of the component's part of the project, which bootstrap writes in the root README.md between the component's markers, with a link to the README.md in `directory`.",
+      "type": "string",
+      "minLength": 1
+    },
     "detect": {
-      "description": "How to know, from its files only, that a repository uses the component. The component is detected when every rule in `all` matches and, if `any` has rules, at least one of them matches.",
+      "description": "Required unless `base` is true. How to know, from its files only, that a repository uses the component. The component is detected when every rule in `all` matches and, if `any` has rules, at least one of them matches.",
       "type": "object",
       "additionalProperties": false,
       "minProperties": 1,
