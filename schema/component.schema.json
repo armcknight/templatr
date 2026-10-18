@@ -158,12 +158,13 @@
           "additionalProperties": false
         },
         {
-          "description": "The path of the first file that matches the glob and, when `contains` is set, whose contents match it; or `true` and `false` when `exists` is set.",
+          "description": "The path of the first file that matches the glob and, when `contains` is set, whose contents match it; its name without the directory and the extension when `stem` is set; or `true` and `false` when `exists` is set.",
           "properties": {
             "from": { "const": "glob" },
             "glob": { "type": "string", "minLength": 1 },
             "contains": { "type": "string", "minLength": 1 },
             "exists": { "type": "boolean" },
+            "stem": { "type": "boolean" },
             "map": true
           },
           "required": ["glob"],

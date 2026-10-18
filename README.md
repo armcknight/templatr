@@ -114,11 +114,11 @@ Values that differ for each project, such as the bundle ID or the team ID. Each 
 
 | `from` | Reads |
 | --- | --- |
-| `build-setting` | `key` from `xcodebuild -showBuildSettings` for the project's scheme. |
+| `build-setting` | `key` from `xcodebuild -showBuildSettings` for the project's scheme, in the Release configuration when the project has one. |
 | `fastlane-config` | The first argument of the call `key` in `file`, such as `team_id("…")` in `fastlane/Appfile`. An array's values are joined with commas. |
 | `toml` | The dotted `key` in the TOML `file`, such as `app` in `fly.toml`. |
 | `yaml` | The dotted `key` in the YAML `file`, such as `global_secrets` in `.arkana.yml`. A list's values are joined with `separator`, a comma by default. |
-| `glob` | The path of the first file that matches `glob` and, with `contains`, whose contents match that regular expression; with `exists = true`, `true` or `false`. |
+| `glob` | The path of the first file that matches `glob` and, with `contains`, whose contents match that regular expression; with `stem = true`, that file's name without its directory and extension; with `exists = true`, `true` or `false`. |
 | `regex` | The first capture group of `pattern` in the first file that matches `glob`. |
 
 Any rule can have `map`, which replaces the value found with the value of its key, such as `{ iphoneos = "ios" }`. An input with no `infer`, or whose value is not found and has no `default`, is asked for one time.

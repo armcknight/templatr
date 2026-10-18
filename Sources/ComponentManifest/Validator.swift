@@ -108,8 +108,13 @@ public struct Validator: Sendable {
                 switch rule.from {
                 case .regex(_, let pattern):
                     problems += Self.regexProblems(at: label, pattern: pattern, needsGroup: true)
-                case .glob(_, let contains?, _):
-                    problems += Self.regexProblems(at: label, pattern: contains, needsGroup: false)
+                case .glob(_, let contains, let exists, let stem):
+                    if let contains {
+                        problems += Self.regexProblems(at: label, pattern: contains, needsGroup: false)
+                    }
+                    if exists == true && stem == true {
+                        problems.append("\(label): exists and stem cannot both be true")
+                    }
                 default:
                     break
                 }

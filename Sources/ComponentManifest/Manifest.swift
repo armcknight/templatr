@@ -215,9 +215,10 @@ public struct InferRule: Codable, Equatable, Sendable {
         /// joined with `separator`, a comma by default.
         case yaml(file: String, key: String, separator: String?)
         /// The path of the first file that matches the glob and, when
-        /// `contains` is set, whose contents match it; or `true` and `false`
-        /// when `exists` is set.
-        case glob(glob: String, contains: String?, exists: Bool?)
+        /// `contains` is set, whose contents match it; its name without the
+        /// directory and the extension when `stem` is set; or `true` and
+        /// `false` when `exists` is set.
+        case glob(glob: String, contains: String?, exists: Bool?, stem: Bool?)
         /// The first capture group of a regular expression in the first file
         /// that matches the glob.
         case regex(glob: String, pattern: String)
@@ -247,7 +248,7 @@ public struct InferRule: Codable, Equatable, Sendable {
             case .fastlaneConfig: ["file", "key"]
             case .toml: ["file", "key"]
             case .yaml: ["file", "key", "separator"]
-            case .glob: ["glob", "contains", "exists"]
+            case .glob: ["glob", "contains", "exists", "stem"]
             case .regex: ["glob", "pattern"]
             }
         }
@@ -255,7 +256,7 @@ public struct InferRule: Codable, Equatable, Sendable {
 
     /// Every key a rule can have, over all the sources.
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case from, map, key, file, separator, glob, contains, exists, pattern
+        case from, map, key, file, separator, glob, contains, exists, stem, pattern
     }
 
     /// The keys every rule can have.
@@ -285,7 +286,8 @@ public struct InferRule: Codable, Equatable, Sendable {
         case .glob:
             from = .glob(
                 glob: try container.text(.glob), contains: try container.textIfPresent(.contains),
-                exists: try container.decodeIfPresent(Bool.self, forKey: .exists)
+                exists: try container.decodeIfPresent(Bool.self, forKey: .exists),
+                stem: try container.decodeIfPresent(Bool.self, forKey: .stem)
             )
         case .regex:
             from = .regex(glob: try container.text(.glob), pattern: try container.text(.pattern))
@@ -306,10 +308,11 @@ public struct InferRule: Codable, Equatable, Sendable {
             try container.encode(file, forKey: .file)
             try container.encode(key, forKey: .key)
             try container.encodeIfPresent(separator, forKey: .separator)
-        case .glob(let glob, let contains, let exists):
+        case .glob(let glob, let contains, let exists, let stem):
             try container.encode(glob, forKey: .glob)
             try container.encodeIfPresent(contains, forKey: .contains)
             try container.encodeIfPresent(exists, forKey: .exists)
+            try container.encodeIfPresent(stem, forKey: .stem)
         case .regex(let glob, let pattern):
             try container.encode(glob, forKey: .glob)
             try container.encode(pattern, forKey: .pattern)

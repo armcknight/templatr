@@ -63,6 +63,14 @@ struct ValidatorTests {
         expectProblem("has no capture group")
     }
 
+    @Test func globInferCannotBeBothExistsAndStem() throws {
+        try repository.editManifest(
+            #"infer = [{ from = "toml", file = "fly.toml", key = "app" }]"#,
+            #"infer = [{ from = "glob", glob = "fly.toml", exists = true, stem = true }]"#
+        )
+        expectProblem("exists and stem cannot both be true")
+    }
+
     @Test func invalidDetectRegex() throws {
         try repository.editManifest(#"contains = "vapor""#, #"contains = "vapor(""#)
         expectProblem("invalid regular expression")

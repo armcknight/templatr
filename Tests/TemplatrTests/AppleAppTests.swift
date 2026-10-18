@@ -13,8 +13,13 @@ import Testing
             /* Begin PBXNativeTarget section */
             productType = "com.apple.product-type.application";
             """)
+        // The scheme's file name, not the product it builds, is its name. A
+        // framework's scheme comes first by name, but does not build an app.
         try project.write("Demo.xcodeproj/xcshareddata/xcschemes/Demo.xcscheme", """
-            <BuildableReference BuildableName = "Demo.app" BlueprintName = "Demo">
+            <BuildableReference BuildableName = "Demo Dev.app" BlueprintName = "Demo">
+            """)
+        try project.write("Demo.xcodeproj/xcshareddata/xcschemes/Common.xcscheme", """
+            <BuildableReference BuildableName = "Common.framework" BlueprintName = "Common">
             """)
         try project.write("config/Demo.xcconfig", "MARKETING_VERSION = 1.2\nCURRENT_PROJECT_VERSION = 7\n")
         try project.write("fastlane/Appfile", """
@@ -27,7 +32,10 @@ import Testing
             """)
         try project.write(".arkana.yml", "global_secrets:\n  - SentryDSN\n  - FeedbackEmail\n")
         stubs.settings = [
-            "PRODUCT_NAME": "Demo", "SDKROOT": "iphoneos", "PRODUCT_BUNDLE_IDENTIFIER": "io.example.other",
+            "PRODUCT_NAME": "Demo",
+            // xcodebuild prints SDKROOT as a path.
+            "SDKROOT": "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.1.sdk",
+            "PLATFORM_NAME": "iphoneos", "PRODUCT_BUNDLE_IDENTIFIER": "io.example.other",
             "DEVELOPMENT_TEAM": "ZZZZZ99999",
         ]
     }
@@ -81,9 +89,15 @@ import Testing
     }
 
     @Test func aMappedValueThatIsNotInTheMapIsNotFound() throws {
-        stubs.settings?["SDKROOT"] = "watchos"
+        stubs.settings?["PLATFORM_NAME"] = "watchos"
         let resolution = try bootstrapper.resolve(repository: project.root, answers: [:])
         #expect(resolution.components.first?.missing.map(\.name) == ["platform"])
+    }
+
+    @Test func aSchemeThatBuildsNoAppIsChosenWhenNoneDoes() throws {
+        try FileManager.default.removeItem(at: project.root.appending(path: "Demo.xcodeproj/xcshareddata/xcschemes/Demo.xcscheme"))
+        let resolution = try bootstrapper.resolve(repository: project.root, answers: [:])
+        #expect(resolution.components.first?.values["scheme"] == "Common")
     }
 
     @Test func aRecordedValueIsNotInferredAgain() throws {
@@ -167,5 +181,44 @@ import Testing
         #expect(section.replace(in: "x\n<!-- b -->\nold\n<!-- e -->\ny", with: "new\n") == "x\n<!-- b -->\nnew\n<!-- e -->\ny")
         #expect(section.replace(in: "x", with: "new\n") == "x\n\n<!-- b -->\nnew\n<!-- e -->\n")
         #expect(section.replace(in: "", with: "new\n") == "<!-- b -->\nnew\n<!-- e -->\n")
+    }
+
+    @Test func stems() {
+        #expect(Inferrer.stem("A.xcodeproj/xcshareddata/xcschemes/Demo App.xcscheme") == "Demo App")
+        #expect(Inferrer.stem("Demo") == "Demo")
+    }
+
+    @Test(arguments: [true, false])
+    func buildSettingsAreForTheReleaseConfiguration(hasRelease: Bool) throws {
+        let runner = XcodebuildStub(hasRelease: hasRelease)
+        let settings = XcodeBuildSettings(runner: runner)
+            .buildSettings(repository: URL(fileURLWithPath: "/"), project: "Demo.xcodeproj", workspace: nil, scheme: "Demo")
+        #expect(settings?["CONFIGURATION"] == (hasRelease ? "Release" : "Debug"))
+        let base = ["xcodebuild", "-showBuildSettings", "-json", "-project", "Demo.xcodeproj", "-scheme", "Demo"]
+        #expect(runner.calls == (hasRelease ? [base + ["-configuration", "Release"]] : [base + ["-configuration", "Release"], base]))
+    }
+}
+
+/// xcodebuild for a project with a Debug configuration and, when `hasRelease`,
+/// a Release one.
+final class XcodebuildStub: CommandRunner, @unchecked Sendable {
+    let hasRelease: Bool
+    private let lock = NSLock()
+    private var _calls: [[String]] = []
+
+    init(hasRelease: Bool) {
+        self.hasRelease = hasRelease
+    }
+
+    var calls: [[String]] { lock.withLock { _calls } }
+
+    func run(_ arguments: [String], input: Data?, in directory: URL?) throws -> CommandResult {
+        lock.withLock { _calls.append(arguments) }
+        let configuration = arguments.firstIndex(of: "-configuration").map { arguments[$0 + 1] } ?? "Debug"
+        guard configuration == "Debug" || hasRelease else {
+            return CommandResult(status: 65, output: Data(), error: Data("no configuration \(configuration)".utf8))
+        }
+        let json = #"[{"buildSettings": {"WRAPPER_EXTENSION": "app", "CONFIGURATION": "\#(configuration)"}}]"#
+        return CommandResult(status: 0, output: Data(json.utf8), error: Data())
     }
 }
