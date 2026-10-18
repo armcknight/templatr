@@ -37,7 +37,7 @@ struct GitHubRepoTests {
             return commands
         }
         let scripts = commands.filter { $0.hasPrefix(prefix) }.map { String($0.dropFirst(prefix.count).split(separator: " ")[0]) }
-        #expect(scripts.count == 3)
+        #expect(scripts.count == 4)
         for script in scripts {
             #expect(FileManager.default.isExecutableFile(atPath: repositoryRoot.appending(path: script).path), "\(script)")
         }
