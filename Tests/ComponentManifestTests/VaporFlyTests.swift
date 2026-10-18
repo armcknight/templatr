@@ -199,7 +199,7 @@ struct DetectionTests {
     }
 
     @Test func globExists() throws {
-        let rule = InferRule.From.glob(glob: "project.yml", contains: nil, exists: true)
+        let rule = InferRule.From.glob(glob: "project.yml", contains: nil, exists: true, stem: nil)
         #expect(Detection(root: repository.root).value(rule) == "false")
         try repository.write("project.yml", "")
         #expect(Detection(root: repository.root).value(rule) == "true")

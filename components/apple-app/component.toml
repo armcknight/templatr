@@ -13,7 +13,7 @@ any = [
 
 [[inputs]]
 name = "app_name"
-description = "The app's product name."
+description = "The app's product name in the Release configuration, as App Store Connect names the app."
 example = "Babysittr"
 infer = [{ from = "build-setting", key = "PRODUCT_NAME" }]
 
@@ -21,7 +21,12 @@ infer = [{ from = "build-setting", key = "PRODUCT_NAME" }]
 name = "scheme"
 description = "The shared Xcode scheme that builds and tests the app."
 example = "Babysittr"
-infer = [{ from = "regex", glob = "**/*.xcodeproj/xcshareddata/xcschemes/*.xcscheme", pattern = "BuildableName = \"([^\"]+)\\.app\"" }]
+# The scheme's file name is its name. A scheme that builds an app comes first,
+# so that a framework's or a test's scheme is not chosen.
+infer = [
+  { from = "glob", glob = "**/*.xcodeproj/xcshareddata/xcschemes/*.xcscheme", contains = "BuildableName = \"[^\"]+\\.app\"", stem = true },
+  { from = "glob", glob = "**/*.xcodeproj/xcshareddata/xcschemes/*.xcscheme", stem = true },
+]
 
 [[inputs]]
 name = "project"
@@ -52,7 +57,7 @@ infer = [{ from = "glob", glob = "project.yml", exists = true }]
 name = "platform"
 description = "The app's platform, as fastlane names it: ios, tvos or mac. An iOS app with an embedded watch app is ios."
 example = "ios"
-infer = [{ from = "build-setting", key = "SDKROOT", map = { iphoneos = "ios", appletvos = "tvos", macosx = "mac" } }]
+infer = [{ from = "build-setting", key = "PLATFORM_NAME", map = { iphoneos = "ios", appletvos = "tvos", macosx = "mac" } }]
 
 [[inputs]]
 name = "bundle_id"

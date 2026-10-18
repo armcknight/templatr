@@ -51,9 +51,10 @@ struct Detection {
                 value = value?.table?[String(part)]
             }
             return value.flatMap(Self.text)
-        case .glob(let glob, let contains, let exists):
+        case .glob(let glob, let contains, let exists, let stem):
             let found = files(matching: glob, contains: contains).first?.path
             if exists == true { return found == nil ? "false" : "true" }
+            if stem == true { return found.map { ((($0 as NSString).lastPathComponent) as NSString).deletingPathExtension } }
             return found
         case .regex(let glob, let pattern):
             guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
