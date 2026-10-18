@@ -63,6 +63,14 @@ struct ValidatorTests {
         expectProblem("has no capture group")
     }
 
+    @Test func globInferCannotBeBothExistsAndStem() throws {
+        try repository.editManifest(
+            #"infer = [{ from = "toml", file = "fly.toml", key = "app" }]"#,
+            #"infer = [{ from = "glob", glob = "fly.toml", exists = true, stem = true }]"#
+        )
+        expectProblem("exists and stem cannot both be true")
+    }
+
     @Test func invalidDetectRegex() throws {
         try repository.editManifest(#"contains = "vapor""#, #"contains = "vapor(""#)
         expectProblem("invalid regular expression")
@@ -70,9 +78,14 @@ struct ValidatorTests {
 
     @Test func unknownPlaceholderInScaffold() throws {
         try repository.write(
-            "components/demo/scaffold/README.md", scaffoldReadme.replacingOccurrences(of: "inputs.app", with: "inputs.name")
+            "components/demo/scaffold/server/README.md", scaffoldReadme.replacingOccurrences(of: "inputs.app", with: "inputs.name")
         )
-        expectProblem("scaffold/README.md: unknown placeholder {{inputs.name}}")
+        expectProblem("scaffold/server/README.md: unknown placeholder {{inputs.name}}")
+    }
+
+    @Test func unknownPlaceholderInBlurb() throws {
+        try repository.editManifest("{{inputs.app}}.\"", "{{inputs.name}}.\"")
+        expectProblem("blurb: unknown placeholder {{inputs.name}}")
     }
 
     @Test func unknownPlaceholderInHumanText() throws {
@@ -94,17 +107,81 @@ struct ValidatorTests {
         #expect(Placeholders.names(in: "${{ github.sha }} {{templates.tag}}") == ["templates.tag"])
     }
 
-    @Test func scaffoldReadmeNeedsMarkers() throws {
-        try repository.write("components/demo/scaffold/README.md", "# {{inputs.app}}\n<!-- superlinear:end -->\n")
+    @Test func aComponentsReadmeIsInItsDirectory() throws {
+        try repository.delete("components/demo/scaffold/server/README.md")
+        expectProblem("components/demo: scaffold/server/README.md is missing")
+    }
+
+    @Test func aComponentsReadmeHasNoMarkers() throws {
+        try repository.write("components/demo/scaffold/server/README.md", scaffoldReadme + baseReadme)
+        expectProblem("has the how-this-is-built markers")
+    }
+
+    @Test func aScaffoldFileIsInTheComponentsDirectory() throws {
+        try repository.write("components/demo/scaffold/Makefile", "all:\n")
+        try repository.write("components/demo/scaffold/.github/workflows/ci.yml", workflow)
+        expectProblem("components/demo/scaffold/Makefile: must be under server/ or a workflow named .github/workflows/demo-*")
+        expectProblem("components/demo/scaffold/.github/workflows/ci.yml: must be under server/")
+    }
+
+    @Test func aBaseComponent() throws {
+        try repository.addBase()
+        #expect(repository.problems() == [])
+    }
+
+    @Test func theBaseReadmeNeedsMarkers() throws {
+        try repository.addBase()
+        try repository.write("components/base/scaffold/README.md", "# Project\n<!-- superlinear:end -->\n")
         expectProblem("one time each")
     }
 
-    @Test func markersInOrder() throws {
+    @Test func theBaseReadmesMarkersAreInOrder() throws {
+        try repository.addBase()
         try repository.write(
-            "components/demo/scaffold/README.md",
+            "components/base/scaffold/README.md",
             "<!-- superlinear:end -->\n<!-- superlinear:begin how-this-is-built -->\n"
         )
         expectProblem("one time each")
+    }
+
+    @Test func aBaseComponentHasNoDetectRules() throws {
+        try repository.addBase()
+        try repository.write(
+            "components/base/component.toml", baseManifest + "\n[detect]\nall = [{ glob = \"Makefile\" }]\n"
+        )
+        expectProblem("a base component has no detect rules")
+    }
+
+    @Test func aComponentThatIsNotBaseNeedsDetectRules() throws {
+        try repository.addBase()
+        try repository.write("components/base/component.toml", baseManifest.replacingOccurrences(of: "base = true\n", with: ""))
+        expectProblem("'detect' is required")
+    }
+
+    @Test func thereIsOneBaseComponent() throws {
+        try repository.addBase()
+        try repository.write("components/other/component.toml", baseManifest.replacingOccurrences(of: "\"base\"", with: "\"other\""))
+        try repository.write("components/other/CLAUDE.md", "# other\n")
+        try repository.write("components/other/scaffold/Makefile", "all:\n")
+        expectProblem("base, other are base components")
+    }
+
+    @Test func twoScaffoldsDoNotShareAPath() throws {
+        try repository.addBase()
+        try repository.write("components/base/scaffold/.github/workflows/demo-deploy.yml", workflow)
+        try repository.write("components/base/scaffold/server/fly.toml", "")
+        expectProblem("components/demo/scaffold/.github/workflows/demo-deploy.yml: base's scaffold has it too")
+        expectProblem("components/base/scaffold/server/fly.toml: is in demo's directory")
+    }
+
+    @Test func twoComponentsDoNotShareADirectory() throws {
+        try repository.write(
+            "components/other/component.toml",
+            manifest.replacingOccurrences(of: "name = \"demo\"", with: "name = \"other\"")
+        )
+        try repository.write("components/other/CLAUDE.md", "# other\n")
+        try repository.write("components/other/scaffold/server/OTHER.md", "")
+        expectProblem("directory 'server' is also demo's")
     }
 
     @Test func missingClaudeMd() throws {

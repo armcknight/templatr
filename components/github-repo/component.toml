@@ -35,6 +35,15 @@ description = "Pull requests merge only by squashing, with the pull request's ti
 check = "{{templates}}/components/github-repo/bin/check-merge-options"
 fix = "gh api --method PATCH 'repos/{owner}/{repo}' -F allow_squash_merge=true -F allow_merge_commit=false -F allow_rebase_merge=false -f squash_merge_commit_title=PR_TITLE -F allow_update_branch=true -F delete_branch_on_merge=true >/dev/null"
 
+# A private repository of an account on the free plan has no rulesets. Then
+# default-branch-protection passes without a ruleset, and this step asks a
+# person to decide.
+[[steps]]
+id = "rulesets-available"
+description = "GitHub offers rulesets for the repository: it is public, or its owner has a paid plan."
+check = "{{templates}}/components/github-repo/bin/check-rulesets-available"
+fix = { human = { text = "The repository is private on GitHub's free plan, so GitHub offers no rulesets, and nothing stops its default branch from being deleted or force-pushed. Make the repository public, or upgrade to GitHub Pro; or accept the risk." } }
+
 [[steps]]
 id = "default-branch-protection"
 description = "A ruleset stops the default branch from being deleted or force-pushed, and the repository's admins, who include the owner, can always bypass it."
@@ -49,9 +58,15 @@ description = "Checks that pull requests merge only by squashing, titled with th
 
 [[shared]]
 kind = "script"
+path = "components/github-repo/bin/check-rulesets-available"
+version = "v1"
+description = "Checks that GitHub offers rulesets for the repository, which it does not for a private repository on the free plan."
+
+[[shared]]
+kind = "script"
 path = "components/github-repo/bin/check-default-branch-protection"
 version = "v1"
-description = "Checks that a ruleset that the owner can bypass stops the default branch from being deleted or force-pushed."
+description = "Checks that a ruleset that the owner can bypass stops the default branch from being deleted or force-pushed, when GitHub offers rulesets for the repository."
 
 [[shared]]
 kind = "script"

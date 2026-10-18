@@ -12,16 +12,18 @@ This repository holds no secrets: only their names and where to get them.
 
 | Component | What it sets up |
 | --- | --- |
-| [apple-app](components/apple-app) | An iOS (with an optional embedded watch app), tvOS or macOS app, tested on each pull request, with staging builds on demand, and uploaded to TestFlight by hand with `make deploy-beta`. |
+| [apple-app](components/apple-app) | An iOS (with an optional embedded watch app), tvOS or macOS app in `ios/`, tested on each pull request, with staging builds on demand, and uploaded to TestFlight by hand with `make ios deploy-beta`. |
+| [base](components/base) | The root files that every project has with its other components: the Makefile that includes each component's targets, and the README.md that links to each component's README. |
 | [github-repo](components/github-repo) | A repository on GitHub whose pull requests are squashed when they merge, with their branches deleted, and whose default branch cannot be deleted or force-pushed except by the owner. |
-| [vapor-fly](components/vapor-fly) | A Swift server built with Vapor and run on Fly.io, built and tested on Linux on each pull request, and deployed by the owner, by hand with `make server deploy` or on a merge. |
-| [supabase](components/supabase) | A Postgres database on Supabase for a Vapor server on Fly.io, with local and test databases, Supabase's root CA in the server's image, a local and remote parity check, and migrations with the Supabase CLI before each deploy or with Fluent when the server starts. |
+| [linear-workspace](components/linear-workspace) | A Linear workspace that superlinear works from: each team has an In Review state after In Progress, a Todo state, Triage, and superlinear's labels; the owner has a "superlinear proposals" view in their favorites; and no onboarding issue is open. See [The linear-workspace component](#the-linear-workspace-component). |
+| [vapor-fly](components/vapor-fly) | A Swift server in `server/`, built with Vapor and run on Fly.io, built and tested on Linux on each pull request, and deployed by the owner, by hand with `make server deploy` or on a merge. |
+| [supabase](components/supabase) | A Postgres database on Supabase for a Vapor server on Fly.io, with its files in `supabase/`, local and test databases, Supabase's root CA in the server's image, a local and remote parity check, and migrations with the Supabase CLI before each deploy or with Fluent when the server starts. |
 
 ## Layout
 
 ```
 components/<name>/component.toml   the manifest
-components/<name>/scaffold/        files copied one time into a project
+components/<name>/scaffold/        files copied one time into a project, at the paths they have there
 components/<name>/CLAUDE.md        conventions for agents, included by projects
 components/<name>/bin/             scripts the manifest's steps run
 .github/workflows/ci.yml           this repository's own CI
@@ -50,24 +52,48 @@ Releases are tags: `v1`, `v1.1`, `v2`. Projects refer to a tag — in `import_fr
 | [armcknight/workflows: ios-ci.yml](https://github.com/armcknight/workflows/blob/4/.github/workflows/ios-ci.yml) | workflow | apple-app | Runs the `test` lane on each pull request, and on a `/build-staging` comment the `stage` lane, with an install link. |
 | [armcknight/workflows: ota-refresh.yml](https://github.com/armcknight/workflows/blob/4/.github/workflows/ota-refresh.yml) | workflow | apple-app | Signs a staging build's install link again on a `/refresh-staging` comment, and asks for a new build when the old one is gone. |
 | [armcknight/workflows: ota-cleanup.yml](https://github.com/armcknight/workflows/blob/4/.github/workflows/ota-cleanup.yml) | workflow | apple-app | Deletes a pull request's staging builds when it closes. |
-| [make/apple-app.mk](make/apple-app.mk) | make | apple-app | The `apple-app-test`, `apple-app-stage`, `apple-app-deploy-beta`, `apple-app-patch`, `apple-app-minor` and `apple-app-major` targets. |
-| [components/apple-app/scaffold/Brewfile](components/apple-app/scaffold/Brewfile) | brewfile | apple-app | The tools the lanes use. |
+| [make/apple-app.mk](make/apple-app.mk) | make | apple-app | The `apple-app-test`, `apple-app-stage`, `apple-app-deploy-beta`, `apple-app-patch`, `apple-app-minor` and `apple-app-major` targets, which `ios/component.mk` runs as `make ios <command>`. |
+| [components/apple-app/scaffold/ios/Brewfile](components/apple-app/scaffold/ios/Brewfile) | brewfile | apple-app | The tools the lanes use. |
 | [components/apple-app/bin/check-app-store-connect](components/apple-app/bin/check-app-store-connect) | script | apple-app | Checks the app record and its tester group in App Store Connect. |
 | [components/apple-app/bin/check-shared-lanes](components/apple-app/bin/check-shared-lanes) | script | apple-app | Checks that `fastlane/Fastfile` uses the shared lanes. |
 | [armcknight/workflows: vapor-ci.yml](https://github.com/armcknight/workflows/blob/4/.github/workflows/vapor-ci.yml) | workflow | vapor-fly | Builds and tests the package on Linux in the swift image on each pull request, and builds the Docker image. |
 | [armcknight/workflows: fly-deploy.yml](https://github.com/armcknight/workflows/blob/4/.github/workflows/fly-deploy.yml) | workflow | vapor-fly | Deploys the default branch's tip to Fly with its `GIT_SHA`, by hand or on a merge, then waits for the health check to answer. |
-| [make/vapor-fly.mk](make/vapor-fly.mk) | make | vapor-fly | The `vapor-fly-build`, `vapor-fly-serve`, `vapor-fly-serve-docker`, `vapor-fly-deploy` and `vapor-fly-status` targets, which the scaffold's Makefile runs as `make server <command>`. |
-| [components/vapor-fly/scaffold/Brewfile](components/vapor-fly/scaffold/Brewfile) | brewfile | vapor-fly | The tools the Makefile targets use. |
+| [make/vapor-fly.mk](make/vapor-fly.mk) | make | vapor-fly | The `vapor-fly-build`, `vapor-fly-serve`, `vapor-fly-serve-docker`, `vapor-fly-deploy` and `vapor-fly-status` targets, which `server/component.mk` runs as `make server <command>`. |
+| [components/vapor-fly/scaffold/server/Brewfile](components/vapor-fly/scaffold/server/Brewfile) | brewfile | vapor-fly | The tools the Makefile targets use. |
 | [components/vapor-fly/bin/check-fly-config](components/vapor-fly/bin/check-fly-config) | script | vapor-fly | Checks that `fly.toml` names the app, forces HTTPS, scales to zero and has the health check. |
 | [components/vapor-fly/bin/check-fly-secrets](components/vapor-fly/bin/check-fly-secrets) | script | vapor-fly, supabase | Checks that the Fly app has each runtime secret, by name. |
-| [make/supabase.mk](make/supabase.mk) | make | supabase | The `supabase-db-init`, `supabase-db-reset`, `supabase-db-migrate`, `supabase-db-test-start`, `supabase-db-test-stop`, `supabase-db-status`, `supabase-status-diff` and `supabase-refresh-ca` targets, which the scaffold's `make/local-db.mk` runs as `make local-db <command>` and `make server <command>`. |
+| [make/supabase.mk](make/supabase.mk) | make | supabase | The `supabase-db-init`, `supabase-db-reset`, `supabase-db-migrate`, `supabase-db-test-start`, `supabase-db-test-stop`, `supabase-db-status`, `supabase-status-diff` and `supabase-refresh-ca` targets, which `supabase/component.mk` runs as `make local-db <command>`, `make server status-diff` and `make server refresh-ca`. |
 | [components/supabase/bin/check-supabase-project](components/supabase/bin/check-supabase-project) | script | supabase | Checks that the Supabase CLI can see the project. |
 | [components/supabase/bin/supabase-ca](components/supabase/bin/supabase-ca) | script | supabase | Downloads the database's root CA certificate and verifies the database's TLS certificate against it. |
 | [components/supabase/bin/db-snapshot](components/supabase/bin/db-snapshot) | script | supabase | Writes a database's tables, columns, row counts and applied migrations as JSON. |
 | [components/supabase/bin/db-snapshot-diff](components/supabase/bin/db-snapshot-diff) | script | supabase | Compares two snapshots, and exits 1 when the databases differ. |
 | [components/github-repo/bin/check-merge-options](components/github-repo/bin/check-merge-options) | script | github-repo | Checks that pull requests merge only by squashing, titled with the pull request's title, that GitHub offers to update their branches, and that it deletes them after a merge. |
-| [components/github-repo/bin/check-default-branch-protection](components/github-repo/bin/check-default-branch-protection) | script | github-repo | Checks that a ruleset that the owner can bypass stops the default branch from being deleted or force-pushed. |
+| [components/github-repo/bin/check-rulesets-available](components/github-repo/bin/check-rulesets-available) | script | github-repo | Checks that GitHub offers rulesets for the repository, which it does not for a private repository on the free plan. |
+| [components/github-repo/bin/check-default-branch-protection](components/github-repo/bin/check-default-branch-protection) | script | github-repo | Checks that a ruleset that the owner can bypass stops the default branch from being deleted or force-pushed, when GitHub offers rulesets for the repository. |
 | [components/github-repo/bin/protect-default-branch](components/github-repo/bin/protect-default-branch) | script | github-repo | Makes or updates the `Default branch` ruleset, which stops the default branch from being deleted or force-pushed, with a bypass for the repository's admins. |
+| [components/linear-workspace/bin/linear-workspace](components/linear-workspace/bin/linear-workspace) | script | linear-workspace | Checks, and sets up, the Linear workspace's teams' states, Triage and labels, the proposals view, the onboarding issues and the initiatives, with Linear's API. |
+
+## The linear-workspace component
+
+Its steps check, and `bootstrap` sets up, the Linear workspace that superlinear works from. They run like any other component's steps, and their results are in the same report.
+
+It is detected by an `.envrc` (or `.envrc.example`) that sets `LINEAR_API_KEY` or `LINCTL_API_KEY`. A project without one can add `linear-workspace` to `.templatr.toml` by hand. Its input `linear_teams` has the keys of the teams to check, separated by spaces, such as `STA`; empty, the default, means every team in the workspace. superlinear gives the teams of its `teamIds`. Set `linear_initiatives` to `true` when the project's spec should be under an initiative.
+
+| Step | Check | Fix |
+| --- | --- | --- |
+| `linear-key` | `LINEAR_API_KEY`, else `LINCTL_API_KEY`, is set, Linear accepts it, and its user is an admin of the workspace or of each team, which the fixes need. | Human: make a personal API key in Linear's settings, as the workspace's owner, and export it in the project's `.envrc`. |
+| `envrc-ignored` | An `.envrc` that holds a key is ignored by git. | Adds `.envrc` to `.gitignore`. |
+| `in-review-state` | Each team has an "In Review" state of type `started`, after "In Progress": superlinear sets it after it opens a pull request. | Makes the state, or moves it, after the team's last `started` state and before its first `completed` one. |
+| `todo-state` | Each team has a state of type `unstarted`, which superlinear's `ready` mode starts from. | Human. |
+| `triage` | Triage is on in each team: superlinear puts its proposals there. | Turns it on. |
+| `labels` | Each team has the labels `Needs human`, `superlinear`, `superlinear: proposed`, `superlinear: spec` and `superlinear: hands off`, as team or workspace labels. | Makes the missing ones as team labels. |
+| `proposals-view` | A custom view named "superlinear proposals" shows the open issues labeled `superlinear: proposed`, and is in the key's user's favorites. superlinear's comments are written with the owner's own key, so they do not reach the owner's inbox; this view is where pending proposals are found. | Makes the view, or corrects its filter, and adds it to the favorites. |
+| `onboarding-issues` | None of the issues Linear makes in a new workspace ("Get familiar with Linear", "Set up your teams", "Connect your tools", "Import your data") is open: in `ready` mode, superlinear would start agents on them. | Cancels the open issues with exactly those titles. |
+| `initiatives` | Only when `linear_initiatives` is `true`: the workspace has an initiative. The API cannot tell whether initiatives are on, but there are initiatives only when they are. | Human: turn initiatives on in the workspace's settings. The API cannot. |
+
+The steps read the key from their environment: `LINEAR_API_KEY`, else `LINCTL_API_KEY`. A project's `.envrc` already exports `LINCTL_API_KEY` for `linctl`, and direnv loads it in the shell; a script runs `direnv exec <repository> swift run templatr check <repository>`. superlinear's daemon has no `.envrc`, so it gives each workspace's key from its own config to the steps, with `Services.system(environment:)`.
+
+The script calls Linear's GraphQL API with `curl`, and reads its JSON with JavaScript for Automation, which every Mac has; the steps that use it run only on macOS. It never prints the key, and gives it to `curl` in a header file that only the user can read, never on a command line. Each fix is safe to run again.
 
 ## The manifest
 
@@ -77,9 +103,23 @@ Releases are tags: `v1`, `v1.1`, `v2`. Projects refer to a tag — in `import_fr
 
 The component's name, which is also its directory's name, and one sentence about what it sets up.
 
+### `directory`, `blurb`, `base`
+
+`directory` is the project's subdirectory that the component's files are in, such as `server` for vapor-fly and `ios` for apple-app. It names the part's role, not its framework or how it is deployed, so that it stays right when those change, and so that a second app can have its own, such as `android`. A component has its own directory also when a project has no other component. Its `detect` and `infer` rules read files in it, and its steps run in it.
+
+`blurb` is a summary of the component's part of the project, with placeholders. `templatr bootstrap` writes it in the root README.md, with a link to the README.md in `directory`.
+
+A component with `base = true` comes with every other component, so it has no `detect` and no `directory`: [base](components/base) has the root Makefile and README.md. There is at most one.
+
+### Project layout
+
+Each component's scaffold has the files at the paths they have in the project: under its `directory`, such as `scaffold/server/fly.toml`, with its own `README.md`, `.gitignore` and `Brewfile` there, and its workflows in `scaffold/.github/workflows/`, each named with the component's name first, such as `vapor-fly-ci.yml`, because GitHub reads workflows only there. The tools run in the directory, or are told where it is: `fly deploy server`, `docker compose --file server/docker-compose.yml`, `cd ios && bundle exec fastlane`, and the shared workflows' `working-directory` input. No two components have a file at the same path.
+
+The root Makefile, from the base component, has `TEMPLATES_TAG`, the rule that downloads the Makefile fragments, `help` and `templates-update`, and includes every `*/component.mk`. Each component's `component.mk` sets its values, adds its namespace to `NAMESPACES` and its fragment to `TEMPLATES_FRAGMENTS`, includes the fragment, and maps `make <namespace> <command>` to the fragment's targets, such as `make server deploy` to `vapor-fly-deploy`.
+
 ### `detect`
 
-How to know that a repository uses the component, from its files only. Each rule is a `glob`, relative to the repository root (`**` matches any number of directories), with an optional `contains`: a regular expression that the contents of at least one matching file must match. The component is detected when every rule in `all` matches and, if `any` has rules, at least one of them does.
+How to know that a repository uses the component, from its files only. Each rule is a `glob`, relative to the component's `directory`, or to the repository root when it has none (`**` matches any number of directories), with an optional `contains`: a regular expression that the contents of at least one matching file must match. The component is detected when every rule in `all` matches and, if `any` has rules, at least one of them does.
 
 ```toml
 [detect]
@@ -95,11 +135,11 @@ Values that differ for each project, such as the bundle ID or the team ID. Each 
 
 | `from` | Reads |
 | --- | --- |
-| `build-setting` | `key` from `xcodebuild -showBuildSettings` for the project's scheme. |
+| `build-setting` | `key` from `xcodebuild -showBuildSettings` for the project's scheme, in the Release configuration when the project has one. |
 | `fastlane-config` | The first argument of the call `key` in `file`, such as `team_id("…")` in `fastlane/Appfile`. An array's values are joined with commas. |
 | `toml` | The dotted `key` in the TOML `file`, such as `app` in `fly.toml`. |
 | `yaml` | The dotted `key` in the YAML `file`, such as `global_secrets` in `.arkana.yml`. A list's values are joined with `separator`, a comma by default. |
-| `glob` | The path of the first file that matches `glob` and, with `contains`, whose contents match that regular expression; with `exists = true`, `true` or `false`. |
+| `glob` | The path of the first file that matches `glob` and, with `contains`, whose contents match that regular expression; with `stem = true`, that file's name without its directory and extension; with `exists = true`, `true` or `false`. |
 | `regex` | The first capture group of `pattern` in the first file that matches `glob`. |
 
 Any rule can have `map`, which replaces the value found with the value of its key, such as `{ iphoneos = "ios" }`. An input with no `infer`, or whose value is not found and has no `default`, is asked for one time.
@@ -110,7 +150,7 @@ Secrets, by name. Each has a `description`, a `source` — `keychain:<item>`, `1
 
 ### `steps`
 
-Ordered. Each has an `id`, a `description`, a `check` — a shell command, run at the repository root, that exits 0 when the step is done — and a `fix`: a shell command, or `{ human = { text = "…" } }`, which becomes a Needs human issue. `scope = "app"` marks a step done one time for each app.
+Ordered. Each has an `id`, a `description`, a `check` — a shell command, run in the component's `directory`, or at the repository root when it has none, that exits 0 when the step is done — and a `fix`: a shell command, or `{ human = { text = "…" } }`, which becomes a Needs human issue. `scope = "app"` marks a step done one time for each app.
 
 ### `shared`
 
@@ -122,7 +162,7 @@ Sections of the superlinear guide that explain the component, each with a `title
 
 ### Placeholders
 
-Scaffold files, step commands, secrets' sources and human texts can contain:
+Scaffold files, step commands, secrets' sources, human texts and blurbs can contain:
 
 * `{{inputs.<name>}}`: an input's value. In `check` and `fix` commands, the value is quoted for the shell.
 * `{{templates}}`: the path of a checkout of this repository at the project's tag, for the scripts in `components/<name>/bin/`.
@@ -130,22 +170,24 @@ Scaffold files, step commands, secrets' sources and human texts can contain:
 
 GitHub Actions expressions, `${{ … }}`, are not placeholders.
 
-## The scaffold's README section
+## The root README
 
-Each component's `scaffold/README.md` has a section between these markers:
+The base component's `scaffold/README.md`, the project's root README.md, has a section between these markers:
 
 ```
 <!-- superlinear:begin how-this-is-built -->
 <!-- superlinear:end -->
 ```
 
-`templatr bootstrap` writes it from the manifests of the components the project uses, and changes nothing outside the markers. It has a "How this project is built" heading and:
+`templatr bootstrap` writes it one time for the whole project, from the manifests of the components the project uses, and changes nothing outside the markers. The components' own READMEs, in their directories, do not have it. It has a "How this project is built" heading and:
 
-* the components the project uses, each linked to `components/<name>` here at the pinned tag;
+* the components the project uses, each linked to `components/<name>` here at the pinned tag, with its directory;
 * each shared workflow, lane, Makefile fragment and Brewfile the project uses, linked here at the pinned tag, or in its own repository at its `version`;
 * the secrets by name, never their values, with where each comes from, and the human steps;
 * links to the superlinear guide's [life of an issue](https://github.com/armcknight/superlinear/blob/main/docs/lifecycle.md#overview), [planning](https://github.com/armcknight/superlinear/blob/main/docs/planning.md#proposals), [bootstrap](https://github.com/armcknight/superlinear/blob/main/docs/bootstrap.md#components) and [builds](https://github.com/armcknight/superlinear/blob/main/docs/builds.md#ci) sections, and to the components' own `docs` anchors;
 * a link to the project's Linear team and, when it has one, its spec document.
+
+Above it, each component with a `blurb` has its own section, which bootstrap writes between `<!-- templatr:begin <name> -->` and `<!-- templatr:end -->`: a link to its directory's README.md and its blurb.
 
 ## Setting up a project
 
@@ -161,7 +203,7 @@ swift run templatr check ~/Code/babysittr         # report what it still needs, 
 
 ### `templatr bootstrap [<repository>]`
 
-1. **Which components.** On the first run it matches each component's `detect` rules against the repository; it can find more than one. It reads each input from where its `infer` says, then shows the values it found to confirm, and asks for the ones it did not find. Leave an answer empty to skip it: the steps and scaffold files that need it wait for a later run.
+1. **Which components.** On the first run it matches each component's `detect` rules against the files in its directory; it can find more than one, and the base component comes with them. It reads each input from where its `infer` says, then shows the values it found to confirm, and asks for the ones it did not find. Leave an answer empty to skip it: the steps and scaffold files that need it wait for a later run.
 2. **The record.** It writes `.templatr.toml` at the repository's root: each component, the tag it is pinned to, and its inputs. Later runs read it instead of detecting again, and a change made to it by hand wins. A component that detection finds later, such as a watch app added to the project, is reported, not added: add it to the file to use it.
 
    ```toml
@@ -172,10 +214,10 @@ swift run templatr check ~/Code/babysittr         # report what it still needs, 
    bundle_id = "io.mcknight.babysittr"
    ```
 
-3. **Scaffold.** It copies each scaffold file that the project does not have yet, with its placeholders filled in. It never overwrites a file.
+3. **Scaffold.** It copies each scaffold file that the project does not have yet, with its placeholders filled in. It never overwrites a file. A path that two components' scaffolds have is an error, and neither file is copied.
 4. **Steps.** It runs each step's `check`, and its `fix` command when the check fails, then the check again. A failing step whose fix is `human` is reported with its text, whether it needs two-factor, and links to the manifest and the guide. A step that is done one time for each app (`scope = "app"`) runs one time.
 5. **Secrets.** It reads the repository's secret names with `gh secret list`. For each missing one, after it asks, it reads the value from its `source` and gives it to `gh secret set` on standard input. A `generate:` secret is made on this Mac and stored first in the Keychain item `superlinear.<name>`, such as `superlinear.match-deploy-key`, with an SSH key's public half in `superlinear.<name>.pub`. A `local` secret is only looked for in the Keychain, and never set in GitHub. Values never go to a log, the output or a file.
-6. **README and CLAUDE.md.** It writes the README's "How this project is built" section between its markers, adding them at the end when the README does not have them, and changes nothing outside them. It copies each component's `CLAUDE.md` to `.templatr/<name>/CLAUDE.md` and imports those copies in the project's `CLAUDE.md`, between `<!-- templatr:begin components -->` and `<!-- templatr:end -->`.
+6. **README and CLAUDE.md.** It writes the root README's "How this project is built" section between its markers, adding them at the end when the README does not have them, and each component's blurb between its own markers, adding them above that section; it changes nothing outside them. It copies each component's `CLAUDE.md` to `.templatr/<name>/CLAUDE.md` and imports those copies in the project's `CLAUDE.md`, between `<!-- templatr:begin components -->` and `<!-- templatr:end -->`.
 
 It then reports what is left, as `check` does. Running it again changes nothing that is already done.
 
@@ -191,8 +233,7 @@ The exit status is 0 when nothing is left to do, 1 when the report lists somethi
 
 ## Adding a component
 
-1. Make `components/<name>/` with `component.toml`, `CLAUDE.md` and `scaffold/README.md` with the markers.
-   A project can use the component with any others, and bootstrap copies a scaffold file only when the project does not have it, so do not put a file in the scaffold that another component's scaffold can also have, such as `Makefile`, `.gitignore` or `.envrc.example`. Make a step whose fix adds the component's lines to that file when they are not there, as the supabase component does. The supabase and github-repo scaffolds' `README.md` has only the markers.
+1. Make `components/<name>/` with `component.toml`, with its `directory` and `blurb`, `CLAUDE.md`, and `scaffold/<directory>/README.md`, without the markers. Put its files under `scaffold/<directory>/`, its Makefile targets in `scaffold/<directory>/component.mk`, and its workflows in `scaffold/.github/workflows/<name>-*.yml`.
 2. Put shared lanes, Makefile fragments and scripts at the top level, and reusable workflows in armcknight/workflows. Add them to the manifest's `shared` and to the table above.
 3. Add any new guide section to superlinear's `docs/`, with its anchor listed in `docs/anchors.md`, first.
 4. Run the checks below, then tag a release.
@@ -203,7 +244,7 @@ The exit status is 0 when nothing is left to do, 1 when the report lists somethi
 
 * `ComponentManifest`, a library: `Manifest` and its `Codable` types for `component.toml`, and `Validator`, the checks below. Decoding is strict: an unknown key, an empty text, a value that does not match its pattern, or an empty list is an error with its path in the file, such as `secrets/0/source`. The library does not run `detect` rules or `infer` rules; the `Templatr` library below does that on these types. The validator's tests have their own reference that runs them, `Tests/ComponentManifestTests/Detection.swift`, to test each component's rules against fixtures taken from the projects it comes from; set `MTG_REPOSITORY` to a checkout of mtg to also test `vapor-fly` and `supabase` against it.
 * `validate-components`, a command: `validate-components [--root DIR] [--anchors PATH_OR_URL|none]`. The root is the current directory by default. The anchors come from superlinear's `docs/anchors.md` on `main` by default; a path or a URL replaces that, and `none` skips the check. It prints each problem to stderr and exits 1 when there are any.
-* `Templatr`, a library on the `ComponentManifest` types: `Bootstrapper`'s `resolve`, `bootstrap` and `check` do what [Setting up a project](#setting-up-a-project) says, and return a `Report`, the same values that `check --json` prints. It knows nothing of Linear: superlinear turns the report into issues. The programs it runs, the Keychain, 1Password and GitHub are behind the protocols in `Services`, which the tests replace.
+* `Templatr`, a library on the `ComponentManifest` types: `Bootstrapper`'s `resolve`, `bootstrap` and `check` do what [Setting up a project](#setting-up-a-project) says, and return a `Report`, the same values that `check --json` prints. Only the `linear-workspace` component's steps use Linear, with a key from the environment: superlinear turns the report into issues. The programs it runs, the Keychain, 1Password and GitHub are behind the protocols in `Services`, which the tests replace. `ProcessRunner(environment:)` adds environment variables to the commands it runs, such as a Linear API key for the steps.
 * `templatr`, a command: a thin layer on the library, which asks the questions.
 
 The package builds on macOS and Linux. [TOMLKit](https://github.com/LebJe/TOMLKit) parses the TOML, and [Yams](https://github.com/jpsim/Yams) the YAML.
@@ -222,8 +263,11 @@ For each `components/<name>/component.toml`:
 * `name` is the directory's name;
 * input names, secret names and step IDs are unique;
 * a `local` secret's source is a Keychain item;
-* `CLAUDE.md` and `scaffold/README.md` exist, and the README has the generated section's markers, one time each and in order;
-* each `{{placeholder}}` in the scaffold, the steps, the secrets' sources and the human texts names a declared input, `templates` or `templates.tag`;
+* `CLAUDE.md` exists;
+* a component with a `directory` has `scaffold/<directory>/README.md`, without the generated section's markers, and its other scaffold files are under `scaffold/<directory>/` or are workflows named `.github/workflows/<name>-*`; a component with neither has only such workflows;
+* the base component has `scaffold/README.md`, with the generated section's markers, one time each and in order;
+* there is at most one base component, no two components have the same `directory`, no two scaffolds have a file at the same path, and no scaffold has a file in another component's directory;
+* each `{{placeholder}}` in the scaffold, the steps, the secrets' sources, the human texts and the blurb names a declared input, `templates` or `templates.tag`;
 * each regular expression compiles, and each `regex` infer rule has a capture group;
 * each shared path in this repository exists; a path in another `repo` is not checked;
 * each docs anchor is listed in superlinear's `docs/anchors.md`.
@@ -240,4 +284,4 @@ swift test                                    # the validator's and the Templatr
 swift run validate-components                 # the manifests, and the guide's docs/anchors.md
 ```
 
-and checks every link in the Markdown files with [lychee](https://github.com/lycheeverse/lychee).
+and checks every link in the Markdown files with [lychee](https://github.com/lycheeverse/lychee). It also runs `swift test` on macOS, where the tests also run the `linear-workspace` component's script against a fake Linear API.

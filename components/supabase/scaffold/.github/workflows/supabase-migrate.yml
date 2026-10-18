@@ -1,7 +1,7 @@
 name: Supabase migrate
 
 # Applies supabase/migrations to the Supabase project with `supabase db push`.
-# .github/workflows/deploy.yml calls it in a job that the deploy job needs, so
+# .github/workflows/vapor-fly-deploy.yml calls it in a job that the deploy job needs, so
 # a migration that fails stops the deploy:
 #
 #   jobs:

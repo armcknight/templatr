@@ -2,41 +2,23 @@ import Foundation
 import Testing
 @testable import ComponentManifest
 
-// The parts of mtg's files that the supabase rules read, cut down. mtg runs
-// Fluent migrations, and keeps Supabase's root CA in deploy/.
+// mtg, as bootstrap leaves it: its server in server/, and the supabase
+// scaffold's component.mk in supabase/, rendered with mtg's values. mtg runs
+// Fluent migrations, and has no Supabase CLI files.
 
-let mtgSupabaseFlyToml = mtgFlyToml.replacingOccurrences(
-    of: "  MTG_SERVER_PORT = \"8080\"\n",
-    with: "  MTG_SERVER_PORT = \"8080\"\n  MTG_DB_CA_CERT = \"/app/supabase-root-2021-ca.crt\"\n"
-)
+let mtgComponentMk = """
+    SUPABASE_MIGRATION_STYLE = fluent
+    SUPABASE_PRODUCT = mtg-server
+    SUPABASE_PACKAGE_PATH = server
+    SUPABASE_MIGRATE_ARGS = migrate --yes
+    SUPABASE_DB_NAME = mtg_collection
+    SUPABASE_PG_VERSION = 17
+    SUPABASE_CA_CERT = server/deploy/supabase-root-2021-ca.crt
 
-let mtgSupabaseDockerfile = mtgDockerfile.replacingOccurrences(
-    of: "ARG GIT_SHA=unknown\n",
-    with: "COPY deploy/supabase-root-2021-ca.crt /app/supabase-root-2021-ca.crt\nARG GIT_SHA=unknown\n"
-)
+    NAMESPACES += local-db
+    TEMPLATES_FRAGMENTS += $(TEMPLATES_MAKE)/supabase.mk
 
-let mtgDockerCompose = """
-    services:
-      db:
-        image: postgres:17
-        environment:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: mtg_collection
-
-    """
-
-let mtgEnvExample = """
-    # PostgreSQL connection string
-    DATABASE_URL=postgres://localhost:5432/mtg_collection
-    MTG_SERVER_PORT=8080
-
-    """
-
-let mtgEnvrcExample = """
-    # DATABASE_URL — your external Postgres (Supabase or Neon). Use the POOLED connection
-    # string (session mode, port 5432) and add ?sslmode=require.
-    # export DATABASE_URL=postgres://USER:PASSWORD@HOST:5432/postgres?sslmode=require
+    include $(TEMPLATES_MAKE)/supabase.mk
 
     """
 
@@ -47,15 +29,17 @@ let supabaseRootCA = """
 
     """
 
+// The server's files are in vapor-fly's directory, which the rules do not
+// read, so fly_app is asked for, and the CA's inputs have their defaults.
 let mtgSupabaseInputs: [String: String?] = [
     "project_ref": nil,
     "migration_style": "fluent",
     "product": "mtg-server",
-    "fly_app": "mtg-server",
+    "fly_app": nil,
     "database_name": "mtg_collection",
     "pg_version": "17",
     "ca_cert_path": "deploy/supabase-root-2021-ca.crt",
-    "ca_cert_env": "MTG_DB_CA_CERT",
+    "ca_cert_env": "DATABASE_CA_CERT",
 ]
 
 // A server that uses the Supabase CLI, as `supabase init` makes it, with its
@@ -81,16 +65,11 @@ let cliPackage = mtgPackage
     .replacingOccurrences(of: "mtg-server", with: "statustician")
     .replacingOccurrences(of: "https://github.com/vapor/fluent", with: "https://github.com/vapor/postgres-nio")
 
-let cliEnvExample = """
-    DATABASE_URL=postgres://postgres.abcdefghijklmnopqrst:<password>@aws-0-us-west-1.pooler.supabase.com:5432/postgres?sslmode=require
-
-    """
-
 let cliInputs: [String: String?] = [
     "project_ref": "abcdefghijklmnopqrst",
     "migration_style": "cli",
-    "product": "statustician",
-    "fly_app": "statustician",
+    "product": nil,
+    "fly_app": nil,
     "database_name": "postgres",
     "pg_version": "15",
     "ca_cert_path": "deploy/supabase-root-2021-ca.crt",
@@ -110,21 +89,20 @@ struct SupabaseTests {
     var detection: Detection { Detection(root: repository.root) }
 
     func writeMtg() throws {
-        try repository.write("Package.swift", mtgPackage)
-        try repository.write("fly.toml", mtgSupabaseFlyToml)
-        try repository.write("Dockerfile", mtgSupabaseDockerfile)
-        try repository.write("docker-compose.yml", mtgDockerCompose)
-        try repository.write(".env.example", mtgEnvExample)
-        try repository.write(".envrc.example", mtgEnvrcExample)
-        try repository.write("deploy/supabase-root-2021-ca.crt", supabaseRootCA)
+        try repository.write("server/Package.swift", mtgPackage)
+        try repository.write("server/fly.toml", mtgFlyToml)
+        try repository.write("server/Dockerfile", mtgDockerfile)
+        try repository.write("server/deploy/supabase-root-2021-ca.crt", supabaseRootCA)
+        try repository.write("supabase/component.mk", mtgComponentMk)
     }
 
+    /// `supabase link` writes the reference ID to supabase/.temp/project-ref.
     func writeCLI() throws {
-        try repository.write("Package.swift", cliPackage)
-        try repository.write("fly.toml", "app = \"statustician\"\nprimary_region = \"sjc\"\n")
+        try repository.write("server/Package.swift", cliPackage)
+        try repository.write("server/fly.toml", "app = \"statustician\"\nprimary_region = \"sjc\"\n")
         try repository.write("supabase/config.toml", cliConfigToml)
         try repository.write("supabase/migrations/20261017000000_init.sql", "CREATE TABLE checks (id uuid PRIMARY KEY);\n")
-        try repository.write(".env.example", cliEnvExample)
+        try repository.write("supabase/.temp/project-ref", "abcdefghijklmnopqrst\n")
     }
 
     @Test func mtg() throws {
@@ -133,9 +111,12 @@ struct SupabaseTests {
         #expect(detection.inputs(of: supabase) == mtgSupabaseInputs)
     }
 
-    @Test func mtgIsDetectedByItsCertificateAlone() throws {
-        try repository.write("deploy/supabase-root-2021-ca.crt", supabaseRootCA)
-        #expect(detection.detects(supabase))
+    /// A fluent project has no Supabase CLI files, so until it has the
+    /// scaffold's component.mk it gets the component by name.
+    @Test func mtgWithoutTheScaffoldIsNotDetected() throws {
+        try writeMtg()
+        try FileManager.default.removeItem(at: repository.root.appending(path: "supabase"))
+        #expect(!detection.detects(supabase))
     }
 
     @Test func cli() throws {
@@ -150,24 +131,23 @@ struct SupabaseTests {
         #expect(detection.inputs(of: supabase)["migration_style"] == "cli")
     }
 
-    @Test func detectedByAHostInTheEnvrcExample() throws {
-        try repository.write(".envrc.example", "export DATABASE_URL=postgres://postgres:pw@db.abcdefghijklmnopqrst.supabase.co:5432/postgres\n")
-        #expect(detection.detects(supabase))
-        #expect(detection.inputs(of: supabase)["project_ref"] == "abcdefghijklmnopqrst")
+    @Test func readsTheFilesInItsDirectory() throws {
+        try repository.write("config.toml", cliConfigToml)
+        try repository.write("component.mk", mtgComponentMk)
+        #expect(!detection.detects(supabase))
     }
 
-    @Test func vaporServerWithoutSupabase() throws {
-        try repository.write("Package.swift", mtgPackage)
-        try repository.write("fly.toml", mtgFlyToml)
-        try repository.write("docker-compose.yml", mtgDockerCompose)
-        try repository.write(".env.example", mtgEnvExample)
+    @Test func componentMkOfAnotherComponent() throws {
+        try repository.write("supabase/component.mk", "NAMESPACES += local-db\ninclude $(TEMPLATES_MAKE)/postgres.mk\n")
         #expect(!detection.detects(supabase))
     }
 
     @Test func linkedProjectRefComesFirst() throws {
         try writeCLI()
-        try repository.write("supabase/.temp/project-ref", "zyxwvutsrqponmlkjihg")
-        #expect(detection.inputs(of: supabase)["project_ref"] == "zyxwvutsrqponmlkjihg")
+        try repository.write(
+            "supabase/config.toml", cliConfigToml.replacingOccurrences(of: "\"statustician\"", with: "\"zyxwvutsrqponmlkjihg\"")
+        )
+        #expect(detection.inputs(of: supabase)["project_ref"] == "abcdefghijklmnopqrst")
     }
 
     @Test func projectIdIsARefOnlyInItsForm() throws {
@@ -180,49 +160,20 @@ struct SupabaseTests {
         #expect(detection.inputs(of: supabase)["project_ref"] == "abcdefghijklmnopqrst")
     }
 
-    @Test func migrationStyleIsAskedWithoutTheCLIOrFluent() throws {
-        try repository.write("Package.swift", cliPackage)
-        try repository.write("deploy/supabase-root-2021-ca.crt", supabaseRootCA)
+    @Test func configComesBeforeComponentMk() throws {
+        try repository.write("supabase/config.toml", cliConfigToml)
+        try repository.write("supabase/component.mk", mtgComponentMk)
+        let inputs = detection.inputs(of: supabase)
+        #expect(inputs["migration_style"] == "cli")
+        #expect(inputs["database_name"] == "postgres")
+        #expect(inputs["pg_version"] == "15")
+    }
+
+    @Test func migrationStyleIsAskedWithoutTheCLIOrTheScaffold() throws {
+        try repository.write("supabase/component.mk", "NAMESPACES += local-db\ninclude $(TEMPLATES_MAKE)/supabase.mk\n")
         let inputs = detection.inputs(of: supabase)
         #expect(inputs["migration_style"] == .some(nil))
         #expect(inputs["database_name"] == .some(nil))
         #expect(inputs["pg_version"] == "17")
-    }
-
-    /// Bootstrap copies a scaffold file only when the project does not have it
-    /// yet, so a file that two components' scaffolds have would come from
-    /// whichever runs first. The supabase scaffold has no such file but
-    /// README.md, and its README.md is only the generated section's markers,
-    /// so the result is the same in any order and with any other component.
-    @Test func scaffoldIsTheSameWithAnyOtherComponentInAnyOrder() throws {
-        let components = repositoryRoot.appending(path: "components")
-        func files(of component: String) -> Set<String> {
-            let scaffold = components.appending(path: "\(component)/scaffold")
-            guard let enumerator = FileManager.default.enumerator(atPath: scaffold.path) else { return [] }
-            var paths: Set<String> = []
-            while let path = enumerator.nextObject() as? String {
-                if enumerator.fileAttributes?[.type] as? FileAttributeType == .typeRegular { paths.insert(path) }
-            }
-            return paths
-        }
-        let own = files(of: "supabase")
-        #expect(own.contains("make/local-db.mk"))
-        for other in try FileManager.default.contentsOfDirectory(atPath: components.path) where other != "supabase" {
-            #expect(own.intersection(files(of: other)).subtracting(["README.md"]).isEmpty, "shared with \(other)")
-        }
-        let readme = try String(contentsOf: components.appending(path: "supabase/scaffold/README.md"), encoding: .utf8)
-        #expect(readme == "\(Validator.beginMarker)\n\(Validator.endMarker)\n")
-    }
-
-    /// Set MTG_REPOSITORY to a checkout of mtg to run it. Only the project
-    /// reference is asked for: mtg keeps it only in the ignored .envrc.
-    @Test(.enabled(if: ProcessInfo.processInfo.environment["MTG_REPOSITORY"] != nil))
-    func mtgCheckout() throws {
-        let checkout = Detection(root: URL(fileURLWithPath: ProcessInfo.processInfo.environment["MTG_REPOSITORY"]!))
-        #expect(checkout.detects(supabase))
-        let inputs = checkout.inputs(of: supabase)
-        #expect(inputs.filter { $0.value == nil }.keys.sorted() == ["project_ref"])
-        #expect(inputs["migration_style"] == "fluent")
-        #expect(inputs["ca_cert_env"] == "MTG_DB_CA_CERT")
     }
 }

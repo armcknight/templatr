@@ -22,8 +22,9 @@ extension DetectRule {
 
 /// Reads the build settings of a project's app target.
 public protocol BuildSettingsProvider: Sendable {
-    /// The settings of the app target that `scheme` builds, or `nil` when they
-    /// cannot be read. `project`, `workspace` and `scheme` are relative to the
+    /// The settings of the app target that `scheme` builds, in the Release
+    /// configuration when the project has one, or `nil` when they cannot be
+    /// read. `project`, `workspace` and `scheme` are relative to the
     /// repository, and `nil` when not known.
     func buildSettings(repository: URL, project: String?, workspace: String?, scheme: String?) -> [String: String]?
 }
@@ -46,11 +47,18 @@ public struct XcodeBuildSettings: BuildSettingsProvider {
         if let scheme {
             arguments += ["-scheme", scheme]
         }
-        guard let result = try? runner.run(arguments, input: nil, in: repository), result.succeeded,
-              let targets = try? JSONDecoder().decode([Target].self, from: result.output)
+        // The release product name is the one in App Store Connect; a debug
+        // configuration's can name a development variant.
+        guard let targets = targets(arguments + ["-configuration", "Release"], in: repository)
+            ?? targets(arguments, in: repository)
         else { return nil }
         let app = targets.first { $0.buildSettings["WRAPPER_EXTENSION"] == "app" } ?? targets.first
         return app?.buildSettings
+    }
+
+    private func targets(_ arguments: [String], in repository: URL) -> [Target]? {
+        guard let result = try? runner.run(arguments, input: nil, in: repository), result.succeeded else { return nil }
+        return try? JSONDecoder().decode([Target].self, from: result.output)
     }
 
     private struct Target: Decodable {
@@ -114,13 +122,14 @@ struct Inferrer {
         case .yaml(let file, let key, let separator):
             guard let text = files.text(of: file), let document = try? Yams.load(yaml: text) else { return nil }
             return Self.yamlValue(document, at: key, separator: separator ?? ",")
-        case .glob(let glob, let contains, let exists):
+        case .glob(let glob, let contains, let exists, let stem):
             let matches = contains == nil
                 ? files.matching(glob)
                 : files.files(matching: glob).filter { path in
                     files.text(of: path).map { Patterns.matches(contains!, $0) } ?? false
                 }
             if exists == true { return matches.isEmpty ? "false" : "true" }
+            if stem == true { return matches.first.map(Self.stem) }
             return matches.first
         case .regex(let glob, let pattern):
             for path in files.files(matching: glob) {
@@ -130,6 +139,11 @@ struct Inferrer {
             }
             return nil
         }
+    }
+
+    /// The name of the file at `path`, without its directory and extension.
+    static func stem(_ path: String) -> String {
+        ((path as NSString).lastPathComponent as NSString).deletingPathExtension
     }
 
     /// The first argument of the call `key` in a fastlane configuration file:

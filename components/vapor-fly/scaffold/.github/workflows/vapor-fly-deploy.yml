@@ -1,4 +1,4 @@
-name: Deploy
+name: Server deploy
 
 # A deploy is the owner's action. With deploy-on: manual, only a run that the
 # owner starts from the Actions tab deploys. With deploy-on: merge, each push to
@@ -20,5 +20,7 @@ jobs:
       app: {{inputs.fly_app}}
       health-check-path: {{inputs.health_check_path}}
       deploy-on: manual
+      # fly.toml and the Dockerfile are in server/.
+      working-directory: server
     secrets:
       FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

@@ -42,6 +42,8 @@ public struct Validator: Sendable {
             }
         }
 
+        problems += layoutProblems(manifests)
+
         let readme = root.appending(path: "README.md")
         if let text = try? String(contentsOf: readme, encoding: .utf8) {
             let links = Set(Self.links(in: text))
@@ -95,7 +97,7 @@ public struct Validator: Sendable {
             problems.append("\(`where`): secret \(secret.name) is local, so its source must be a keychain: item")
         }
 
-        for (group, rules) in [("all", manifest.detect.all), ("any", manifest.detect.any)] {
+        for (group, rules) in [("all", manifest.detect?.all), ("any", manifest.detect?.any)] {
             for (index, rule) in (rules ?? []).enumerated() {
                 if let contains = rule.contains {
                     problems += Self.regexProblems(at: "\(`where`): detect.\(group)[\(index)]", pattern: contains, needsGroup: false)
@@ -108,8 +110,13 @@ public struct Validator: Sendable {
                 switch rule.from {
                 case .regex(_, let pattern):
                     problems += Self.regexProblems(at: label, pattern: pattern, needsGroup: true)
-                case .glob(_, let contains?, _):
-                    problems += Self.regexProblems(at: label, pattern: contains, needsGroup: false)
+                case .glob(_, let contains, let exists, let stem):
+                    if let contains {
+                        problems += Self.regexProblems(at: label, pattern: contains, needsGroup: false)
+                    }
+                    if exists == true && stem == true {
+                        problems.append("\(label): exists and stem cannot both be true")
+                    }
                 default:
                     break
                 }
@@ -121,15 +128,42 @@ public struct Validator: Sendable {
         }
 
         let scaffold = directory.appending(path: "scaffold")
-        let readme = scaffold.appending(path: "README.md")
-        if let text = try? String(contentsOf: readme, encoding: .utf8) {
-            if !Self.hasMarkers(text) {
+        if manifest.base {
+            // The root README.md, with the project-wide section.
+            let readme = scaffold.appending(path: "README.md")
+            if let text = try? String(contentsOf: readme, encoding: .utf8) {
+                if !Self.hasMarkers(text) {
+                    problems.append(
+                        "\(relative(readme)): needs \(Self.beginMarker) and then \(Self.endMarker), one time each"
+                    )
+                }
+            } else {
+                problems.append("\(component): scaffold/README.md is missing")
+            }
+        } else if let subdirectory = manifest.directory {
+            // The component's own README.md. The project-wide section is in the
+            // base component's root README.md only.
+            let readme = scaffold.appending(path: "\(subdirectory)/README.md")
+            if let text = try? String(contentsOf: readme, encoding: .utf8) {
+                if text.contains(Self.beginMarker) || text.contains(Self.endMarker) {
+                    problems.append(
+                        "\(relative(readme)): has the how-this-is-built markers, which only the base component's README.md has"
+                    )
+                }
+            } else {
+                problems.append("\(component): scaffold/\(subdirectory)/README.md is missing")
+            }
+        }
+        if !manifest.base {
+            let workflows = ".github/workflows/\(manifest.name)-"
+            let inside = manifest.directory.map { "\($0)/" }
+            for path in Self.scaffoldPaths(in: scaffold) {
+                if path.hasPrefix(workflows) || inside.map(path.hasPrefix) == true { continue }
+                let allowed = inside.map { "under \($0) or " } ?? ""
                 problems.append(
-                    "\(relative(readme)): needs \(Self.beginMarker) and then \(Self.endMarker), one time each"
+                    "\(component)/scaffold/\(path): must be \(allowed)a workflow named \(workflows)*, so that no other component has it"
                 )
             }
-        } else {
-            problems.append("\(component): scaffold/README.md is missing")
         }
 
         let allowed = Placeholders.builtin.union(manifest.inputs.map { "inputs.\($0.name)" })
@@ -154,6 +188,9 @@ public struct Validator: Sendable {
                 sources.append(("\(`where`): step \(step.id) fix", human.text))
             }
         }
+        if let blurb = manifest.blurb {
+            sources.append(("\(`where`): blurb", blurb))
+        }
         for (label, text) in sources {
             for name in Placeholders.names(in: text).subtracting(allowed).sorted() {
                 problems.append("\(label): unknown placeholder {{\(name)}}")
@@ -173,6 +210,54 @@ public struct Validator: Sendable {
         }
 
         return (problems, manifest)
+    }
+
+    /// What two components' layouts would make collide in a project: a second
+    /// base component, two components in one directory, and a scaffold path
+    /// that two components have.
+    func layoutProblems(_ manifests: [(name: String, manifest: Manifest)]) -> [String] {
+        var problems: [String] = []
+        let bases = manifests.filter(\.manifest.base).map(\.name)
+        if bases.count > 1 {
+            problems.append("components/: \(bases.joined(separator: ", ")) are base components; there can be one")
+        }
+        var directories: [String: String] = [:]
+        for (name, manifest) in manifests {
+            guard let directory = manifest.directory else { continue }
+            if let other = directories[directory] {
+                problems.append("components/\(name)/component.toml: directory '\(directory)' is also \(other)'s")
+            } else {
+                directories[directory] = name
+            }
+        }
+        var owners: [String: String] = [:]
+        for (name, _) in manifests {
+            let scaffold = root.appending(path: "components/\(name)/scaffold")
+            for path in Self.scaffoldPaths(in: scaffold) {
+                if let other = owners[path] {
+                    problems.append("components/\(name)/scaffold/\(path): \(other)'s scaffold has it too")
+                } else {
+                    owners[path] = name
+                }
+                if let first = path.split(separator: "/").first.map(String.init), path.contains("/"),
+                   let owner = directories[first], owner != name {
+                    problems.append("components/\(name)/scaffold/\(path): is in \(owner)'s directory")
+                }
+            }
+        }
+        return problems
+    }
+
+    /// The paths of the files in a scaffold, relative to it, sorted.
+    public static func scaffoldPaths(in scaffold: URL) -> [String] {
+        guard let enumerator = FileManager.default.enumerator(atPath: scaffold.path) else { return [] }
+        var paths: [String] = []
+        while let path = enumerator.nextObject() as? String {
+            if enumerator.fileAttributes?[.type] as? FileAttributeType == .typeRegular {
+                paths.append(path)
+            }
+        }
+        return paths.sorted()
     }
 
     /// The scaffold's README has the generated section's markers, one time each

@@ -11,7 +11,20 @@ import TOMLKit
 public struct Manifest: Codable, Equatable, Sendable {
     public var name: String
     public var description: String
-    public var detect: Detect
+    /// Whether every project gets the component, with the others. A base
+    /// component has no `detect` rules and no `directory`: its files, such as
+    /// the root Makefile and README.md, are at the repository root.
+    public var base: Bool
+    /// The subdirectory of the project that the component's files are in, such
+    /// as `server`. Its `detect` and `infer` rules read files there, and its
+    /// steps run there. `nil` for a component whose files are at the root.
+    public var directory: String?
+    /// A summary of the component's part of the project, which bootstrap
+    /// writes in the root README.md with a link to the README.md in
+    /// `directory`.
+    public var blurb: String?
+    /// `nil` only for a base component.
+    public var detect: Detect?
     public var inputs: [Input]
     public var secrets: [Secret]
     public var steps: [Step]
@@ -19,15 +32,18 @@ public struct Manifest: Codable, Equatable, Sendable {
     public var docs: [Doc]
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case name, description, detect, inputs, secrets, steps, shared, docs
+        case name, description, base, directory, blurb, detect, inputs, secrets, steps, shared, docs
     }
 
     public init(
-        name: String, description: String, detect: Detect, inputs: [Input], secrets: [Secret],
-        steps: [Step], shared: [Shared], docs: [Doc]
+        name: String, description: String, base: Bool = false, directory: String? = nil, blurb: String? = nil,
+        detect: Detect?, inputs: [Input], secrets: [Secret], steps: [Step], shared: [Shared], docs: [Doc]
     ) {
         self.name = name
         self.description = description
+        self.base = base
+        self.directory = directory
+        self.blurb = blurb
         self.detect = detect
         self.inputs = inputs
         self.secrets = secrets
@@ -41,7 +57,18 @@ public struct Manifest: Codable, Equatable, Sendable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         name = try container.text(.name, .slug)
         description = try container.text(.description)
-        detect = try container.decode(Detect.self, forKey: .detect)
+        base = try container.decodeIfPresent(Bool.self, forKey: .base) ?? false
+        directory = try container.textIfPresent(.directory, .slug)
+        blurb = try container.textIfPresent(.blurb)
+        detect = try container.decodeIfPresent(Detect.self, forKey: .detect)
+        if base {
+            if detect != nil { throw container.corrupted(at: .detect, "a base component has no detect rules") }
+            if directory != nil { throw container.corrupted(at: .directory, "a base component's files are at the root") }
+        } else if detect == nil {
+            throw DecodingError.keyNotFound(CodingKeys.detect, DecodingError.Context(
+                codingPath: decoder.codingPath, debugDescription: "'detect' is required"
+            ))
+        }
         inputs = try container.decode([Input].self, forKey: .inputs)
         secrets = try container.decode([Secret].self, forKey: .secrets)
         steps = try container.decode([Step].self, forKey: .steps)
@@ -215,9 +242,10 @@ public struct InferRule: Codable, Equatable, Sendable {
         /// joined with `separator`, a comma by default.
         case yaml(file: String, key: String, separator: String?)
         /// The path of the first file that matches the glob and, when
-        /// `contains` is set, whose contents match it; or `true` and `false`
-        /// when `exists` is set.
-        case glob(glob: String, contains: String?, exists: Bool?)
+        /// `contains` is set, whose contents match it; its name without the
+        /// directory and the extension when `stem` is set; or `true` and
+        /// `false` when `exists` is set.
+        case glob(glob: String, contains: String?, exists: Bool?, stem: Bool?)
         /// The first capture group of a regular expression in the first file
         /// that matches the glob.
         case regex(glob: String, pattern: String)
@@ -247,7 +275,7 @@ public struct InferRule: Codable, Equatable, Sendable {
             case .fastlaneConfig: ["file", "key"]
             case .toml: ["file", "key"]
             case .yaml: ["file", "key", "separator"]
-            case .glob: ["glob", "contains", "exists"]
+            case .glob: ["glob", "contains", "exists", "stem"]
             case .regex: ["glob", "pattern"]
             }
         }
@@ -255,7 +283,7 @@ public struct InferRule: Codable, Equatable, Sendable {
 
     /// Every key a rule can have, over all the sources.
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case from, map, key, file, separator, glob, contains, exists, pattern
+        case from, map, key, file, separator, glob, contains, exists, stem, pattern
     }
 
     /// The keys every rule can have.
@@ -285,7 +313,8 @@ public struct InferRule: Codable, Equatable, Sendable {
         case .glob:
             from = .glob(
                 glob: try container.text(.glob), contains: try container.textIfPresent(.contains),
-                exists: try container.decodeIfPresent(Bool.self, forKey: .exists)
+                exists: try container.decodeIfPresent(Bool.self, forKey: .exists),
+                stem: try container.decodeIfPresent(Bool.self, forKey: .stem)
             )
         case .regex:
             from = .regex(glob: try container.text(.glob), pattern: try container.text(.pattern))
@@ -306,10 +335,11 @@ public struct InferRule: Codable, Equatable, Sendable {
             try container.encode(file, forKey: .file)
             try container.encode(key, forKey: .key)
             try container.encodeIfPresent(separator, forKey: .separator)
-        case .glob(let glob, let contains, let exists):
+        case .glob(let glob, let contains, let exists, let stem):
             try container.encode(glob, forKey: .glob)
             try container.encodeIfPresent(contains, forKey: .contains)
             try container.encodeIfPresent(exists, forKey: .exists)
+            try container.encodeIfPresent(stem, forKey: .stem)
         case .regex(let glob, let pattern):
             try container.encode(glob, forKey: .glob)
             try container.encode(pattern, forKey: .pattern)

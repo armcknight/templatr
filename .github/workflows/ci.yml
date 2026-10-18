@@ -27,6 +27,17 @@ jobs:
       - name: Validate the manifests
         run: swift run validate-components
 
+  # The linear-workspace component's script is JavaScript for Automation, and
+  # its tests run it against a fake Linear API: they run only on macOS, as
+  # superlinear does.
+  test-macos:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Test
+        run: swift test
+
   links:
     runs-on: ubuntu-latest
     steps:

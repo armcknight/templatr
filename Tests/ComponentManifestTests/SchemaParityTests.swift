@@ -99,6 +99,7 @@ struct SchemaParityTests {
             try #require(object["pattern"] as? String, "no pattern in \(object)")
         }
         #expect(try pattern(definition("slug")) == Format.slug.pattern)
+        #expect(try property("directory", of: schema)["$ref"] as? String == "#/$defs/slug")
         #expect(try pattern(definition("identifier")) == Format.identifier.pattern)
         #expect(try pattern(property("name", of: definition("secret"))) == Format.constant.pattern)
         #expect(try pattern(property("source", of: definition("secret"))) == Format.secretSource.pattern)
@@ -124,7 +125,10 @@ struct SchemaParityTests {
 
     @Test func everyRequiredKeyIsRequiredInSwift() throws {
         func required(_ object: [String: Any]) -> Set<String> { Set(object["required"] as? [String] ?? []) }
-        #expect(required(schema) == keys(Manifest.CodingKeys.self))
+        // detect is required unless base is true; base, directory and blurb
+        // are optional.
+        #expect(required(schema) == keys(Manifest.CodingKeys.self).subtracting(["base", "directory", "blurb", "detect"]))
+        #expect(required(try #require(schema["else"] as? [String: Any])) == ["detect"])
         #expect(try required(definition("detectRule")) == ["glob"])
         #expect(try required(definition("input")) == ["name", "description", "example"])
         #expect(try required(definition("human")) == ["text"])
