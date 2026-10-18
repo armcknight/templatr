@@ -1,0 +1,24 @@
+name: Deploy
+
+# A deploy is the owner's action. With deploy-on: manual, only a run that the
+# owner starts from the Actions tab deploys. With deploy-on: merge, each push to
+# the default branch deploys too, and a push there is a merge, which only the
+# owner does. Agents never start a deploy.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [{{inputs.default_branch}}]
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    uses: armcknight/workflows/.github/workflows/fly-deploy.yml@4
+    with:
+      app: {{inputs.fly_app}}
+      health-check-path: {{inputs.health_check_path}}
+      deploy-on: manual
+    secrets:
+      FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

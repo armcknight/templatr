@@ -144,6 +144,7 @@ public struct Validator: Sendable {
             }
         }
         for secret in manifest.secrets {
+            sources.append(("\(`where`): secret \(secret.name) source", secret.source.rawValue))
             if let human = secret.human {
                 sources.append(("\(`where`): secret \(secret.name)", human.text))
             }

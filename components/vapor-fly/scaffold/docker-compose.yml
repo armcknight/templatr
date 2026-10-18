@@ -1,0 +1,15 @@
+# A local run of the image that Fly runs, for Linux parity: `make server
+# serve-docker`, and `make server serve-docker-down` to stop it. Add the
+# services the server needs, such as a database, and its environment here.
+# The values here are for local use only; the deployed values are Fly secrets.
+
+services:
+  app:
+    build:
+      context: .
+      args:
+        GIT_SHA: local
+    environment:
+      LOG_LEVEL: debug
+    ports:
+      - "{{inputs.internal_port}}:{{inputs.internal_port}}"

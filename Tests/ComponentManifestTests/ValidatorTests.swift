@@ -80,6 +80,16 @@ struct ValidatorTests {
         expectProblem("step domain fix: unknown placeholder {{inputs.domain}}")
     }
 
+    @Test func placeholderInSecretSource() throws {
+        try repository.editManifest(#"source = "keychain:demo.fly-token""#, #"source = "keychain:demo.{{inputs.app}}.fly-token""#)
+        #expect(repository.problems() == [])
+    }
+
+    @Test func unknownPlaceholderInSecretSource() throws {
+        try repository.editManifest(#"source = "keychain:demo.fly-token""#, #"source = "keychain:demo.{{inputs.name}}.fly-token""#)
+        expectProblem("secret FLY_API_TOKEN source: unknown placeholder {{inputs.name}}")
+    }
+
     @Test func githubExpressionsAreNotPlaceholders() {
         #expect(Placeholders.names(in: "${{ github.sha }} {{templates.tag}}") == ["templates.tag"])
     }
