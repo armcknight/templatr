@@ -1,0 +1,3 @@
+# Copy to .envrc, which git ignores, and give the key of the templatr Linear
+# workspace: linctl and the linear-workspace component's steps read it.
+export LINCTL_API_KEY=

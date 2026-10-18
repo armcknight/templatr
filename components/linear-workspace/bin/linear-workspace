@@ -1,0 +1,395 @@
+#!/usr/bin/osascript -l JavaScript
+// Usage: linear-workspace check|fix <step> [<team keys>]
+//
+// Checks, or sets up, what superlinear needs in a Linear workspace, for the
+// steps of the linear-workspace component. `check` exits 0 when the step is
+// done, and prints what is missing to standard error otherwise. `fix` sets up
+// what is missing and changes nothing that is already done, so it is safe to
+// run again.
+//
+// <team keys> are the keys of the teams to check, separated by spaces, such as
+// "STA TEM". Empty or not given, every team in the workspace is checked.
+//
+// The key is LINEAR_API_KEY, else LINCTL_API_KEY, from the environment. It is
+// given to curl in a header file that only this user can read, never on a
+// command line, and it is never printed. LINEAR_API_URL replaces the API's
+// URL, for tests.
+//
+// It is JavaScript for Automation, which every Mac has, so that reading the
+// API's JSON needs no other program.
+
+ObjC.import('Foundation')
+ObjC.import('stdlib')
+
+const API_URL = 'https://api.linear.app/graphql'
+
+const IN_REVIEW = 'In Review'
+const IN_PROGRESS = 'In Progress'
+const LABELS = ['Needs human', 'superlinear', 'superlinear: proposed', 'superlinear: spec', 'superlinear: hands off']
+const PROPOSALS_VIEW = 'superlinear proposals'
+const PROPOSALS_FILTER = {
+  labels: { some: { name: { eq: 'superlinear: proposed' } } },
+  state: { type: { nin: ['completed', 'canceled'] } },
+}
+const ONBOARDING_TITLES = ['Get familiar with Linear', 'Set up your teams', 'Connect your tools', 'Import your data']
+
+class Failure extends Error {}
+
+function run(argv) {
+  const [action, step, teamKeys] = argv
+  const steps = {
+    'linear-key': { check: checkKey },
+    'in-review-state': { check: checkInReview, fix: fixInReview },
+    'todo-state': { check: checkTodo },
+    triage: { check: checkTriage, fix: fixTriage },
+    labels: { check: checkLabels, fix: fixLabels },
+    'proposals-view': { check: checkProposalsView, fix: fixProposalsView },
+    'onboarding-issues': { check: checkOnboarding, fix: fixOnboarding },
+    initiatives: { check: checkInitiatives },
+  }
+  const handler = steps[step] && steps[step][action]
+  if (!handler) {
+    printError('Usage: linear-workspace check|fix <step> [<team keys>]\nSteps: ' + Object.keys(steps).join(', '))
+    $.exit(64)
+  }
+  const keys = (teamKeys || '').split(/\s+/).filter((key) => key.length > 0)
+  try {
+    const problems = handler(keys) || []
+    if (problems.length > 0) {
+      printError(problems.join('\n'))
+      $.exit(1)
+    }
+  } catch (error) {
+    printError(error instanceof Failure ? error.message : String(error))
+    $.exit(1)
+  }
+  $.exit(0)
+}
+
+// MARK: - Steps
+
+function checkKey(keys) {
+  const data = graphql(`query Viewer {
+    viewer { id name admin teamMemberships(first: 250) { nodes { owner team { key } } } }
+  }`)
+  const viewer = data.viewer
+  if (viewer.admin) return []
+  const owned = new Set(viewer.teamMemberships.nodes.filter((m) => m.owner).map((m) => m.team.key))
+  return teams(keys)
+    .filter((team) => !owned.has(team.key))
+    .map((team) => `${viewer.name} is not an admin of the team ${team.key}, or of the workspace.`)
+}
+
+function inReviewProblem(team) {
+  const review = team.states.find((state) => state.name === IN_REVIEW)
+  if (!review) return `The team ${team.key} has no "${IN_REVIEW}" state.`
+  if (review.type !== 'started') {
+    return `The team ${team.key}'s "${IN_REVIEW}" state is of type ${review.type}, not started.`
+  }
+  const progress = team.states.find((state) => state.name === IN_PROGRESS && state.type === 'started')
+  if (progress && review.position <= progress.position) {
+    return `The team ${team.key}'s "${IN_REVIEW}" state is not after "${IN_PROGRESS}".`
+  }
+  return null
+}
+
+function checkInReview(keys) {
+  return teams(keys).map(inReviewProblem).filter((problem) => problem)
+}
+
+// Each team's "In Review" state goes after its last started state and, when
+// their positions allow it, before its first completed one. Linear shows the
+// started states before the completed ones whatever their positions.
+function fixInReview(keys) {
+  const problems = []
+  for (const team of teams(keys)) {
+    if (!inReviewProblem(team)) continue
+    const review = team.states.find((state) => state.name === IN_REVIEW)
+    if (review && review.type !== 'started') {
+      problems.push(inReviewProblem(team) + ' Linear cannot change the type of a state: rename it or remove it.')
+      continue
+    }
+    const started = team.states.filter((state) => state.type === 'started' && state !== review).map((s) => s.position)
+    const completed = team.states.filter((state) => state.type === 'completed').map((s) => s.position)
+    const last = started.length > 0 ? Math.max(...started) : 0
+    const first = completed.length > 0 ? Math.min(...completed) : null
+    const position = first !== null && first > last ? (last + first) / 2 : last + 1
+    if (review) {
+      graphql(`mutation UpdateState($id: String!, $position: Float!) {
+        workflowStateUpdate(id: $id, input: { position: $position }) { success }
+      }`, { id: review.id, position })
+    } else {
+      graphql(`mutation CreateState($teamId: String!, $position: Float!) {
+        workflowStateCreate(input: { teamId: $teamId, name: "${IN_REVIEW}", type: "started", color: "#4cb782", position: $position }) { success }
+      }`, { teamId: team.id, position })
+    }
+  }
+  return problems
+}
+
+function checkTodo(keys) {
+  return teams(keys)
+    .filter((team) => !team.states.some((state) => state.type === 'unstarted'))
+    .map((team) => `The team ${team.key} has no state of type unstarted, such as Todo.`)
+}
+
+function checkTriage(keys) {
+  return teams(keys).filter((team) => !team.triageEnabled).map((team) => `Triage is off in the team ${team.key}.`)
+}
+
+function fixTriage(keys) {
+  for (const team of teams(keys).filter((team) => !team.triageEnabled)) {
+    graphql(`mutation EnableTriage($id: String!) {
+      teamUpdate(id: $id, input: { triageEnabled: true }) { success }
+    }`, { id: team.id })
+  }
+}
+
+// The labels each team does not have, as a team label or a workspace label.
+// Linear compares label names without case.
+function missingLabels(keys) {
+  const workspace = all('issueLabels', 'name', 'filter: { team: { null: true } }').map((label) => label.name.toLowerCase())
+  return teams(keys).map((team) => {
+    const names = new Set(workspace.concat(team.labels.map((label) => label.toLowerCase())))
+    return { team, missing: LABELS.filter((label) => !names.has(label.toLowerCase())) }
+  }).filter((entry) => entry.missing.length > 0)
+}
+
+function checkLabels(keys) {
+  return missingLabels(keys).map(({ team, missing }) => `The team ${team.key} has no label ${missing.map((l) => `"${l}"`).join(', ')}.`)
+}
+
+function fixLabels(keys) {
+  for (const { team, missing } of missingLabels(keys)) {
+    for (const name of missing) {
+      graphql(`mutation CreateLabel($teamId: String!, $name: String!) {
+        issueLabelCreate(input: { teamId: $teamId, name: $name }) { success }
+      }`, { teamId: team.id, name })
+    }
+  }
+}
+
+// The proposals view is the workspace's, not a team's: the team keys do not
+// change it.
+function proposalsView() {
+  const view = all('customViews', 'id name filterData').find((view) => view.name === PROPOSALS_VIEW)
+  const favorites = new Set()
+  for (const favorite of all('favorites', 'customView { id } children(first: 50) { nodes { customView { id } } }', null, 100)) {
+    for (const node of [favorite].concat(favorite.children ? favorite.children.nodes : [])) {
+      if (node.customView) favorites.add(node.customView.id)
+    }
+  }
+  return {
+    view,
+    filtered: view ? sameFilter(view.filterData, PROPOSALS_FILTER) : false,
+    favorite: view ? favorites.has(view.id) : false,
+  }
+}
+
+function checkProposalsView() {
+  const { view, filtered, favorite } = proposalsView()
+  if (!view) return [`There is no custom view named "${PROPOSALS_VIEW}".`]
+  const problems = []
+  if (!filtered) problems.push(`The view "${PROPOSALS_VIEW}" does not show only the open issues labeled "superlinear: proposed".`)
+  if (!favorite) problems.push(`The view "${PROPOSALS_VIEW}" is not in the key's user's favorites.`)
+  return problems
+}
+
+function fixProposalsView() {
+  let { view, filtered, favorite } = proposalsView()
+  if (!view) {
+    view = graphql(`mutation CreateView($filterData: IssueFilter!) {
+      customViewCreate(input: { name: "${PROPOSALS_VIEW}", filterData: $filterData }) { customView { id } }
+    }`, { filterData: PROPOSALS_FILTER }).customViewCreate.customView
+  } else if (!filtered) {
+    graphql(`mutation UpdateView($id: String!, $filterData: IssueFilter!) {
+      customViewUpdate(id: $id, input: { filterData: $filterData }) { success }
+    }`, { id: view.id, filterData: PROPOSALS_FILTER })
+  }
+  if (!favorite) {
+    graphql(`mutation FavoriteView($customViewId: String!) {
+      favoriteCreate(input: { customViewId: $customViewId }) { success }
+    }`, { customViewId: view.id })
+  }
+}
+
+// The open issues, in the teams checked, whose titles are exactly those of
+// the issues Linear makes in a new workspace.
+function openOnboardingIssues(keys) {
+  const checked = new Set(teams(keys).map((team) => team.key))
+  return graphql(`query OnboardingIssues($titles: [String!]!) {
+    issues(first: 250, filter: { title: { in: $titles }, state: { type: { nin: ["completed", "canceled"] } } }) {
+      nodes { id identifier title team { key } }
+    }
+  }`, { titles: ONBOARDING_TITLES }).issues.nodes
+    .filter((issue) => ONBOARDING_TITLES.includes(issue.title) && checked.has(issue.team.key))
+}
+
+function checkOnboarding(keys) {
+  return openOnboardingIssues(keys).map((issue) => `${issue.identifier}, "${issue.title}", is open.`)
+}
+
+function fixOnboarding(keys) {
+  const issues = openOnboardingIssues(keys)
+  const byKey = new Map(teams(keys).map((team) => [team.key, team]))
+  const problems = []
+  for (const issue of issues) {
+    const canceled = byKey.get(issue.team.key).states
+      .filter((state) => state.type === 'canceled')
+      .sort((a, b) => a.position - b.position)[0]
+    if (!canceled) {
+      problems.push(`The team ${issue.team.key} has no canceled state to move ${issue.identifier} to.`)
+      continue
+    }
+    graphql(`mutation CancelIssue($id: String!, $stateId: String!) {
+      issueUpdate(id: $id, input: { stateId: $stateId }) { success }
+    }`, { id: issue.id, stateId: canceled.id })
+  }
+  return problems
+}
+
+// The API cannot tell whether initiatives are on, but there are initiatives
+// only when they are.
+function checkInitiatives() {
+  const data = graphql(`query Initiatives { initiatives(first: 1) { nodes { id } } }`)
+  return data.initiatives.nodes.length > 0 ? [] : ['The workspace has no initiative.']
+}
+
+// MARK: - The API
+
+let teamsCache = null
+
+// The teams with these keys, or every team when there are none. Their states
+// and labels are read as lists of their own: Linear refuses a query with
+// lists in lists, as too complex.
+function teams(keys) {
+  if (!teamsCache) {
+    const states = all('workflowStates', 'id name type position team { id }')
+    const labels = all('issueLabels', 'name team { id }')
+    teamsCache = all('teams', 'id key triageEnabled').map((team) => ({
+      id: team.id,
+      key: team.key,
+      triageEnabled: team.triageEnabled,
+      states: states.filter((state) => state.team && state.team.id === team.id),
+      labels: labels.filter((label) => label.team && label.team.id === team.id).map((label) => label.name),
+    }))
+  }
+  if (keys.length === 0) return teamsCache
+  const unknown = keys.filter((key) => !teamsCache.some((team) => team.key === key))
+  if (unknown.length > 0) throw new Failure(`The key cannot see the team ${unknown.join(', ')}.`)
+  return teamsCache.filter((team) => keys.includes(team.key))
+}
+
+// Every node of a list at the root of the API, page by page. `filter` is an
+// argument such as `filter: { team: { null: true } }`. Pages are smaller than
+// 250 nodes when `fields` has a list of its own.
+function all(list, fields, filter, pageSize) {
+  const nodes = []
+  let after = null
+  do {
+    const page = graphql(`query List($after: String) {
+      ${list}(first: ${pageSize || 250}, after: $after${filter ? ', ' + filter : ''}) { nodes { ${fields} } pageInfo { hasNextPage endCursor } }
+    }`, { after })[list]
+    nodes.push(...page.nodes)
+    after = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null
+  } while (after)
+  return nodes
+}
+
+function environment(name) {
+  const value = $.NSProcessInfo.processInfo.environment.objectForKey(name)
+  return value.isNil() ? '' : value.js
+}
+
+// Posts a GraphQL request with curl and returns its data, or throws a Failure
+// with the API's errors.
+function graphql(query, variables) {
+  const key = environment('LINEAR_API_KEY') || environment('LINCTL_API_KEY')
+  if (!key) throw new Failure('Neither LINEAR_API_KEY nor LINCTL_API_KEY is set.')
+  const url = environment('LINEAR_API_URL') || API_URL
+
+  const manager = $.NSFileManager.defaultManager
+  const directory = $.NSTemporaryDirectory().js + 'linear-workspace-' + $.NSUUID.UUID.UUIDString.js
+  manager.createDirectoryAtPathWithIntermediateDirectoriesAttributesError(
+    directory, false, $({ NSFilePosixPermissions: 0o700 }), null)
+  const header = directory + '/header'
+  try {
+    manager.createFileAtPathContentsAttributes(
+      header, data(`Authorization: ${key}\n`), $({ NSFilePosixPermissions: 0o600 }))
+    const result = execute(
+      ['curl', '--silent', '--show-error', '--request', 'POST', '--header', '@' + header,
+        '--header', 'Content-Type: application/json', '--header', 'Expect:', '--data-binary', '@-', url],
+      data(JSON.stringify({ query, variables: variables || {} })))
+    if (result.status !== 0) throw new Failure(`curl could not reach ${url}: ${result.error.trim()}`)
+    let response
+    try {
+      response = JSON.parse(result.output)
+    } catch (error) {
+      throw new Failure(`The Linear API answered with no JSON: ${result.output.slice(0, 200)}`)
+    }
+    if (response.errors && response.errors.length > 0) {
+      throw new Failure('The Linear API answered: ' + response.errors.map((error) => error.message).join('; '))
+    }
+    return response.data
+  } finally {
+    manager.removeItemAtPathError(directory, null)
+  }
+}
+
+function execute(arguments_, input) {
+  const task = $.NSTask.alloc.init
+  task.executableURL = $.NSURL.fileURLWithPath('/usr/bin/env')
+  task.arguments = $(arguments_)
+  const [standardInput, output, error] = [$.NSPipe.pipe, $.NSPipe.pipe, $.NSPipe.pipe]
+  task.standardInput = standardInput
+  task.standardOutput = output
+  task.standardError = error
+  if (!task.launchAndReturnError(null)) throw new Failure(`Could not run ${arguments_[0]}.`)
+  standardInput.fileHandleForWriting.writeData(input)
+  standardInput.fileHandleForWriting.closeFile
+  const outputData = output.fileHandleForReading.readDataToEndOfFile
+  const errorData = error.fileHandleForReading.readDataToEndOfFile
+  task.waitUntilExit
+  return { status: task.terminationStatus, output: text(outputData), error: text(errorData) }
+}
+
+// MARK: - Filters
+
+// Whether two issue filters are the same, with the clauses of a top-level
+// "and" in any order, and the values of "in" and "nin" in any order.
+function sameFilter(a, b) {
+  if (!a || !b) return false
+  const left = clauses(a).sort()
+  const right = clauses(b).sort()
+  return left.length === right.length && left.every((clause, index) => clause === right[index])
+}
+
+function clauses(filter) {
+  if (Object.keys(filter).length === 1 && Array.isArray(filter.and)) return filter.and.flatMap(clauses)
+  return Object.keys(filter).map((key) => canonical({ [key]: filter[key] }))
+}
+
+function canonical(value, key) {
+  if (Array.isArray(value)) {
+    const items = value.map((item) => canonical(item))
+    return '[' + (key === 'in' || key === 'nin' ? items.sort() : items).join(',') + ']'
+  }
+  if (value && typeof value === 'object') {
+    return '{' + Object.keys(value).sort().map((k) => JSON.stringify(k) + ':' + canonical(value[k], k)).join(',') + '}'
+  }
+  return JSON.stringify(value)
+}
+
+// MARK: - Text
+
+function data(string) {
+  return $(string).dataUsingEncoding($.NSUTF8StringEncoding)
+}
+
+function text(data) {
+  return $.NSString.alloc.initWithDataEncoding(data, $.NSUTF8StringEncoding).js || ''
+}
+
+function printError(message) {
+  $.NSFileHandle.fileHandleWithStandardError.writeData(data(message + '\n'))
+}

@@ -1,0 +1,111 @@
+name = "linear-workspace"
+description = "A Linear workspace that superlinear works from: each team has an In Review state, a Todo state, Triage and superlinear's labels, the owner has a view of the pending proposals, and no onboarding issue is open."
+
+# The key is not a secret of the manifest: the steps read LINEAR_API_KEY, else
+# LINCTL_API_KEY, from their environment, which the project's .envrc or
+# superlinear's config gives.
+secrets = []
+
+# An .envrc that sets a Linear API key, which the steps use. A project without
+# one can add linear-workspace to .templatr.toml by hand.
+[detect]
+any = [
+  { glob = ".envrc", contains = "\\b(LINEAR|LINCTL)_API_KEY=" },
+  { glob = ".envrc.example", contains = "\\b(LINEAR|LINCTL)_API_KEY=" },
+]
+
+[[inputs]]
+name = "linear_teams"
+description = "The keys of the teams to check, separated by spaces. Empty, every team in the workspace."
+example = "STA TEM"
+default = ""
+
+[[inputs]]
+name = "linear_initiatives"
+description = "Whether the project's spec should be under an initiative, which needs initiatives to be on in the workspace: true or false."
+example = "true"
+default = "false"
+
+[[steps]]
+id = "linear-key"
+description = "LINEAR_API_KEY, else LINCTL_API_KEY, is set, Linear accepts it, and its user is an admin of each team."
+check = "{{templates}}/components/linear-workspace/bin/linear-workspace check linear-key {{inputs.linear_teams}}"
+fix = { human = { text = "As the owner of the Linear workspace, make a personal API key in Linear's settings (Security & access), and export it as LINCTL_API_KEY in the project's .envrc. Its user must be an admin of the workspace or of each team." } }
+
+[[steps]]
+id = "envrc-ignored"
+description = "An .envrc that holds a Linear API key is ignored by git."
+check = "! grep -qE '(LINEAR|LINCTL)_API_KEY' .envrc 2>/dev/null || git check-ignore -q .envrc"
+fix = "grep -qxF .envrc .gitignore 2>/dev/null || { if [ -s .gitignore ] && [ -n \"$(tail -c 1 .gitignore)\" ]; then echo; fi; echo .envrc; } >> .gitignore"
+
+[[steps]]
+id = "in-review-state"
+description = "Each team has an In Review state of type started, after In Progress and before Done, which superlinear sets after it opens a pull request."
+check = "{{templates}}/components/linear-workspace/bin/linear-workspace check in-review-state {{inputs.linear_teams}}"
+fix = "{{templates}}/components/linear-workspace/bin/linear-workspace fix in-review-state {{inputs.linear_teams}}"
+
+[[steps]]
+id = "todo-state"
+description = "Each team has at least one state of type unstarted, such as Todo, which superlinear's ready mode starts issues from."
+check = "{{templates}}/components/linear-workspace/bin/linear-workspace check todo-state {{inputs.linear_teams}}"
+fix = { human = { text = "In each team's settings in Linear (Issue statuses & automations), add a status of the Todo type." } }
+
+[[steps]]
+id = "triage"
+description = "Triage is on in each team: superlinear puts its proposals there."
+check = "{{templates}}/components/linear-workspace/bin/linear-workspace check triage {{inputs.linear_teams}}"
+fix = "{{templates}}/components/linear-workspace/bin/linear-workspace fix triage {{inputs.linear_teams}}"
+
+[[steps]]
+id = "labels"
+description = "Each team has the labels superlinear uses, as team or workspace labels: Needs human, superlinear, superlinear: proposed, superlinear: spec and superlinear: hands off."
+check = "{{templates}}/components/linear-workspace/bin/linear-workspace check labels {{inputs.linear_teams}}"
+fix = "{{templates}}/components/linear-workspace/bin/linear-workspace fix labels {{inputs.linear_teams}}"
+
+[[steps]]
+id = "proposals-view"
+description = "A custom view named superlinear proposals shows the open issues labeled superlinear: proposed, and is in the key's user's favorites. superlinear's comments are written with the owner's own key, so they do not reach the owner's inbox: this view is where pending proposals are found."
+check = "{{templates}}/components/linear-workspace/bin/linear-workspace check proposals-view"
+fix = "{{templates}}/components/linear-workspace/bin/linear-workspace fix proposals-view"
+
+[[steps]]
+id = "onboarding-issues"
+description = "None of the issues Linear makes in a new workspace (Get familiar with Linear, Set up your teams, Connect your tools, Import your data) is open: in ready mode, superlinear would start agents on them."
+check = "{{templates}}/components/linear-workspace/bin/linear-workspace check onboarding-issues {{inputs.linear_teams}}"
+fix = "{{templates}}/components/linear-workspace/bin/linear-workspace fix onboarding-issues {{inputs.linear_teams}}"
+
+[[steps]]
+id = "initiatives"
+description = "When the project's spec should be under an initiative (linear_initiatives is true), the workspace has initiatives."
+check = "[ {{inputs.linear_initiatives}} != true ] || {{templates}}/components/linear-workspace/bin/linear-workspace check initiatives"
+fix = { human = { text = "Turn on initiatives in the Linear workspace's settings (Initiatives), and make the project's initiative. The API cannot turn them on." } }
+
+[[shared]]
+kind = "script"
+path = "components/linear-workspace/bin/linear-workspace"
+version = "v1"
+description = "Checks, and sets up, a Linear workspace's teams' states, Triage and labels, the superlinear proposals view, the onboarding issues and the initiatives, with Linear's API and a key from the environment."
+
+[[docs]]
+title = "Components"
+anchor = "bootstrap.md#components"
+
+[[docs]]
+title = "bootstrap --check"
+anchor = "bootstrap.md#bootstrap-check"
+
+[[docs]]
+title = "Proposals"
+anchor = "planning.md#proposals"
+
+[[docs]]
+title = "The pull request"
+anchor = "lifecycle.md#pull-request"
+
+[[docs]]
+title = "A workspace's API key"
+anchor = "configuration.md#api-key"
+
+[[docs]]
+title = "A workspace's teams"
+anchor = "configuration.md#team-ids"

@@ -8,8 +8,9 @@ import FoundationNetworking
 /// what can be automated, and reports the rest. Running it again changes
 /// nothing that is already done.
 ///
-/// It knows nothing of Linear: callers such as superlinear's `bootstrap` turn
-/// its `Report` into issues.
+/// Only the linear-workspace component's steps use Linear, with a key from
+/// their environment: callers such as superlinear's `bootstrap` turn its
+/// `Report` into issues.
 public struct Bootstrapper: Sendable {
     public var templates: Templates
     public var services: Services
@@ -495,7 +496,14 @@ public struct Services: Sendable {
 
     /// `xcodebuild`, `security`, `op` and `gh`, and web requests for links.
     public static func system() -> Services {
-        let runner = ProcessRunner()
+        system(environment: [:])
+    }
+
+    /// The same, with `environment` added to the environment of every command,
+    /// the steps' included: superlinear's daemon, which has no `.envrc`, gives
+    /// each workspace's `LINEAR_API_KEY` this way.
+    public static func system(environment: [String: String]) -> Services {
+        let runner = ProcessRunner(environment: environment)
         return Services(
             runner: runner, buildSettings: XcodeBuildSettings(runner: runner), keychain: SystemKeychain(runner: runner),
             passwordManager: OnePasswordCLI(runner: runner), secrets: GitHubCLI(runner: runner), links: HTTPLinkChecker(),
