@@ -1,0 +1,59 @@
+#!/bin/bash
+# Usage: DATABASE_URL=… db-snapshot <label> <output.json>
+#
+# Writes the state of the database at DATABASE_URL as JSON, and prints it: the
+# public schema's tables with their columns and row counts, and the applied
+# migrations, both Fluent's (_fluent_migrations) and the Supabase CLI's
+# (supabase_migrations.schema_migrations). Compare two with db-snapshot-diff,
+# such as the local database and the remote one before a deploy.
+#
+# It only reads. It needs psql and jq.
+
+set -euo pipefail
+
+label="${1:?usage: db-snapshot <label> <output.json>}"
+output="${2:?usage: db-snapshot <label> <output.json>}"
+: "${DATABASE_URL:?DATABASE_URL must be the database to read}"
+
+mkdir -p "$(dirname "$output")"
+
+query() {
+  psql "$DATABASE_URL" -tAX -v ON_ERROR_STOP=1 -c "$1"
+}
+
+# Each table's exact row count, in one query.
+tables=$(query "
+  SELECT COALESCE(json_object_agg(t.table_name, json_build_object(
+    'rows', (xpath('/row/c/text()', query_to_xml(format('SELECT count(*) AS c FROM public.%I', t.table_name), false, true, '')))[1]::text::bigint,
+    'columns', (SELECT json_agg(c.column_name || ' ' || c.data_type ORDER BY c.ordinal_position)
+                FROM information_schema.columns c
+                WHERE c.table_schema = 'public' AND c.table_name = t.table_name)
+  ) ORDER BY t.table_name), '{}'::json)
+  FROM information_schema.tables t
+  WHERE t.table_schema = 'public' AND t.table_type = 'BASE TABLE'")
+
+# The applied migrations in a table, or [] when the database has no such table.
+migrations() {
+  if [ "$(query "SELECT to_regclass('$1') IS NOT NULL")" = t ]; then
+    query "SELECT COALESCE(json_agg($2 ORDER BY $2), '[]'::json) FROM $1"
+  else
+    echo '[]'
+  fi
+}
+
+fluent=$(migrations public._fluent_migrations name)
+cli=$(migrations supabase_migrations.schema_migrations version)
+
+jq -n \
+  --arg label "$label" \
+  --arg at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+  --arg sha "$(git rev-parse --short HEAD 2>/dev/null || echo unknown)" \
+  --argjson tables "$tables" \
+  --argjson fluent "$fluent" \
+  --argjson cli "$cli" \
+  '{
+     label: $label,
+     captured_at: $at,
+     git_sha: $sha,
+     db: { tables: $tables, migrations: { fluent: $fluent, cli: $cli } }
+   }' | tee "$output"

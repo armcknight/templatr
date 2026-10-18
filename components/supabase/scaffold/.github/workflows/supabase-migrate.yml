@@ -1,0 +1,87 @@
+name: Supabase migrate
+
+# Applies supabase/migrations to the Supabase project with `supabase db push`.
+# .github/workflows/vapor-fly-deploy.yml calls it in a job that the deploy job needs, so
+# a migration that fails stops the deploy:
+#
+#   jobs:
+#     migrate:
+#       uses: ./.github/workflows/supabase-migrate.yml
+#       with:
+#         project-ref: {{inputs.project_ref}}
+#         deploy-on: manual
+#       secrets:
+#         SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+#         SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+#     deploy:
+#       needs: migrate
+#       uses: armcknight/workflows/.github/workflows/fly-deploy.yml@4
+#       with:
+#         deploy-on: manual
+#         ...
+#
+# It runs on the same events as fly-deploy.yml, so keep the two deploy-on
+# values the same. Like fly-deploy.yml, it refuses a commit that is not the tip
+# of the default branch.
+
+on:
+  workflow_call:
+    inputs:
+      project-ref:
+        description: "The Supabase project's reference ID."
+        required: true
+        type: string
+      deploy-on:
+        description: "`manual`: migrate only on `workflow_dispatch`. `merge`: also on each push to the default branch. The same as the deploy's."
+        required: false
+        type: string
+        default: "manual"
+    secrets:
+      SUPABASE_ACCESS_TOKEN:
+        required: true
+      SUPABASE_DB_PASSWORD:
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    name: Migrate ${{ inputs.project-ref }}
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (inputs.deploy-on == 'merge' &&
+       github.event_name == 'push' &&
+       github.ref == format('refs/heads/{0}', github.event.repository.default_branch))
+    runs-on: ubuntu-latest
+    # One migration of a project at a time, and never cancelled once started.
+    concurrency:
+      group: supabase-migrate-${{ inputs.project-ref }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Refuse a commit that is not the tip of the default branch
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          set -euo pipefail
+          git fetch --depth=1 origin "$DEFAULT_BRANCH"
+          if [ "$(git rev-parse HEAD)" != "$(git rev-parse FETCH_HEAD)" ]; then
+            echo "::error::This run is not at the tip of $DEFAULT_BRANCH. Start the workflow from $DEFAULT_BRANCH again."
+            exit 1
+          fi
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Apply the migrations
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          PROJECT_REF: ${{ inputs.project-ref }}
+        run: |
+          set -euo pipefail
+          supabase link --project-ref "$PROJECT_REF"
+          supabase db push

@@ -17,6 +17,7 @@ This repository holds no secrets: only their names and where to get them.
 | [github-repo](components/github-repo) | A repository on GitHub whose pull requests are squashed when they merge, with their branches deleted, and whose default branch cannot be deleted or force-pushed except by the owner. |
 | [linear-workspace](components/linear-workspace) | A Linear workspace that superlinear works from: each team has an In Review state after In Progress, a Todo state, Triage, and superlinear's labels; the owner has a "superlinear proposals" view in their favorites; and no onboarding issue is open. See [The linear-workspace component](#the-linear-workspace-component). |
 | [vapor-fly](components/vapor-fly) | A Swift server in `server/`, built with Vapor and run on Fly.io, built and tested on Linux on each pull request, and deployed by the owner, by hand with `make server deploy` or on a merge. |
+| [supabase](components/supabase) | A Postgres database on Supabase for a Vapor server on Fly.io, with its files in `supabase/`, local and test databases, Supabase's root CA in the server's image, a local and remote parity check, and migrations with the Supabase CLI before each deploy or with Fluent when the server starts. |
 
 ## Layout
 
@@ -66,7 +67,12 @@ The `templatr` command has releases of its own, with three-part tags such as `0.
 | [make/vapor-fly.mk](make/vapor-fly.mk) | make | vapor-fly | The `vapor-fly-build`, `vapor-fly-serve`, `vapor-fly-serve-docker`, `vapor-fly-deploy` and `vapor-fly-status` targets, which `server/component.mk` runs as `make server <command>`. |
 | [components/vapor-fly/scaffold/server/Brewfile](components/vapor-fly/scaffold/server/Brewfile) | brewfile | vapor-fly | The tools the Makefile targets use. |
 | [components/vapor-fly/bin/check-fly-config](components/vapor-fly/bin/check-fly-config) | script | vapor-fly | Checks that `fly.toml` names the app, forces HTTPS, scales to zero and has the health check. |
-| [components/vapor-fly/bin/check-fly-secrets](components/vapor-fly/bin/check-fly-secrets) | script | vapor-fly | Checks that the Fly app has each runtime secret, by name. |
+| [components/vapor-fly/bin/check-fly-secrets](components/vapor-fly/bin/check-fly-secrets) | script | vapor-fly, supabase | Checks that the Fly app has each runtime secret, by name. |
+| [make/supabase.mk](make/supabase.mk) | make | supabase | The `supabase-db-init`, `supabase-db-reset`, `supabase-db-migrate`, `supabase-db-test-start`, `supabase-db-test-stop`, `supabase-db-status`, `supabase-status-diff` and `supabase-refresh-ca` targets, which `supabase/component.mk` runs as `make local-db <command>`, `make server status-diff` and `make server refresh-ca`. |
+| [components/supabase/bin/check-supabase-project](components/supabase/bin/check-supabase-project) | script | supabase | Checks that the Supabase CLI can see the project. |
+| [components/supabase/bin/supabase-ca](components/supabase/bin/supabase-ca) | script | supabase | Downloads the database's root CA certificate and verifies the database's TLS certificate against it. |
+| [components/supabase/bin/db-snapshot](components/supabase/bin/db-snapshot) | script | supabase | Writes a database's tables, columns, row counts and applied migrations as JSON. |
+| [components/supabase/bin/db-snapshot-diff](components/supabase/bin/db-snapshot-diff) | script | supabase | Compares two snapshots, and exits 1 when the databases differ. |
 | [components/github-repo/bin/check-merge-options](components/github-repo/bin/check-merge-options) | script | github-repo | Checks that pull requests merge only by squashing, titled with the pull request's title, that GitHub offers to update their branches, and that it deletes them after a merge. |
 | [components/github-repo/bin/check-rulesets-available](components/github-repo/bin/check-rulesets-available) | script | github-repo | Checks that GitHub offers rulesets for the repository, which it does not for a private repository on the free plan. |
 | [components/github-repo/bin/check-default-branch-protection](components/github-repo/bin/check-default-branch-protection) | script | github-repo | Checks that a ruleset that the owner can bypass stops the default branch from being deleted or force-pushed, when GitHub offers rulesets for the repository. |

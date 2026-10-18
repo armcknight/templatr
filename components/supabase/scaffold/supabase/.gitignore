@@ -1,0 +1,8 @@
+# The Supabase CLI's local state.
+.temp/
+.branches/
+# The isolated test database, the parity snapshots and the logs of the
+# local-db commands.
+.test-pgdata/
+status/
+*.log

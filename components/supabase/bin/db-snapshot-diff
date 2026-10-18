@@ -1,0 +1,45 @@
+#!/bin/bash
+# Usage: db-snapshot-diff <a.json> <b.json>
+#
+# Compares two snapshots from db-snapshot: the migrations that only one has,
+# the tables that only one has, the columns that differ, and the row counts
+# (≠ marks a difference). Exits 1 when the databases differ, so that a deploy
+# can run it first.
+
+set -euo pipefail
+
+a="${1:?usage: db-snapshot-diff <a.json> <b.json>}"
+b="${2:?usage: db-snapshot-diff <a.json> <b.json>}"
+
+for snapshot in "$a" "$b"; do
+  if [ ! -s "$snapshot" ]; then
+    echo "$snapshot does not exist. Make it with db-snapshot." >&2
+    exit 2
+  fi
+done
+
+jq -s -r '
+  .[0] as $a | .[1] as $b |
+  def only(x; y): (x - y) | if length == 0 then "(none)" else join(", ") end;
+  "\($a.label) (\($a.git_sha)) and \($b.label) (\($b.git_sha))",
+  "",
+  "  Fluent migrations only in \($a.label): \(only($a.db.migrations.fluent; $b.db.migrations.fluent))",
+  "  Fluent migrations only in \($b.label): \(only($b.db.migrations.fluent; $a.db.migrations.fluent))",
+  "  CLI migrations only in \($a.label): \(only($a.db.migrations.cli; $b.db.migrations.cli))",
+  "  CLI migrations only in \($b.label): \(only($b.db.migrations.cli; $a.db.migrations.cli))",
+  "  Tables only in \($a.label): \(only($a.db.tables | keys; $b.db.tables | keys))",
+  "  Tables only in \($b.label): \(only($b.db.tables | keys; $a.db.tables | keys))",
+  "",
+  "  Rows (\($a.label) | \($b.label)):",
+  ( ([$a.db.tables, $b.db.tables] | add | keys)[] as $t
+    | $a.db.tables[$t] as $x | $b.db.tables[$t] as $y
+    | "    \(if $x == $y then " " else "≠" end) \($t): \($x.rows // "-") | \($y.rows // "-")\(if $x and $y and $x.columns != $y.columns then ", and its columns differ" else "" end)" )
+' "$a" "$b"
+
+echo
+if jq -es '.[0].db == .[1].db' "$a" "$b" >/dev/null; then
+  echo "The databases are the same."
+else
+  echo "The databases differ." >&2
+  exit 1
+fi
