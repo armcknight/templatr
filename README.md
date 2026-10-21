@@ -270,6 +270,25 @@ With `--json`, it prints the report in the format of [schema/check-report.schema
 
 The exit status is 0 when nothing is left to do, 1 when the report lists something or an error stops the run, and 64 for a usage error. `templatr --help` and `templatr <subcommand> --help` show all the options.
 
+### Storing the App Store Connect keys and Fly deploy tokens
+
+[bin/store-secrets](bin/store-secrets) stores the secrets that the owner makes for the `apple-app` and `vapor-fly` components in the Keychain, under the item names that the manifests' `source` fields give. Apple has no command line or API that makes an App Store Connect team API key: first make each key on the website (Users and Access, Integrations, App Store Connect API, Team Keys) and download its `.p8` file, which downloads only one time. Fly deploy tokens it makes itself, with `fly tokens create deploy`, when `fly` is logged in.
+
+```sh
+bin/store-secrets \
+  --asc-key ~/Downloads/AuthKey_ABC123DEFG.p8 --asc-key-id ABC123DEFG --asc-issuer-id <issuer-id> \
+  --asc-admin-key ~/Downloads/AuthKey_HIJ456KLMN.p8 --asc-admin-key-id HIJ456KLMN --asc-admin-issuer-id <issuer-id> \
+  --fly-app mtg-armcknight \
+  --check ~/Code/babysittr --check ~/Code/mtg
+```
+
+* `--asc-key`, `--asc-key-id` and `--asc-issuer-id` are the Uploads key, with the App Manager role, stored as `ASC_KEY_P8_BASE64` (the file, base64 encoded), `ASC_KEY_ID` and `ASC_ISSUER_ID`. The `--asc-admin-…` options are the same for the Admin key, which match needs to make or renew certificates and profiles, stored as `ASC_ADMIN_KEY_P8_BASE64`, `ASC_ADMIN_KEY_ID` and `ASC_ADMIN_ISSUER_ID`. Give a key's three options together, or none of them.
+* `--fly-app`, which can be given more than one time, makes a deploy token for the app that expires in a year, and stores it as the app's `FLY_API_TOKEN`.
+* `--check`, which can be given more than one time, runs `swift run templatr check` on the repository at the end.
+* `--dry-run` prints the item that each value would go in, and stores nothing, makes no token and runs no check.
+
+It also looks for `MATCH_PASSWORD` and `MATCH_DEPLOY_KEY` in the Keychain, and says how to add each one that is missing; it does not make them. It never prints a value, and never puts one in a command's arguments, where `ps` can show it: values go to `security -i` on standard input, as `templatr` stores them. Running it again replaces the values. The exit status is 0 when everything was stored and nothing is missing, 1 when something failed or is missing, and 2 for a usage error.
+
 ## Adding a component
 
 1. Make `components/<name>/` with `component.toml`, with its `directory` and `blurb`, `CLAUDE.md`, and `scaffold/<directory>/README.md`, without the markers. Put its files under `scaffold/<directory>/`, its Makefile targets in `scaffold/<directory>/component.mk`, and its workflows in `scaffold/.github/workflows/<name>-*.yml`.
