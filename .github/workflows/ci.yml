@@ -10,6 +10,15 @@ permissions:
   contents: read
 
 jobs:
+  # Builds and tests the package on macOS, as every Swift package of the
+  # toolchain does. The linear-workspace component's script is JavaScript for
+  # Automation, and its tests run it against a fake Linear API: they run only on
+  # macOS, as superlinear does.
+  ci:
+    uses: armcknight/workflows/.github/workflows/swift-package-ci.yml@4
+
+  # The shared workflow has no Linux build, no validator and no second package:
+  # the jobs below are templatr's own.
   validate:
     runs-on: ubuntu-latest
     # superlinear's bootstrap uses the ComponentManifest library on macOS; the
@@ -27,17 +36,12 @@ jobs:
       - name: Validate the manifests
         run: swift run validate-components
 
-  # The linear-workspace component's script is JavaScript for Automation, and
-  # its tests run it against a fake Linear API: they run only on macOS, as
-  # superlinear does. The apple-app component's match-certificates package
-  # reads certificates with the Security framework, so it builds only on macOS.
-  test-macos:
+  # The apple-app component's match-certificates package reads certificates
+  # with the Security framework, so it builds only on macOS.
+  match-certificates:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
-
-      - name: Test
-        run: swift test
 
       - name: Test the match-certificates package
         run: swift test --package-path components/apple-app/match-certificates
