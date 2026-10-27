@@ -12,6 +12,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The `apple-app` component's `ASC_ADMIN_KEY_ID`, `ASC_ADMIN_ISSUER_ID` and
+  `ASC_ADMIN_KEY_P8_BASE64` local secrets: the App Store Connect API key with
+  the Admin role, which match needs to make or renew certificates and
+  profiles. `templatr check` reports them as missing until they are in the
+  Keychain.
+
 ## [v1.0.0] 2026-10-18
 
 ### Added
