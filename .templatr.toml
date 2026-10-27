@@ -1,0 +1,18 @@
+# The armcknight/templatr components this project uses. `templatr bootstrap`
+# writes it; a change made by hand wins over detection.
+
+[components.base]
+tag = "v1"
+
+[components.base.inputs]
+project_name = "templatr"
+
+[components.github-repo]
+tag = "v1"
+
+[components.linear-workspace]
+tag = "v1"
+
+[components.linear-workspace.inputs]
+linear_initiatives = "false"
+linear_teams = ""

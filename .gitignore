@@ -7,3 +7,6 @@ __pycache__/
 *.pyc
 *.orig
 /Sources/TemplatrCLI/BuildMetadata.generated.swift
+
+# Downloaded Makefile fragments; see the Makefile.
+/.templatr/make/

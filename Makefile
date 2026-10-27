@@ -25,6 +25,60 @@
 # vrsn and prepare-release come from the armcknight/tools cask: `make init`
 # installs it with the rest of the Brewfile.
 
+# <!-- templatr:begin base -->
+# # The project's Makefile. Each component's targets are in its directory's
+# component.mk, such as server/component.mk or apple/component.mk, which this
+# file includes. Their Makefile fragments come from armcknight/templatr at
+# TEMPLATES_TAG: each is downloaded on first use, and `make templates-update`
+# downloads them again, as after changing the tag.
+#
+# Commands are namespaced: `make server deploy` runs the server-deploy target,
+# and `make apple ios test` runs apple-ios-test. The direct form, `make
+# server-deploy`, works too. `make help` lists them.
+
+TEMPLATES_TAG = v1
+TEMPLATES_MAKE = .templatr/make
+
+# Each component.mk adds its namespace, such as server, and the fragments it
+# includes.
+NAMESPACES :=
+TEMPLATES_FRAGMENTS :=
+
+.DEFAULT_GOAL = help
+.PHONY: help templates-update
+
+include $(sort $(wildcard */component.mk))
+
+# `make <namespace> <command>` runs `<namespace>-<command>`, and the words after
+# the namespace do nothing by themselves. A command can be more than one word,
+# joined with dashes: `make apple ios test` runs `apple-ios-test`. A namespace
+# with no command lists the targets.
+ifneq ($(filter $(firstword $(MAKECMDGOALS)),$(NAMESPACES)),)
+NS  := $(firstword $(MAKECMDGOALS))
+EMPTY :=
+SPACE := $(EMPTY) $(EMPTY)
+CMD := $(subst $(SPACE),-,$(strip $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))))
+.PHONY: $(NS)
+$(NS):
+	@$(MAKE) --no-print-directory $(if $(strip $(CMD)),$(NS)-$(CMD),help)
+%:
+	@:
+endif
+
+$(TEMPLATES_MAKE)/%.mk:
+	mkdir -p $(@D)
+	curl -fsSL https://raw.githubusercontent.com/armcknight/templatr/$(TEMPLATES_TAG)/make/$*.mk -o $@
+
+## help: list these targets
+help:
+	@awk '/^## /{ t = substr($$0, 4); c = index(t, ":"); printf "  make %-28s %s\n", substr(t, 1, c - 1), substr(t, c + 2) }' $(filter-out $(TEMPLATES_MAKE)/%,$(MAKEFILE_LIST))
+
+## templates-update: download the Makefile fragments again at TEMPLATES_TAG
+templates-update:
+	rm -rf $(TEMPLATES_MAKE)
+	$(if $(strip $(TEMPLATES_FRAGMENTS)),$(MAKE) $(TEMPLATES_FRAGMENTS))
+# <!-- templatr:end -->
+
 BINARY       = .build/release/templatr
 INSTALL_PATH = $(HOME)/.local/bin/templatr
 METADATA_FILE = Sources/TemplatrCLI/BuildMetadata.generated.swift
@@ -34,16 +88,8 @@ VRSN_KEY     = version
 TEMPLATES_VERSION_FILE = components/VERSION
 TEMPLATES_CHANGELOG    = components/CHANGELOG.md
 
-.DEFAULT_GOAL = help
-.PHONY: help init build test validate links install patch minor major deploy deploy-beta \
+.PHONY: init build test validate links install patch minor major deploy deploy-beta \
 	templates-patch templates-minor templates-major templates-deploy templates-deploy-beta
-
-# Targets document themselves with a `## name: description` line above them,
-# which is the only thing this prints. Only the first colon separates the two,
-# so a description may contain further colons.
-## help: list these targets
-help:
-	@awk '/^## /{ t = substr($$0, 4); c = index(t, ":"); printf "  make %-22s %s\n", substr(t, 1, c - 1), substr(t, c + 2) }' $(MAKEFILE_LIST)
 
 # Both taps are third-party, and Homebrew refuses to load formulae or casks from
 # an untrusted tap. `brew bundle` aborts on the first one it meets and installs

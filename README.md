@@ -214,6 +214,44 @@ The base component's `scaffold/README.md`, the project's root README.md, has a s
 
 ```
 <!-- templatr:begin how-this-is-built -->
+<!-- templatr bootstrap writes this section from the components' manifests. Do not edit it. -->
+## How this project is built
+
+This project uses these components from [armcknight/templatr](https://github.com/armcknight/templatr):
+
+* [base](https://github.com/armcknight/templatr/tree/v1/components/base) at `v1`: The project's root files, which every project has with its other components: the Makefile that includes each component's targets, and the README.md that links to each component's README.
+* [github-repo](https://github.com/armcknight/templatr/tree/v1/components/github-repo) at `v1`: A repository on GitHub whose pull requests are squashed when they merge, and whose default branch cannot be deleted or force-pushed except by the owner.
+* [linear-workspace](https://github.com/armcknight/templatr/tree/v1/components/linear-workspace) at `v1`: A Linear workspace that superlinear works from: each team has an In Review state, a Todo state, Triage and superlinear's labels, the owner has a view of the pending proposals, and no onboarding issue is open.
+
+### Shared pieces
+
+* [components/github-repo/bin/check-merge-options](https://github.com/armcknight/templatr/blob/v1/components/github-repo/bin/check-merge-options), script: Checks that pull requests merge only by squashing, titled with the pull request's title, that branches can be updated, and that they are deleted after a merge.
+* [components/github-repo/bin/check-rulesets-available](https://github.com/armcknight/templatr/blob/v1/components/github-repo/bin/check-rulesets-available), script: Checks that GitHub offers rulesets for the repository, which it does not for a private repository on the free plan.
+* [components/github-repo/bin/check-default-branch-protection](https://github.com/armcknight/templatr/blob/v1/components/github-repo/bin/check-default-branch-protection), script: Checks that a ruleset that the owner can bypass stops the default branch from being deleted or force-pushed, when GitHub offers rulesets for the repository.
+* [components/github-repo/bin/protect-default-branch](https://github.com/armcknight/templatr/blob/v1/components/github-repo/bin/protect-default-branch), script: Makes or updates the Default branch ruleset, which stops the default branch from being deleted or force-pushed, with a bypass for the repository's admins.
+* [components/linear-workspace/bin/linear-workspace](https://github.com/armcknight/templatr/blob/v1/components/linear-workspace/bin/linear-workspace), script: Checks, and sets up, a Linear workspace's teams' states, Triage and labels, the superlinear proposals view, the onboarding issues and the initiatives, with Linear's API and a key from the environment.
+
+### Steps a person does
+
+* The root Makefile includes each component's component.mk, and has the help and templates-update targets. If not: Copy the Makefile from the base scaffold, or add its TEMPLATES_TAG, NAMESPACES, TEMPLATES_FRAGMENTS, the include of */component.mk, the namespace rule, the fragment download rule, help and templates-update to the project's Makefile. Move the targets that were in it for one component, such as its VAPOR_FLY_* or APPLE_APP_* values, into that component's component.mk.
+* The GitHub CLI is logged in. If not: Run `gh auth login` on this Mac, as the owner of the repository.
+* The repository is on GitHub, and the logged-in user can administer it. If not: Push the repository to GitHub, with a remote that points to it, and run `gh auth login` as its owner or as an admin of it.
+* GitHub offers rulesets for the repository: it is public, or its owner has a paid plan. If not: The repository is private on GitHub's free plan, so GitHub offers no rulesets, and nothing stops its default branch from being deleted or force-pushed. Make the repository public, or upgrade to GitHub Pro; or accept the risk.
+* LINEAR_API_KEY, else LINCTL_API_KEY, is set, Linear accepts it, and its user is an admin of each team. If not: As the owner of the Linear workspace, make a personal API key in Linear's settings (Security & access), and export it as LINCTL_API_KEY in the project's .envrc. Its user must be an admin of the workspace or of each team.
+* Each team has at least one state of type unstarted, such as Todo, which superlinear's ready mode starts issues from. If not: In each team's settings in Linear (Issue statuses & automations), add a status of the Todo type.
+* When the project's spec should be under an initiative (linear_initiatives is true), the workspace has initiatives. If not: Turn on initiatives in the Linear workspace's settings (Initiatives), and make the project's initiative. The API cannot turn them on.
+
+### Further reading
+
+* [The life of an issue](https://github.com/armcknight/superlinear/blob/main/docs/lifecycle.md#overview)
+* [Planning](https://github.com/armcknight/superlinear/blob/main/docs/planning.md#proposals)
+* [Bootstrap](https://github.com/armcknight/superlinear/blob/main/docs/bootstrap.md#components)
+* [Builds](https://github.com/armcknight/superlinear/blob/main/docs/builds.md#ci)
+* [bootstrap --check](https://github.com/armcknight/superlinear/blob/main/docs/bootstrap.md#bootstrap-check)
+* [The pull request](https://github.com/armcknight/superlinear/blob/main/docs/lifecycle.md#pull-request)
+* [The merge](https://github.com/armcknight/superlinear/blob/main/docs/lifecycle.md#merge)
+* [A workspace's API key](https://github.com/armcknight/superlinear/blob/main/docs/configuration.md#api-key)
+* [A workspace's teams](https://github.com/armcknight/superlinear/blob/main/docs/configuration.md#team-ids)
 <!-- templatr:end -->
 ```
 
@@ -344,3 +382,44 @@ swift run validate-components                 # the manifests, and the guide's d
 ```
 
 and checks every link in the Markdown files with [lychee](https://github.com/lycheeverse/lychee). It also runs `swift test` on macOS, where the tests also run the `linear-workspace` component's script against a fake Linear API.
+
+<!-- superlinear:begin how-this-is-built -->
+<!-- templatr bootstrap writes this section from the components' manifests. Do not edit it. -->
+## How this project is built
+
+This project uses these components from [armcknight/templatr](https://github.com/armcknight/templatr):
+
+* [base](https://github.com/armcknight/templatr/tree/v1/components/base) at `v1`: The project's root files, which every project has with its other components: the Makefile that includes each component's targets, and the README.md that links to each component's README.
+* [github-repo](https://github.com/armcknight/templatr/tree/v1/components/github-repo) at `v1`: A repository on GitHub whose pull requests are squashed when they merge, and whose default branch cannot be deleted or force-pushed except by the owner.
+* [linear-workspace](https://github.com/armcknight/templatr/tree/v1/components/linear-workspace) at `v1`: A Linear workspace that superlinear works from: each team has an In Review state, a Todo state, Triage and superlinear's labels, the owner has a view of the pending proposals, and no onboarding issue is open.
+
+### Shared pieces
+
+* [components/github-repo/bin/check-merge-options](https://github.com/armcknight/templatr/blob/v1/components/github-repo/bin/check-merge-options), script: Checks that pull requests merge only by squashing, titled with the pull request's title, that branches can be updated, and that they are deleted after a merge.
+* [components/github-repo/bin/check-rulesets-available](https://github.com/armcknight/templatr/blob/v1/components/github-repo/bin/check-rulesets-available), script: Checks that GitHub offers rulesets for the repository, which it does not for a private repository on the free plan.
+* [components/github-repo/bin/check-default-branch-protection](https://github.com/armcknight/templatr/blob/v1/components/github-repo/bin/check-default-branch-protection), script: Checks that a ruleset that the owner can bypass stops the default branch from being deleted or force-pushed, when GitHub offers rulesets for the repository.
+* [components/github-repo/bin/protect-default-branch](https://github.com/armcknight/templatr/blob/v1/components/github-repo/bin/protect-default-branch), script: Makes or updates the Default branch ruleset, which stops the default branch from being deleted or force-pushed, with a bypass for the repository's admins.
+* [components/linear-workspace/bin/linear-workspace](https://github.com/armcknight/templatr/blob/v1/components/linear-workspace/bin/linear-workspace), script: Checks, and sets up, a Linear workspace's teams' states, Triage and labels, the superlinear proposals view, the onboarding issues and the initiatives, with Linear's API and a key from the environment.
+
+### Steps a person does
+
+* The root Makefile includes each component's component.mk, and has the help and templates-update targets. If not: Copy the Makefile from the base scaffold, or add its TEMPLATES_TAG, NAMESPACES, TEMPLATES_FRAGMENTS, the include of */component.mk, the namespace rule, the fragment download rule, help and templates-update to the project's Makefile. Move the targets that were in it for one component, such as its VAPOR_FLY_* or APPLE_APP_* values, into that component's component.mk.
+* The GitHub CLI is logged in. If not: Run `gh auth login` on this Mac, as the owner of the repository.
+* The repository is on GitHub, and the logged-in user can administer it. If not: Push the repository to GitHub, with a remote that points to it, and run `gh auth login` as its owner or as an admin of it.
+* GitHub offers rulesets for the repository: it is public, or its owner has a paid plan. If not: The repository is private on GitHub's free plan, so GitHub offers no rulesets, and nothing stops its default branch from being deleted or force-pushed. Make the repository public, or upgrade to GitHub Pro; or accept the risk.
+* LINEAR_API_KEY, else LINCTL_API_KEY, is set, Linear accepts it, and its user is an admin of each team. If not: As the owner of the Linear workspace, make a personal API key in Linear's settings (Security & access), and export it as LINCTL_API_KEY in the project's .envrc. Its user must be an admin of the workspace or of each team.
+* Each team has at least one state of type unstarted, such as Todo, which superlinear's ready mode starts issues from. If not: In each team's settings in Linear (Issue statuses & automations), add a status of the Todo type.
+* When the project's spec should be under an initiative (linear_initiatives is true), the workspace has initiatives. If not: Turn on initiatives in the Linear workspace's settings (Initiatives), and make the project's initiative. The API cannot turn them on.
+
+### Further reading
+
+* [The life of an issue](https://github.com/armcknight/superlinear/blob/main/docs/lifecycle.md#overview)
+* [Planning](https://github.com/armcknight/superlinear/blob/main/docs/planning.md#proposals)
+* [Bootstrap](https://github.com/armcknight/superlinear/blob/main/docs/bootstrap.md#components)
+* [Builds](https://github.com/armcknight/superlinear/blob/main/docs/builds.md#ci)
+* [bootstrap --check](https://github.com/armcknight/superlinear/blob/main/docs/bootstrap.md#bootstrap-check)
+* [The pull request](https://github.com/armcknight/superlinear/blob/main/docs/lifecycle.md#pull-request)
+* [The merge](https://github.com/armcknight/superlinear/blob/main/docs/lifecycle.md#merge)
+* [A workspace's API key](https://github.com/armcknight/superlinear/blob/main/docs/configuration.md#api-key)
+* [A workspace's teams](https://github.com/armcknight/superlinear/blob/main/docs/configuration.md#team-ids)
+<!-- superlinear:end -->
