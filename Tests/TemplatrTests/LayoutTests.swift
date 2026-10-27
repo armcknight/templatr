@@ -58,8 +58,8 @@ func makeLayoutTemplates() throws -> Directory {
     try templates.write("components/base/scaffold/README.md", """
         # Project
 
-        <!-- superlinear:begin how-this-is-built -->
-        <!-- superlinear:end -->
+        <!-- templatr:begin how-this-is-built -->
+        <!-- templatr:end -->
 
         """)
     try templates.write("components/base/scaffold/Makefile", "include $(wildcard */component.mk)\n")

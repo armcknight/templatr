@@ -213,8 +213,8 @@ GitHub Actions expressions, `${{ … }}`, are not placeholders.
 The base component's `scaffold/README.md`, the project's root README.md, has a section between these markers:
 
 ```
-<!-- superlinear:begin how-this-is-built -->
-<!-- superlinear:end -->
+<!-- templatr:begin how-this-is-built -->
+<!-- templatr:end -->
 ```
 
 `templatr bootstrap` writes it one time for the whole project, from the manifests of the components the project uses, and changes nothing outside the markers. The components' own READMEs, in their directories, do not have it. It has a "How this project is built" heading and:

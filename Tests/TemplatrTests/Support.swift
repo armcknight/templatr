@@ -156,8 +156,8 @@ func makeTemplates() throws -> Directory {
     try templates.write("components/demo/scaffold/README.md", """
         # {{inputs.app}}
 
-        <!-- superlinear:begin how-this-is-built -->
-        <!-- superlinear:end -->
+        <!-- templatr:begin how-this-is-built -->
+        <!-- templatr:end -->
 
         """)
     try templates.writeExecutable("components/demo/scaffold/bin/deploy", "#!/bin/sh\nfly deploy --app {{inputs.app}}\n")
@@ -187,9 +187,9 @@ let projectReadme = """
 
     Intro text.
 
-    <!-- superlinear:begin how-this-is-built -->
+    <!-- templatr:begin how-this-is-built -->
     Old text.
-    <!-- superlinear:end -->
+    <!-- templatr:end -->
 
     Footer.
 

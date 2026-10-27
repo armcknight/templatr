@@ -9,7 +9,7 @@
 # server-deploy`, works too. `make help` lists them.
 
 TEMPLATES_TAG = {{templates.tag}}
-TEMPLATES_MAKE = .superlinear/make
+TEMPLATES_MAKE = .templatr/make
 
 # Each component.mk adds its namespace, such as server, and the fragments it
 # includes.

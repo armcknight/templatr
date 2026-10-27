@@ -23,9 +23,9 @@ fix = { human = { text = "Copy the Makefile from the base scaffold, or add its T
 
 [[steps]]
 id = "root-gitignore"
-description = "Git ignores the Makefile fragments that the root Makefile downloads to .superlinear/make/."
-check = "git check-ignore -q .superlinear/make/fragment.mk"
-fix = "printf '\\n# Downloaded Makefile fragments; see the Makefile.\\n/.superlinear/make/\\n' >> .gitignore"
+description = "Git ignores the Makefile fragments that the root Makefile downloads to .templatr/make/."
+check = "git check-ignore -q .templatr/make/fragment.mk"
+fix = "printf '\\n# Downloaded Makefile fragments; see the Makefile.\\n/.templatr/make/\\n' >> .gitignore"
 
 
 [[docs]]

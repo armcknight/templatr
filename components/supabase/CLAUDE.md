@@ -1,6 +1,6 @@
 # supabase
 
-This project's server keeps its data in Postgres on [Supabase](https://supabase.com), with the `supabase` component from [armcknight/templatr](https://github.com/armcknight/templatr). `.superlinear/components.toml` has the tag it is pinned to, and the component's inputs, such as its `migration_style`.
+This project's server keeps its data in Postgres on [Supabase](https://supabase.com), with the `supabase` component from [armcknight/templatr](https://github.com/armcknight/templatr). `.templatr.toml` has the tag it is pinned to, and the component's inputs, such as its `migration_style`.
 
 The component's files are in `supabase/`: in the `cli` style, the Supabase CLI's `config.toml` and `migrations/`, and its `component.mk`. Run `supabase` commands from the repository's root, where the CLI finds `supabase/config.toml`. The server, with its Dockerfile and `fly.toml`, is in `server/`. The `make local-db …` commands run from the repository's root.
 

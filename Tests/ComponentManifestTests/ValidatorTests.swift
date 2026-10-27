@@ -189,7 +189,7 @@ struct ValidatorTests {
 
     @Test func theBaseReadmeNeedsMarkers() throws {
         try repository.addBase()
-        try repository.write("components/base/scaffold/README.md", "# Project\n<!-- superlinear:end -->\n")
+        try repository.write("components/base/scaffold/README.md", "# Project\n<!-- templatr:end -->\n")
         expectProblem("one time each")
     }
 
@@ -197,7 +197,7 @@ struct ValidatorTests {
         try repository.addBase()
         try repository.write(
             "components/base/scaffold/README.md",
-            "<!-- superlinear:end -->\n<!-- superlinear:begin how-this-is-built -->\n"
+            "<!-- templatr:end -->\n<!-- templatr:begin how-this-is-built -->\n"
         )
         expectProblem("one time each")
     }

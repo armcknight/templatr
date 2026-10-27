@@ -127,7 +127,7 @@ name = "SUPABASE_ACCESS_TOKEN"
 description = "A Supabase personal access token, for `supabase link` and `supabase db push` in the deploy workflow. Only the cli style uses it."
 source = "keychain:templatr.supabase.access-token"
 scope = "team"
-human = { text = "In https://supabase.com/dashboard/account/tokens (with two-factor authentication), generate a token named superlinear, and store it in the Keychain item templatr.supabase.access-token. It is shown only one time.", twoFactor = true }
+human = { text = "In https://supabase.com/dashboard/account/tokens (with two-factor authentication), generate a token named templatr, and store it in the Keychain item templatr.supabase.access-token. It is shown only one time.", twoFactor = true }
 rotateEvery = "1y"
 
 [[steps]]

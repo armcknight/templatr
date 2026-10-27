@@ -97,8 +97,8 @@ let baseManifest = """
 let baseReadme = """
     # Project
 
-    <!-- superlinear:begin how-this-is-built -->
-    <!-- superlinear:end -->
+    <!-- templatr:begin how-this-is-built -->
+    <!-- templatr:end -->
 
     """
 

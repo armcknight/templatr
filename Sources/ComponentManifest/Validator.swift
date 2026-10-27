@@ -9,8 +9,8 @@ public struct Validator: Sendable {
     /// check.
     public var anchors: Set<String>?
 
-    public static let beginMarker = "<!-- superlinear:begin how-this-is-built -->"
-    public static let endMarker = "<!-- superlinear:end -->"
+    public static let beginMarker = "<!-- templatr:begin how-this-is-built -->"
+    public static let endMarker = "<!-- templatr:end -->"
 
     public init(root: URL, anchors: Set<String>?) {
         self.root = root.standardizedFileURL

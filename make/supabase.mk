@@ -29,7 +29,7 @@
 # Postgres tools from postgresql@$(SUPABASE_PG_VERSION).
 
 TEMPLATES_TAG ?=
-TEMPLATES_MAKE ?= .superlinear/make
+TEMPLATES_MAKE ?= .templatr/make
 SUPABASE_MIGRATION_STYLE ?= fluent
 SUPABASE_PRODUCT ?=
 SUPABASE_PACKAGE_PATH ?= .

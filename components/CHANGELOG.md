@@ -14,6 +14,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The root Makefile downloads its fragments to `.templatr/make/`, next to the
+  components' `CLAUDE.md` copies, and no longer to `.superlinear/make/`. The
+  base component's `.gitignore` check and fix follow. A project with the old
+  directory can delete it: the fragments download again on first use.
+- The root README's "How this project is built" section sits between
+  `<!-- templatr:begin how-this-is-built -->` and `<!-- templatr:end -->`, the
+  same family as the component sections, and no longer `superlinear:begin`. A
+  README that has the old markers must be edited, or bootstrap adds a second
+  section at its end.
 - The Keychain items that every component's secrets come from are named
   `templatr.<name>`, such as `templatr.asc.key-id` and
   `templatr.fly.<app>.deploy-token`, and no longer `superlinear.<name>`. An
