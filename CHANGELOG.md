@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `templatr bootstrap` sets a project up from its components, and
   `templatr check` reports what it still needs.
+- The Keychain items that `bootstrap` and `bin/store-secrets` write and read are
+  named `templatr.<name>`, such as `templatr.asc.key-id`, and no longer
+  `superlinear.<name>`.
 - `templatr --version` prints the version.
 - `make install` builds with the git commit in the version: `templatr --version`
   prints `0.1.0+<commit>`, and `.dirty` when the working tree had changes. A

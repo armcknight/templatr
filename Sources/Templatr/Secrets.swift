@@ -150,7 +150,7 @@ public struct GitHubCLI: SecretStore {
 
 extension Secret {
     /// The secret with the placeholders in its source filled, such as the Fly
-    /// app in `keychain:superlinear.fly.{{inputs.fly_app}}.deploy-token`, and
+    /// app in `keychain:templatr.fly.{{inputs.fly_app}}.deploy-token`, and
     /// the placeholders that have no value.
     func filled(_ values: PlaceholderValues) -> (secret: Secret, missing: [String]) {
         let rendered = values.render(source.rawValue, quoted: false)
@@ -162,13 +162,13 @@ extension Secret {
     }
 
     /// The Keychain item that holds the value: the source's item, or for a
-    /// generated secret `superlinear.<name>`, such as
-    /// `superlinear.match-deploy-key`. `nil` for a 1Password secret.
+    /// generated secret `templatr.<name>`, such as
+    /// `templatr.match-deploy-key`. `nil` for a 1Password secret.
     public var keychainItem: String? {
         switch source {
         case .keychain(let item): item
         case .onePassword: nil
-        case .generate: "superlinear." + name.lowercased().replacingOccurrences(of: "_", with: "-")
+        case .generate: "templatr." + name.lowercased().replacingOccurrences(of: "_", with: "-")
         }
     }
 }

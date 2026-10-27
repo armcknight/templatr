@@ -10,7 +10,7 @@ struct ListMatchCertificates: ParsableCommand {
         discussion: """
             Prints one line for each certificate in the repository, and for each provisioning profile there for one of \
             the bundle IDs (every profile when none is given): its expiry as an ISO 8601 date and time, a tab, and its \
-            name. The password is MATCH_PASSWORD or, without it, the Keychain item superlinear.match.password. Exits 2 \
+            name. The password is MATCH_PASSWORD or, without it, the Keychain item templatr.match.password. Exits 2 \
             when it cannot read the repository.
             """
     )

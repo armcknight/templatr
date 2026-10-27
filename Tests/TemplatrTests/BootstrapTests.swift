@@ -73,7 +73,7 @@ import Testing
 
         // A generated secret is made and kept in the Keychain first.
         #expect(result.secretsGenerated == ["WEBHOOK_SECRET"])
-        let generated = try #require(stubs.keychain["superlinear.webhook-secret"])
+        let generated = try #require(stubs.keychain["templatr.webhook-secret"])
         #expect(generated.count == 64)
         #expect(stubs.github["WEBHOOK_SECRET"] == generated)
 
@@ -92,7 +92,7 @@ import Testing
     @Test func aSecretIsNotSetWithoutConfirmation() async throws {
         let result = try await bootstrap(setSecret: { _ in false })
         #expect(stubs.github.isEmpty)
-        #expect(stubs.keychain["superlinear.webhook-secret"] == nil)
+        #expect(stubs.keychain["templatr.webhook-secret"] == nil)
         #expect(result.report.missingSecrets.map(\.name) == ["DEPLOY_TOKEN", "SIGNING_KEY", "WEBHOOK_SECRET"])
         let human = try #require(result.report.humanSteps.first { $0.id == "secret:SIGNING_KEY" })
         #expect(human.text == "Make a signing key for demo-api.")

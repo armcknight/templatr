@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The Keychain items that every component's secrets come from are named
+  `templatr.<name>`, such as `templatr.asc.key-id` and
+  `templatr.fly.<app>.deploy-token`, and no longer `superlinear.<name>`. An
+  item stored under the old name must be moved by hand: `security` has no
+  rename, so read it with `find-generic-password -w`, add it under the new
+  name, and delete the old one.
 - The `apple-app` component's `ASC_ADMIN_KEY_ID`, `ASC_ADMIN_ISSUER_ID` and
   `ASC_ADMIN_KEY_P8_BASE64` local secrets: the App Store Connect API key with
   the Admin role, which match needs to make or renew certificates and

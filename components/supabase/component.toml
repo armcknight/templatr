@@ -112,22 +112,22 @@ infer = [
 [[secrets]]
 name = "DATABASE_URL"
 description = "The Supabase database's pooled connection string (session mode, port 5432) with ?sslmode=require. The server reads it as a Fly secret."
-source = "keychain:superlinear.supabase.{{inputs.project_ref}}.database-url"
+source = "keychain:templatr.supabase.{{inputs.project_ref}}.database-url"
 scope = "local"
-human = { text = "Sign in to https://supabase.com/dashboard (with two-factor authentication) and make a project for {{inputs.fly_app}}, in the region nearest the Fly app's primary_region in fly.toml. Store its database password in the Keychain item superlinear.supabase.{{inputs.project_ref}}.db-password. From Connect, copy the session pooler's connection string (port 5432), put the password in it, add ?sslmode=require, and store it in the Keychain item superlinear.supabase.{{inputs.project_ref}}.database-url. Project settings that are not in supabase/config.toml, such as Auth providers, are the project's own Needs human steps.", twoFactor = true }
+human = { text = "Sign in to https://supabase.com/dashboard (with two-factor authentication) and make a project for {{inputs.fly_app}}, in the region nearest the Fly app's primary_region in fly.toml. Store its database password in the Keychain item templatr.supabase.{{inputs.project_ref}}.db-password. From Connect, copy the session pooler's connection string (port 5432), put the password in it, add ?sslmode=require, and store it in the Keychain item templatr.supabase.{{inputs.project_ref}}.database-url. Project settings that are not in supabase/config.toml, such as Auth providers, are the project's own Needs human steps.", twoFactor = true }
 
 [[secrets]]
 name = "SUPABASE_DB_PASSWORD"
 description = "The Supabase database's password, for `supabase db push` in the deploy workflow. Only the cli style uses it."
-source = "keychain:superlinear.supabase.{{inputs.project_ref}}.db-password"
+source = "keychain:templatr.supabase.{{inputs.project_ref}}.db-password"
 scope = "repo"
 
 [[secrets]]
 name = "SUPABASE_ACCESS_TOKEN"
 description = "A Supabase personal access token, for `supabase link` and `supabase db push` in the deploy workflow. Only the cli style uses it."
-source = "keychain:superlinear.supabase.access-token"
+source = "keychain:templatr.supabase.access-token"
 scope = "team"
-human = { text = "In https://supabase.com/dashboard/account/tokens (with two-factor authentication), generate a token named superlinear, and store it in the Keychain item superlinear.supabase.access-token. It is shown only one time.", twoFactor = true }
+human = { text = "In https://supabase.com/dashboard/account/tokens (with two-factor authentication), generate a token named superlinear, and store it in the Keychain item templatr.supabase.access-token. It is shown only one time.", twoFactor = true }
 rotateEvery = "1y"
 
 [[steps]]
@@ -152,7 +152,7 @@ fix = "{ git check-ignore -q --no-index ../.envrc || printf '%s\\n' .envrc >> ..
 id = "envrc-example"
 description = "The root's .envrc.example names DATABASE_URL, which direnv exports from the real, ignored .envrc. The fix adds it to the file that is there, or makes the file, so that it works with any other component's lines."
 check = "grep -qs 'DATABASE_URL' ../.envrc.example"
-fix = '''grep -qs DATABASE_URL ../.envrc.example || { if [ -s ../.envrc.example ]; then printf '\n' >> ../.envrc.example; fi; printf '%s\n' '# The Supabase database'"'"'s pooled connection string (session mode, port 5432),' '# with ?sslmode=require. `make server status-diff` and `make server refresh-ca`' '# read it; the server reads it as a Fly secret. Copy this file to .envrc, which' '# git ignores, and fill in the value there; never commit it.' "# Keychain: superlinear.supabase."{{inputs.project_ref}}".database-url" "export DATABASE_URL='postgres://postgres."{{inputs.project_ref}}":<password>@aws-0-<region>.pooler.supabase.com:5432/postgres?sslmode=require'" >> ../.envrc.example; }'''
+fix = '''grep -qs DATABASE_URL ../.envrc.example || { if [ -s ../.envrc.example ]; then printf '\n' >> ../.envrc.example; fi; printf '%s\n' '# The Supabase database'"'"'s pooled connection string (session mode, port 5432),' '# with ?sslmode=require. `make server status-diff` and `make server refresh-ca`' '# read it; the server reads it as a Fly secret. Copy this file to .envrc, which' '# git ignores, and fill in the value there; never commit it.' "# Keychain: templatr.supabase."{{inputs.project_ref}}".database-url" "export DATABASE_URL='postgres://postgres."{{inputs.project_ref}}":<password>@aws-0-<region>.pooler.supabase.com:5432/postgres?sslmode=require'" >> ../.envrc.example; }'''
 
 [[steps]]
 id = "make-fragment"
@@ -176,7 +176,7 @@ fix = { human = { text = "In server/Dockerfile's runtime stage, add `COPY {{inpu
 id = "fly-secret"
 description = "The Fly app has DATABASE_URL as a secret."
 check = "{{templates}}/components/vapor-fly/bin/check-fly-secrets {{inputs.fly_app}} DATABASE_URL"
-fix = { human = { text = "Set DATABASE_URL on {{inputs.fly_app}} from the Keychain item superlinear.supabase.{{inputs.project_ref}}.database-url, so that the value is in no shell history or log: `printf 'DATABASE_URL=%s\\n' \"$(security find-generic-password -s superlinear.supabase.{{inputs.project_ref}}.database-url -w)\" | fly secrets import --stage --app {{inputs.fly_app}}`. --stage keeps the machines as they are until the next deploy." } }
+fix = { human = { text = "Set DATABASE_URL on {{inputs.fly_app}} from the Keychain item templatr.supabase.{{inputs.project_ref}}.database-url, so that the value is in no shell history or log: `printf 'DATABASE_URL=%s\\n' \"$(security find-generic-password -s templatr.supabase.{{inputs.project_ref}}.database-url -w)\" | fly secrets import --stage --app {{inputs.fly_app}}`. --stage keeps the machines as they are until the next deploy." } }
 
 [[steps]]
 id = "deploy-migrations"

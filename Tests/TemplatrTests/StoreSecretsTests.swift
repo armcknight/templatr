@@ -105,8 +105,8 @@ import Testing
     /// The MATCH_PASSWORD and MATCH_DEPLOY_KEY items, which the script only
     /// looks for.
     func addMatchItems() throws {
-        try bin.write("keychain/superlinear.match.password", "00")
-        try bin.write("keychain/superlinear.match-deploy-key", "00")
+        try bin.write("keychain/templatr.match.password", "00")
+        try bin.write("keychain/templatr.match-deploy-key", "00")
     }
 
     @Test func storesEachItemUnderTheManifestsName() throws {
@@ -114,14 +114,14 @@ import Testing
         let result = try run(everyOption)
         #expect(result.succeeded, "\(result.transcript)")
         let stored = keychain
-        #expect(stored["superlinear.asc.key-id"] == "UPLOADS123")
-        #expect(stored["superlinear.asc.issuer-id"] == "issuer-uuid")
-        #expect(stored["superlinear.asc.key-p8-base64"] == base64(uploadsKey))
-        #expect(stored["superlinear.asc-admin.key-id"] == "ADMIN45678")
-        #expect(stored["superlinear.asc-admin.issuer-id"] == "issuer-uuid")
-        #expect(stored["superlinear.asc-admin.key-p8-base64"] == base64(adminKey))
-        #expect(stored["superlinear.fly.mtg-armcknight.deploy-token"] == "FlyV1 token-mtg-armcknight-1")
-        #expect(stored["superlinear.fly.other-app.deploy-token"] == "FlyV1 token-other-app-2")
+        #expect(stored["templatr.asc.key-id"] == "UPLOADS123")
+        #expect(stored["templatr.asc.issuer-id"] == "issuer-uuid")
+        #expect(stored["templatr.asc.key-p8-base64"] == base64(uploadsKey))
+        #expect(stored["templatr.asc-admin.key-id"] == "ADMIN45678")
+        #expect(stored["templatr.asc-admin.issuer-id"] == "issuer-uuid")
+        #expect(stored["templatr.asc-admin.key-p8-base64"] == base64(adminKey))
+        #expect(stored["templatr.fly.mtg-armcknight.deploy-token"] == "FlyV1 token-mtg-armcknight-1")
+        #expect(stored["templatr.fly.other-app.deploy-token"] == "FlyV1 token-other-app-2")
         #expect(stored.count == 10)
     }
 
@@ -144,14 +144,14 @@ import Testing
     @Test func dryRunStoresNothingAndMakesNoToken() throws {
         let result = try run(everyOption + ["--check", "/tmp/project", "--dry-run"])
         #expect(result.succeeded == false, "the match items are missing")
-        #expect(keychain.filter { !$0.key.hasPrefix("superlinear.match") }.isEmpty)
+        #expect(keychain.filter { !$0.key.hasPrefix("templatr.match") }.isEmpty)
         #expect(!arguments.contains("security -i"))
         #expect(!arguments.contains("fly "))
         #expect(!arguments.contains("swift "))
         for item in [
-            "superlinear.asc.key-id", "superlinear.asc.issuer-id", "superlinear.asc.key-p8-base64",
-            "superlinear.asc-admin.key-id", "superlinear.asc-admin.issuer-id", "superlinear.asc-admin.key-p8-base64",
-            "superlinear.fly.mtg-armcknight.deploy-token", "superlinear.fly.other-app.deploy-token",
+            "templatr.asc.key-id", "templatr.asc.issuer-id", "templatr.asc.key-p8-base64",
+            "templatr.asc-admin.key-id", "templatr.asc-admin.issuer-id", "templatr.asc-admin.key-p8-base64",
+            "templatr.fly.mtg-armcknight.deploy-token", "templatr.fly.other-app.deploy-token",
         ] {
             #expect(result.text.contains("in the Keychain item \(item)."), "\(item)")
         }
@@ -164,17 +164,17 @@ import Testing
         #expect(try run(everyOption).succeeded)
         let result = try run(everyOption)
         #expect(result.succeeded, "\(result.transcript)")
-        #expect(keychain["superlinear.fly.mtg-armcknight.deploy-token"] == "FlyV1 token-mtg-armcknight-3")
-        #expect(keychain["superlinear.asc.key-id"] == "UPLOADS123")
+        #expect(keychain["templatr.fly.mtg-armcknight.deploy-token"] == "FlyV1 token-mtg-armcknight-3")
+        #expect(keychain["templatr.asc.key-id"] == "UPLOADS123")
     }
 
     @Test func missingMatchItemsAreReportedNotMade() throws {
         let result = try run(["--fly-app", "mtg-armcknight"])
         #expect(result.status == 1)
         let errors = String(decoding: result.error, as: UTF8.self)
-        #expect(errors.contains("no item superlinear.match.password for MATCH_PASSWORD"))
-        #expect(errors.contains("no item superlinear.match-deploy-key for MATCH_DEPLOY_KEY"))
-        #expect(keychain.keys.sorted() == ["superlinear.fly.mtg-armcknight.deploy-token"])
+        #expect(errors.contains("no item templatr.match.password for MATCH_PASSWORD"))
+        #expect(errors.contains("no item templatr.match-deploy-key for MATCH_DEPLOY_KEY"))
+        #expect(keychain.keys.sorted() == ["templatr.fly.mtg-armcknight.deploy-token"])
     }
 
     @Test func checksEachRepositoryAtTheEnd() throws {

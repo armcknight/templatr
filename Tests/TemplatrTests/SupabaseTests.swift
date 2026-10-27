@@ -55,7 +55,7 @@ let supabaseRootCA = """
 
 /// The root's .envrc.example, as the envrc-example step writes it.
 let supabaseEnvrcExample = """
-    # Keychain: superlinear.supabase.abcdefghijklmnopqrst.database-url
+    # Keychain: templatr.supabase.abcdefghijklmnopqrst.database-url
     export DATABASE_URL='postgres://postgres.abcdefghijklmnopqrst:<password>@aws-0-<region>.pooler.supabase.com:5432/postgres?sslmode=require'
 
     """

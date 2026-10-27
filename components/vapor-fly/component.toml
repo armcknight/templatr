@@ -91,9 +91,9 @@ default = "main"
 [[secrets]]
 name = "FLY_API_TOKEN"
 description = "A deploy token for the one Fly app, which fly-deploy.yml deploys with."
-source = "keychain:superlinear.fly.{{inputs.fly_app}}.deploy-token"
+source = "keychain:templatr.fly.{{inputs.fly_app}}.deploy-token"
 scope = "repo"
-human = { text = "Run templatr's `bin/store-secrets --fly-app {{inputs.fly_app}}`, which makes a deploy token with `fly tokens create deploy --app {{inputs.fly_app}} --expiry 8760h` and stores it in the Keychain item superlinear.fly.{{inputs.fly_app}}.deploy-token. The token can deploy only this app." }
+human = { text = "Run templatr's `bin/store-secrets --fly-app {{inputs.fly_app}}`, which makes a deploy token with `fly tokens create deploy --app {{inputs.fly_app}} --expiry 8760h` and stores it in the Keychain item templatr.fly.{{inputs.fly_app}}.deploy-token. The token can deploy only this app." }
 rotateEvery = "1y"
 
 [[steps]]

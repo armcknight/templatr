@@ -113,7 +113,7 @@ public struct MissingSecret: Codable, Equatable, Sendable {
     public var component: String
     public var name: String
     public var scope: String
-    /// Where the value comes from, such as `keychain:superlinear.match.password`.
+    /// Where the value comes from, such as `keychain:templatr.match.password`.
     public var source: String
 }
 

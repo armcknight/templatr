@@ -2,15 +2,15 @@ import Foundation
 import Tagged
 
 /// The password from MATCH_PASSWORD or, without it, from the Keychain item
-/// superlinear.match.password.
+/// templatr.match.password.
 public func matchPassword(environment: [String: String] = ProcessInfo.processInfo.environment) throws(MatchError) -> MatchPassword {
     if let password = environment["MATCH_PASSWORD"], !password.isEmpty {
         return MatchPassword(password)
     }
-    let keychain = try run(["security", "find-generic-password", "-s", "superlinear.match.password", "-w"])
+    let keychain = try run(["security", "find-generic-password", "-s", "templatr.match.password", "-w"])
     let password = keychain.output.trimmingCharacters(in: .newlines)
     guard keychain.status == 0, !password.isEmpty else {
-        throw MatchError("MATCH_PASSWORD is not set, and the Keychain has no item superlinear.match.password.")
+        throw MatchError("MATCH_PASSWORD is not set, and the Keychain has no item templatr.match.password.")
     }
     return MatchPassword(password)
 }
