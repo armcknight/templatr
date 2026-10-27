@@ -1,11 +1,12 @@
 name: release
 
-# The templates' releases, modelled on release.yml in armcknight/workflows.
+# The templates' releases, with the shared github-release.yml.
 #
 # `make templates-deploy` migrates components/CHANGELOG.md, tags and pushes from
-# a workstation. This picks the tag up and does the two things that must not
-# depend on which machine tagged: publish the GitHub release from the changelog
-# section, and move the major alias, such as `v1`, that projects pin.
+# a workstation. This picks the tag up and does the things that must not depend
+# on which machine tagged: publish the GitHub release from the changelog
+# section, move the major alias, such as `v1`, that projects pin, and ask
+# mcknight.io to refresh its projects page.
 #
 # The templatr command's tags, such as `0.1.0`, have no `v` prefix and do not
 # start this workflow yet. TEM-38 adds their cask release.
@@ -23,84 +24,15 @@ permissions:
   contents: write
 
 jobs:
-  github-release:
-    name: Publish GitHub release
-    # prepare-github-release ships in the tools cask, and a cask is macOS only.
-    runs-on: macos-15
-    steps:
-    - uses: actions/checkout@v5
-      with:
-        # prepare-github-release reads the changelog section for the tag.
-        fetch-depth: 0
-
-    - name: Install armcknight/tools
-      run: |
-        set -euo pipefail
-        # Homebrew refuses to load formulae and casks from an untrusted tap.
-        brew trust armcknight/tools
-        brew install --cask armcknight/tools/tools
-
-    - name: Create the release
-      env:
-        GH_TOKEN: ${{ github.token }}
-      run: |
-        set -euo pipefail
-
-        # Mark a release candidate as a prerelease, so the newest final release
-        # stays the one GitHub shows as "Latest".
-        #
-        # Two full calls rather than an array of arguments: macOS still resolves
-        # `bash` to 3.2, where expanding an empty array under `set -u` aborts the
-        # script — which would break every final release.
-        case "$GITHUB_REF_NAME" in
-          *-*)
-            prepare-github-release "$GITHUB_REF_NAME" --changelog components/CHANGELOG.md --prerelease
-            ;;
-          *)
-            prepare-github-release "$GITHUB_REF_NAME" --changelog components/CHANGELOG.md
-            ;;
-        esac
-
-  major-alias:
-    name: Move the major alias tag
-    # A release candidate must never reach a project pinned to the alias.
-    if: ${{ !contains(github.ref_name, '-') }}
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v5
-      with:
-        fetch-depth: 0
-
-    - name: Move the alias
-      run: |
-        set -euo pipefail
-
-        TAG="$GITHUB_REF_NAME"
-        MAJOR="${TAG%%.*}"
-
-        # actions/checkout fetches the pushed ref; ask for main and every tag
-        # explicitly rather than relying on what it left behind.
-        git fetch --quiet --force --tags origin '+refs/heads/main:refs/remotes/origin/main'
-
-        if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
-          echo "::error::$TAG is not on main. Refusing to move the $MAJOR alias to a commit that main does not contain."
-          exit 1
-        fi
-
-        # Never move the alias backwards. A patch cut on an older line — v1.1.4
-        # while v1.2.0 exists — must not drag projects pinned to `v1` back with it.
-        newest=$(git tag --list "${MAJOR}.*" \
-          | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' \
-          | sort -V \
-          | tail -1)
-        if [ "$newest" != "$TAG" ]; then
-          echo "::notice::$newest is newer than $TAG. Leaving the $MAJOR alias where it is."
-          exit 0
-        fi
-
-        git config user.name "github-actions[bot]"
-        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-        git tag --force --annotate "$MAJOR" --message "$TAG" "$GITHUB_SHA"
-        git push --force origin "refs/tags/$MAJOR"
-
-        echo "::notice::$MAJOR now points at $TAG"
+  release:
+    # The major-alias input and the notify step are on armcknight/workflows'
+    # main but in no release yet: 4.2.0, the newest, has neither. Pin @4 once a
+    # release has them.
+    uses: armcknight/workflows/.github/workflows/github-release.yml@b697717006f9e4f53626bf153bdc16b5f7450a84
+    with:
+      changelog: components/CHANGELOG.md
+      major-alias: true
+    secrets:
+      # TEM-56 sets this secret. Without it the release does not notify
+      # mcknight.io.
+      SITE_DISPATCH_TOKEN: ${{ secrets.SITE_DISPATCH_TOKEN }}
