@@ -14,7 +14,7 @@ struct TemplatrCommand: AsyncParsableCommand {
             Exit status: 0 when nothing is left to do, 1 when the report lists \
             something or an error stops the run, 64 for a usage error.
             """,
-        version: version,
+        version: fullVersion,
         subcommands: [Bootstrap.self, Check.self]
     )
 

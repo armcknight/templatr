@@ -229,7 +229,7 @@ Above it, each component with a `blurb` has its own section, which bootstrap wri
 
 ## Setting up a project
 
-Run `templatr` from a checkout of this repository. It is not in a Homebrew tap. `make init` installs what it and the Makefile targets shell out to, from the [Brewfile](Brewfile); `make install` puts a release build in `~/.local/bin`, which runs against this checkout.
+Run `templatr` from a checkout of this repository. It is not in a Homebrew tap. `make init` installs what it and the Makefile targets shell out to, from the [Brewfile](Brewfile); `make install` puts a release build in `~/.local/bin`, which runs against this checkout; its `--version` names the commit it was built from, such as `0.1.0+d0a4bc2`, with `.dirty` when the tree had changes.
 
 ```sh
 git clone https://github.com/armcknight/templatr && cd templatr

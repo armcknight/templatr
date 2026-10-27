@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `templatr bootstrap` sets a project up from its components, and
   `templatr check` reports what it still needs.
 - `templatr --version` prints the version.
+- `make install` builds with the git commit in the version: `templatr --version`
+  prints `0.1.0+<commit>`, and `.dirty` when the working tree had changes. A
+  release build prints the version alone.
 - `make patch`, `minor` and `major` bump the version, and `make deploy` and
   `make deploy-beta` tag a release and make its GitHub release.
 - A `detect` or `infer` rule with `root = true` reads from the repository root
