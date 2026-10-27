@@ -1,0 +1,41 @@
+name = "mcknight-io-listing"
+description = "A project listed on mcknight.io's projects page, which asks the site to refresh when it releases or merges to its default branch."
+
+inputs = []
+
+# Opt-in: whether a project is listed on mcknight.io is not in its files, so
+# the component is detected only when .templatr.toml lists it, by hand.
+[detect]
+all = [{ glob = ".templatr.toml", contains = "(?m)^\\[components\\.mcknight-io-listing\\]" }]
+
+[[secrets]]
+name = "SITE_DISPATCH_TOKEN"
+description = "A fine-grained personal access token for armcknight/mcknight.io only, with Contents read and write, which the shared workflows' notify step sends to POST /repos/armcknight/mcknight.io/dispatches."
+source = "keychain:templatr.mcknight-io.dispatch-token"
+scope = "repo"
+human = { text = "As armcknight, make a fine-grained personal access token at https://github.com/settings/personal-access-tokens/new: resource owner armcknight, only the repository armcknight/mcknight.io, the repository permission Contents read and write and no other, and an expiry of one year. Store it in the Keychain item templatr.mcknight-io.dispatch-token, with `security add-generic-password -U -a templatr -s templatr.mcknight-io.dispatch-token -w`, which asks for the value so that it is not in the shell history. The token can read and write mcknight.io's files, which a dispatch needs, and nothing in another repository." }
+rotateEvery = "1y"
+
+[[steps]]
+id = "secrets-inherit"
+description = "Each job that calls a workflow in armcknight/workflows passes it the repository's secrets, so that the notify step gets SITE_DISPATCH_TOKEN."
+check = "{{templates}}/components/mcknight-io-listing/bin/check-secrets-inherit"
+fix = { human = { text = "Add `secrets: inherit` to each job in .github/workflows/ that calls a workflow in armcknight/workflows, at the same indentation as its `uses:`. When no job calls one, the project has nothing that notifies mcknight.io: call the shared CI or release workflow first." } }
+
+[[shared]]
+kind = "script"
+path = "components/mcknight-io-listing/bin/check-secrets-inherit"
+version = "v1"
+description = "Checks that each job that calls a workflow in armcknight/workflows passes its secrets, with secrets: inherit."
+
+[[docs]]
+title = "Components"
+anchor = "bootstrap.md#components"
+
+[[docs]]
+title = "Secrets"
+anchor = "bootstrap.md#secrets"
+
+[[docs]]
+title = "CI"
+anchor = "builds.md#ci"
