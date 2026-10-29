@@ -34,6 +34,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `certificates`, whose `list` command prints each one with its expiry. The
   report's new `certificateExpiries` has them. The `apple-app` component lists
   the certificates and profiles in the fastlane match repository.
+- An infer rule with `from = "command"` takes an input's value from what a
+  shell command prints, for a value that is not in a file, such as one a
+  service's API gives. It runs in the component's directory, or at the root
+  with `root = true`, with the `templates` and `templates.tag` placeholders
+  filled in.
+- A manifest's optional `links` are links to the project's own pages for the
+  component, such as its Linear workspace, with placeholders in their URLs.
+  `bootstrap` writes them under "Further reading" in the README's section, and
+  leaves out a link whose input has no value.
 - The `supabase` component is detected from the root also, before its
   `supabase/` exists: from a `server/Package.swift` with
   `fluent-postgres-driver`, or a `.envrc.example` with a Supabase host. It

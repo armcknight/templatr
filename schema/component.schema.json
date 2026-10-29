@@ -68,6 +68,12 @@
       "minItems": 1,
       "items": { "$ref": "#/$defs/doc" }
     },
+    "links": {
+      "description": "Links to the project's own pages for the component, such as its Linear workspace, which bootstrap writes in the root README.md's Further reading. A URL can have placeholders; a link whose input has no value is left out.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/link" }
+    },
     "certificates": {
       "description": "Signing certificates, provisioning profiles and other files that expire. templatr check reports those within 30 days of their expiry.",
       "type": "array",
@@ -134,7 +140,7 @@
       "required": ["from"],
       "properties": {
         "from": {
-          "enum": ["build-setting", "fastlane-config", "toml", "yaml", "glob", "regex"]
+          "enum": ["build-setting", "fastlane-config", "toml", "yaml", "glob", "regex", "command"]
         },
         "map": {
           "description": "Replaces the value found with the value of its key. A value with no key is not found.",
@@ -215,6 +221,17 @@
             "map": true
           },
           "required": ["glob", "pattern"],
+          "additionalProperties": false
+        },
+        {
+          "description": "What a shell command prints, trimmed, when it exits 0 and prints something. It runs in the component's directory, with the `templates` and `templates.tag` placeholders filled in, for a value that is not in a file, such as one a service's API gives.",
+          "properties": {
+            "from": { "const": "command" },
+            "command": { "type": "string", "minLength": 1 },
+            "root": { "$ref": "#/$defs/inferRoot" },
+            "map": true
+          },
+          "required": ["command"],
           "additionalProperties": false
         }
       ]
@@ -351,6 +368,19 @@
           "description": "An anchor that docs/anchors.md in the superlinear repository lists, as <page>.md#<id>.",
           "type": "string",
           "pattern": "^[a-z][a-z0-9-]*\\.md#[a-z0-9][a-z0-9-]*$"
+        }
+      }
+    },
+    "link": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "url"],
+      "properties": {
+        "title": { "type": "string", "minLength": 1 },
+        "url": {
+          "description": "The page's URL, with placeholders for inputs, such as https://linear.app/{{inputs.linear_workspace}}.",
+          "type": "string",
+          "minLength": 1
         }
       }
     }

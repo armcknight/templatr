@@ -197,6 +197,16 @@ import Testing
         #expect(wrong.transcript == "The Linear API answered: Authentication required, not authenticated")
     }
 
+    @Test func printWorkspacePrintsTheURLKeyAndNothingElse() throws {
+        let linear = try FakeLinear.setUp()
+        linear.urlKey = "babysittr"
+        let result = try run("print", "workspace", teams: "", environment: environment(linear))
+        #expect(result.succeeded)
+        #expect(String(decoding: result.output, as: UTF8.self) == "babysittr\n")
+        #expect(result.error.isEmpty)
+        #expect(try !run("check", "workspace", teams: "", environment: environment(linear)).succeeded)
+    }
+
     @Test func anUnknownStepIsAUsageError() throws {
         let linear = try FakeLinear.setUp()
         #expect(try run("fix", "todo-state", teams: "", environment: environment(linear)).status == 64)

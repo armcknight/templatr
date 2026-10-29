@@ -57,6 +57,10 @@ let manifest = #"""
     title = "Builds"
     anchor = "builds.md#ci"
 
+    [[links]]
+    title = "Fly dashboard"
+    url = "https://fly.io/apps/{{inputs.app}}"
+
     [[certificates]]
     id = "tls"
     description = "The app's TLS certificate."

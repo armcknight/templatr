@@ -45,11 +45,12 @@ struct SchemaParityTests {
         #expect(try properties(of: definition("step")) == keys(Step.CodingKeys.self))
         #expect(try properties(of: definition("shared")) == keys(Shared.CodingKeys.self))
         #expect(try properties(of: definition("doc")) == keys(Doc.CodingKeys.self))
+        #expect(try properties(of: definition("link")) == keys(ProjectLink.CodingKeys.self))
         #expect(try properties(of: definition("certificate")) == keys(Certificate.CodingKeys.self))
     }
 
     @Test func everyTableRejectsUnknownKeysLikeTheSchema() throws {
-        for name in ["detectRule", "input", "human", "secret", "step", "shared", "doc", "certificate"] {
+        for name in ["detectRule", "input", "human", "secret", "step", "shared", "doc", "link", "certificate"] {
             #expect(try definition(name)["additionalProperties"] as? Bool == false, Comment(rawValue: name))
         }
         #expect(schema["additionalProperties"] as? Bool == false)
@@ -126,9 +127,9 @@ struct SchemaParityTests {
 
     @Test func everyRequiredKeyIsRequiredInSwift() throws {
         func required(_ object: [String: Any]) -> Set<String> { Set(object["required"] as? [String] ?? []) }
-        // detect is required unless base is true; base, directory, blurb and
-        // certificates are optional.
-        #expect(required(schema) == keys(Manifest.CodingKeys.self).subtracting(["base", "directory", "blurb", "detect", "certificates"]))
+        // detect is required unless base is true; base, directory, blurb,
+        // links and certificates are optional.
+        #expect(required(schema) == keys(Manifest.CodingKeys.self).subtracting(["base", "directory", "blurb", "detect", "links", "certificates"]))
         #expect(required(try #require(schema["else"] as? [String: Any])) == ["detect"])
         #expect(try required(definition("detectRule")) == ["glob"])
         #expect(try required(definition("input")) == ["name", "description", "example"])
@@ -137,6 +138,7 @@ struct SchemaParityTests {
         #expect(try required(definition("step")) == ["id", "description", "check", "fix"])
         #expect(try required(definition("shared")) == ["kind", "path", "version", "description"])
         #expect(try required(definition("doc")) == ["title", "anchor"])
+        #expect(try required(definition("link")) == ["title", "url"])
         #expect(try required(definition("certificate")) == ["id", "description", "list", "renew"])
         let branches = try #require(try definition("inferRule")["oneOf"] as? [[String: Any]])
         let requiredBySource = Dictionary(uniqueKeysWithValues: try branches.map {
@@ -144,7 +146,7 @@ struct SchemaParityTests {
         })
         #expect(requiredBySource == [
             "build-setting": ["key"], "fastlane-config": ["file", "key"], "toml": ["file", "key"],
-            "yaml": ["file", "key"], "glob": ["glob"], "regex": ["glob", "pattern"],
+            "yaml": ["file", "key"], "glob": ["glob"], "regex": ["glob", "pattern"], "command": ["command"],
         ])
     }
 }

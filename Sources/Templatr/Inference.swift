@@ -82,6 +82,10 @@ public struct XcodeBuildSettings: BuildSettingsProvider {
 struct Inferrer {
     let files: ComponentFiles
     let buildSettings: any BuildSettingsProvider
+    /// Runs a `command` rule's command.
+    let runner: any CommandRunner
+    /// The `templates` and `templates.tag` placeholders of a `command` rule.
+    let placeholders: PlaceholderValues
 
     /// The values that the `infer` rules find for `inputs`, by name. `known`
     /// values, such as recorded ones, are not looked for, but name the Xcode
@@ -154,6 +158,13 @@ struct Inferrer {
                 }
             }
             return nil
+        case .command(let command):
+            // The inputs are not known yet, so only the built-in placeholders
+            // are filled in; the validator rejects any other.
+            let (rendered, missing) = placeholders.render(command, quoted: true)
+            guard missing.isEmpty, let result = try? runner.shell(rendered, in: files.root), result.succeeded else { return nil }
+            let value = String(decoding: result.output, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+            return value.isEmpty ? nil : value
         }
     }
 

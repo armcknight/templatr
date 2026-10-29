@@ -76,6 +76,12 @@ let demoManifest = #"""
     example = "core"
     default = "core"
 
+    [[inputs]]
+    name = "workspace"
+    description = "The workspace, which a command prints."
+    example = "demo-ws"
+    infer = [{ from = "command", command = "test -f {{templates}}/make/demo.mk && cat workspace.txt" }]
+
     [[secrets]]
     name = "DEPLOY_TOKEN"
     description = "A deploy token."
@@ -124,6 +130,10 @@ let demoManifest = #"""
     [[docs]]
     title = "Builds"
     anchor = "builds.md#ci"
+
+    [[links]]
+    title = "Dashboard"
+    url = "https://example.com/{{inputs.workspace}}"
 
     [[certificates]]
     id = "signing"
@@ -178,6 +188,7 @@ func makeTemplates() throws -> Directory {
 func makeProject() throws -> Directory {
     let project = try Directory()
     try project.write("fly.toml", "app = \"demo-api\"\nprimary_region = \"sjc\"\n")
+    try project.write("workspace.txt", "demo-ws\n")
     try project.write("README.md", projectReadme)
     return project
 }
@@ -248,9 +259,9 @@ final class Stubs: Keychain, PasswordManager, SecretStore, BuildSettingsProvider
 
     func resolves(_ url: URL) async -> Bool { true }
 
-    func services() -> Services {
+    func services(runner: any CommandRunner = ProcessRunner()) -> Services {
         Services(
-            runner: ProcessRunner(), buildSettings: self, keychain: self, passwordManager: self, secrets: self, links: self,
+            runner: runner, buildSettings: self, keychain: self, passwordManager: self, secrets: self, links: self,
             now: { [now] in now }
         )
     }
@@ -260,8 +271,8 @@ let setEverySecret: @Sendable (Secret) -> Bool = { _ in true }
 
 /// The component `name` of this repository, resolved in `repository` as
 /// bootstrap resolves it, or `nil` when its `detect` rules do not match.
-func resolve(_ name: String, in repository: URL) throws -> ResolvedComponent? {
-    let bootstrapper = Bootstrapper(templates: Templates(root: repositoryRoot, tag: "v1", tags: []), services: Stubs().services())
+func resolve(_ name: String, in repository: URL, runner: any CommandRunner = ProcessRunner()) throws -> ResolvedComponent? {
+    let bootstrapper = Bootstrapper(templates: Templates(root: repositoryRoot, tag: "v1", tags: []), services: Stubs().services(runner: runner))
     return try bootstrapper.resolve(repository: repository, answers: [:]).components.first { $0.component.name == name }
 }
 

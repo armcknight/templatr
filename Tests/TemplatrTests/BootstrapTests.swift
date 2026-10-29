@@ -60,8 +60,20 @@ import Testing
         _ = try await bootstrap(setSecret: setEverySecret)
         let record = try #require(try Record.read(in: project.root))
         #expect(record.components == [
-            "demo": Record.Entry(tag: "v1", inputs: ["app": "demo-api", "region": "sjc", "team": "core"]),
+            "demo": Record.Entry(tag: "v1", inputs: ["app": "demo-api", "region": "sjc", "team": "core", "workspace": "demo-ws"]),
         ])
+    }
+
+    @Test func aCommandRuleThatFailsOrPrintsNothingFindsNoValueAndItsLinkIsLeftOut() async throws {
+        try project.write("workspace.txt", "")
+        let resolved = try #require(try bootstrapper(tags: ["v1"]).resolve(repository: project.root, answers: [:]).components.first)
+        #expect(resolved.missing.map(\.name) == ["workspace"])
+        _ = try await bootstrap(setSecret: setEverySecret)
+        #expect(project.read("README.md")?.contains("[Dashboard]") == false)
+
+        try project.write("workspace.txt", "  demo-ws\n")
+        let found = try #require(try bootstrapper(tags: ["v1"]).resolve(repository: project.root, answers: [:]).components.first)
+        #expect(found.inferred["workspace"] == "demo-ws")
     }
 
     @Test func aMissingSecretIsSetFromItsSource() async throws {
@@ -140,6 +152,7 @@ import Testing
         #expect(section.contains("From the Keychain item `demo.demo-api.deploy-token`."))
         #expect(section.contains("Point the domain at demo-api in sjc."))
         #expect(section.contains("[Linear](https://linear.app/demo)"))
+        #expect(section.contains("[Dashboard](https://example.com/demo-ws)"))
         #expect(section.contains("https://github.com/armcknight/superlinear/blob/main/docs/lifecycle.md#overview"))
     }
 

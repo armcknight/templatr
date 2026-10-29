@@ -86,6 +86,7 @@ public struct Validator: Sendable {
             ("input", manifest.inputs.map(\.name)),
             ("secret", manifest.secrets.map(\.name)),
             ("step", manifest.steps.map(\.id)),
+            ("link", manifest.links.map(\.title)),
             ("certificates", manifest.certificates.map(\.id)),
         ] {
             for value in Self.duplicates(in: values) {
@@ -199,6 +200,16 @@ public struct Validator: Sendable {
         }
         if let blurb = manifest.blurb {
             sources.append(("\(`where`): blurb", blurb))
+        }
+        for input in manifest.inputs {
+            for (index, rule) in (input.infer ?? []).enumerated() {
+                if case .command(let command) = rule.from {
+                    sources.append(("\(`where`): input \(input.name) infer[\(index)] command", command))
+                }
+            }
+        }
+        for link in manifest.links {
+            sources.append(("\(`where`): link \(link.title) url", link.url))
         }
         for certificates in manifest.certificates {
             sources.append(("\(`where`): certificates \(certificates.id) list", certificates.list))

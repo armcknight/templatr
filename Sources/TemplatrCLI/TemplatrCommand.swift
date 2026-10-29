@@ -60,7 +60,7 @@ struct TemplatrCommand: AsyncParsableCommand {
         @Option(
             name: .customLong("link"),
             help: ArgumentHelp(
-                "A link for the README section, such as the project's Linear team. Can be given more than one time.",
+                "A link for the README section, such as the project's spec document. Can be given more than one time.",
                 valueName: "title=url"
             ),
             transform: Bootstrap.link

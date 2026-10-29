@@ -95,7 +95,7 @@ The `templatr` command has releases of its own, with three-part tags without the
 
 Its steps check, and `bootstrap` sets up, the Linear workspace that superlinear works from. They run like any other component's steps, and their results are in the same report.
 
-It is detected by an `.envrc` (or `.envrc.example`) that sets `LINEAR_API_KEY` or `LINCTL_API_KEY`. A project without one can add `linear-workspace` to `.templatr.toml` by hand. Its input `linear_teams` has the keys of the teams to check, separated by spaces, such as `STA`; empty, the default, means every team in the workspace. superlinear gives the teams of its `teamIds`. Set `linear_initiatives` to `true` when the project's spec should be under an initiative.
+It is detected by an `.envrc` (or `.envrc.example`) that sets `LINEAR_API_KEY` or `LINCTL_API_KEY`. A project without one can add `linear-workspace` to `.templatr.toml` by hand. Its input `linear_teams` has the keys of the teams to check, separated by spaces, such as `STA`; empty, the default, means every team in the workspace. superlinear gives the teams of its `teamIds`. Set `linear_initiatives` to `true` when the project's spec should be under an initiative. `linear_workspace` is the workspace's URL key, the path after `linear.app/`: the script reads it from the API with `print workspace`, when the key is in the environment, and `bootstrap` links the workspace from the README's "Further reading".
 
 | Step | Check | Fix |
 | --- | --- | --- |
@@ -169,8 +169,9 @@ Values that differ for each project, such as the bundle ID or the team ID. Each 
 | `yaml` | The dotted `key` in the YAML `file`, such as `global_secrets` in `.arkana.yml`. A list's values are joined with `separator`, a comma by default. |
 | `glob` | The path of the first file that matches `glob` and, with `contains`, whose contents match that regular expression; with `stem = true`, that file's name without its directory and extension; with `exists = true`, `true` or `false`. |
 | `regex` | The first capture group of `pattern` in the first file that matches `glob`. |
+| `command` | What the shell command `command` prints, trimmed, when it exits 0 and prints something, for a value that is not in a file, such as one a service's API gives. It runs in the component's `directory`, with the `templates` and `templates.tag` placeholders filled in, and no input, as none is known yet. The linear-workspace component's `linear_workspace` runs its script with `print workspace`. |
 
-Any rule can have `map`, which replaces the value found with the value of its key, such as `{ iphoneos = "ios" }`. A rule that reads a file, every source but `build-setting`, can have `root = true`, as a `detect` rule can, to read its `file` or `glob` from the repository root instead of the component's `directory`, such as `{ from = "toml", file = "server/fly.toml", key = "app", root = true }`. An input with no `infer`, or whose value is not found and has no `default`, is asked for one time.
+Any rule can have `map`, which replaces the value found with the value of its key, such as `{ iphoneos = "ios" }`. A rule that reads a file or runs a command, every source but `build-setting`, can have `root = true`, as a `detect` rule can, to read its `file` or `glob` from the repository root instead of the component's `directory`, or run there, such as `{ from = "toml", file = "server/fly.toml", key = "app", root = true }`. An input with no `infer`, or whose value is not found and has no `default`, is asked for one time.
 
 ### `secrets`
 
@@ -187,6 +188,10 @@ The reusable pieces that the component uses: `kind` (`workflow`, `fastlane`, `ma
 ### `docs`
 
 Sections of the superlinear guide that explain the component, each with a `title` and an `anchor` listed in its [Anchors](https://github.com/armcknight/superlinear/blob/main/docs/anchors.md) page, as `<page>.md#<id>`, such as `builds.md#testflight`.
+
+### `links`
+
+Optional. Links to the project's own pages for the component, each with a `title` and a `url`, which `bootstrap` writes under "Further reading" in the root README's section, after the guide's links. The URL can have placeholders, such as `https://linear.app/{{inputs.linear_workspace}}`; a link whose input has no value, or an empty one, is left out.
 
 ### `certificates`
 
@@ -263,7 +268,7 @@ This project uses these components from [armcknight/templatr](https://github.com
 * each shared workflow, lane, Makefile fragment and Brewfile the project uses, linked here at the pinned tag, or in its own repository at its `version`;
 * the secrets by name, never their values, with where each comes from, and the human steps;
 * links to the superlinear guide's [life of an issue](https://github.com/armcknight/superlinear/blob/main/docs/lifecycle.md#overview), [planning](https://github.com/armcknight/superlinear/blob/main/docs/planning.md#proposals), [bootstrap](https://github.com/armcknight/superlinear/blob/main/docs/bootstrap.md#components) and [builds](https://github.com/armcknight/superlinear/blob/main/docs/builds.md#ci) sections, and to the components' own `docs` anchors;
-* a link to the project's Linear team and, when it has one, its spec document.
+* the components' `links`, such as the Linear workspace, and the links given with `--link`, such as the project's spec document.
 
 Above it, each component with a `blurb` has its own section, which bootstrap writes between `<!-- templatr:begin <name> -->` and `<!-- templatr:end -->`: a link to its directory's README.md and its blurb.
 
@@ -300,7 +305,7 @@ swift run templatr check ~/Code/babysittr         # report what it still needs, 
 
 It then reports what is left, as `check` does. Running it again changes nothing that is already done.
 
-Options: `--yes` accepts the inputs found and sets missing secrets without asking; without a terminal, nothing is asked, and secrets are set only with `--yes`. `--link TITLE=URL`, which can be given more than one time, adds a link to the README section, such as the project's Linear team or spec document. `--tag TAG` is the tag new components are pinned to, the checkout's newest alias, such as `v1`, by default (a full tag, such as `v1.0.1`, can be given), and `--templates DIR` another checkout of this repository.
+Options: `--yes` accepts the inputs found and sets missing secrets without asking; without a terminal, nothing is asked, and secrets are set only with `--yes`. `--link TITLE=URL`, which can be given more than one time, adds a link to the README section, such as the project's spec document; the linear-workspace component links the Linear workspace itself. `--tag TAG` is the tag new components are pinned to, the checkout's newest alias, such as `v1`, by default (a full tag, such as `v1.0.1`, can be given), and `--templates DIR` another checkout of this repository.
 
 ### `templatr check [<repository>] [--json]`
 

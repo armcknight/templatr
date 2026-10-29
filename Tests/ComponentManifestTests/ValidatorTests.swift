@@ -156,6 +156,21 @@ struct ValidatorTests {
         #expect(repository.problems() == [])
     }
 
+    @Test func unknownPlaceholderInALinkOrAnInferCommand() throws {
+        try repository.editManifest("https://fly.io/apps/{{inputs.app}}", "https://fly.io/apps/{{inputs.name}}")
+        try repository.editManifest(
+            #"{ from = "toml", file = "fly.toml", key = "app" }"#,
+            #"{ from = "command", command = "cat {{inputs.zone}}.txt" }"#
+        )
+        expectProblem("link Fly dashboard url: unknown placeholder {{inputs.name}}")
+        expectProblem("input app infer[0] command: unknown placeholder {{inputs.zone}}")
+    }
+
+    @Test func duplicateLinkTitle() throws {
+        try repository.editManifest("[[links]]", "[[links]]\ntitle = \"Fly dashboard\"\nurl = \"https://fly.io\"\n\n[[links]]")
+        expectProblem("link 'Fly dashboard' is declared more than one time")
+    }
+
     @Test func unknownPlaceholderInSecretSource() throws {
         try repository.editManifest(#"source = "keychain:demo.fly-token""#, #"source = "keychain:demo.{{inputs.name}}.fly-token""#)
         expectProblem("secret FLY_API_TOKEN source: unknown placeholder {{inputs.name}}")

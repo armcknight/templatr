@@ -1,11 +1,13 @@
 #!/usr/bin/osascript -l JavaScript
 // Usage: linear-workspace check|fix <step> [<team keys>]
+//        linear-workspace print workspace
 //
 // Checks, or sets up, what superlinear needs in a Linear workspace, for the
 // steps of the linear-workspace component. `check` exits 0 when the step is
 // done, and prints what is missing to standard error otherwise. `fix` sets up
 // what is missing and changes nothing that is already done, so it is safe to
-// run again.
+// run again. `print workspace` prints the workspace's URL key, the path after
+// linear.app/, for the component's linear_workspace input.
 //
 // <team keys> are the keys of the teams to check, separated by spaces, such as
 // "STA TEM". Empty or not given, every team in the workspace is checked.
@@ -46,10 +48,11 @@ function run(argv) {
     'proposals-view': { check: checkProposalsView, fix: fixProposalsView },
     'onboarding-issues': { check: checkOnboarding, fix: fixOnboarding },
     initiatives: { check: checkInitiatives },
+    workspace: { print: printWorkspace },
   }
   const handler = steps[step] && steps[step][action]
   if (!handler) {
-    printError('Usage: linear-workspace check|fix <step> [<team keys>]\nSteps: ' + Object.keys(steps).join(', '))
+    printError('Usage: linear-workspace check|fix <step> [<team keys>]\n       linear-workspace print workspace\nSteps: ' + Object.keys(steps).join(', '))
     $.exit(64)
   }
   const keys = (teamKeys || '').split(/\s+/).filter((key) => key.length > 0)
@@ -67,6 +70,14 @@ function run(argv) {
 }
 
 // MARK: - Steps
+
+// Prints the workspace's URL key, such as "babysittr" for linear.app/babysittr.
+function printWorkspace() {
+  const data = graphql(`query Organization { organization { urlKey } }`)
+  if (!data.organization || !data.organization.urlKey) throw new Failure('The Linear API gave no workspace URL key.')
+  printOut(data.organization.urlKey)
+  return []
+}
 
 function checkKey(keys) {
   const data = graphql(`query Viewer {
@@ -388,6 +399,10 @@ function data(string) {
 
 function text(data) {
   return $.NSString.alloc.initWithDataEncoding(data, $.NSUTF8StringEncoding).js || ''
+}
+
+function printOut(message) {
+  $.NSFileHandle.fileHandleWithStandardOutput.writeData(data(message + '\n'))
 }
 
 function printError(message) {
