@@ -30,18 +30,21 @@ public struct Manifest: Codable, Equatable, Sendable {
     public var steps: [Step]
     public var shared: [Shared]
     public var docs: [Doc]
+    /// Links to the project's own pages for the component, such as its Linear
+    /// workspace, which bootstrap writes in the root README.md. Optional.
+    public var links: [ProjectLink]
     /// Signing certificates, profiles and other files that expire. Optional:
     /// most components have none.
     public var certificates: [Certificate]
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case name, description, base, directory, blurb, detect, inputs, secrets, steps, shared, docs, certificates
+        case name, description, base, directory, blurb, detect, inputs, secrets, steps, shared, docs, links, certificates
     }
 
     public init(
         name: String, description: String, base: Bool = false, directory: String? = nil, blurb: String? = nil,
         detect: Detect?, inputs: [Input], secrets: [Secret], steps: [Step], shared: [Shared], docs: [Doc],
-        certificates: [Certificate] = []
+        links: [ProjectLink] = [], certificates: [Certificate] = []
     ) {
         self.name = name
         self.description = description
@@ -54,6 +57,7 @@ public struct Manifest: Codable, Equatable, Sendable {
         self.steps = steps
         self.shared = shared
         self.docs = docs
+        self.links = links
         self.certificates = certificates
     }
 
@@ -79,6 +83,7 @@ public struct Manifest: Codable, Equatable, Sendable {
         steps = try container.decode([Step].self, forKey: .steps)
         shared = try container.decode([Shared].self, forKey: .shared)
         docs = try container.some(.docs, Doc.self)
+        links = try container.someIfPresent(.links, ProjectLink.self) ?? []
         certificates = try container.someIfPresent(.certificates, Certificate.self) ?? []
     }
 
@@ -95,8 +100,11 @@ public struct Manifest: Codable, Equatable, Sendable {
         try container.encode(steps, forKey: .steps)
         try container.encode(shared, forKey: .shared)
         try container.encode(docs, forKey: .docs)
-        // An empty list does not decode, so a manifest without certificates
-        // has no key.
+        // An empty list does not decode, so a manifest without links or
+        // certificates has no key.
+        if !links.isEmpty {
+            try container.encode(links, forKey: .links)
+        }
         if !certificates.isEmpty {
             try container.encode(certificates, forKey: .certificates)
         }
@@ -294,6 +302,11 @@ public struct InferRule: Codable, Equatable, Sendable {
         /// The first capture group of a regular expression in the first file
         /// that matches the glob.
         case regex(glob: String, pattern: String)
+        /// What a shell command prints, trimmed, when it exits 0 and prints
+        /// something. It runs in the component's directory, with the
+        /// `templates` and `templates.tag` placeholders filled in, for a value
+        /// that is not in a file, such as one a service's API gives.
+        case command(String)
 
         public var source: Source {
             switch self {
@@ -303,6 +316,7 @@ public struct InferRule: Codable, Equatable, Sendable {
             case .yaml: .yaml
             case .glob: .glob
             case .regex: .regex
+            case .command: .command
             }
         }
     }
@@ -311,7 +325,7 @@ public struct InferRule: Codable, Equatable, Sendable {
     public enum Source: String, CaseIterable, Codable, Sendable {
         case buildSetting = "build-setting"
         case fastlaneConfig = "fastlane-config"
-        case toml, yaml, glob, regex
+        case toml, yaml, glob, regex, command
 
         /// The keys a rule with this source can have, besides `from` and `map`.
         var keys: Set<String> {
@@ -322,13 +336,14 @@ public struct InferRule: Codable, Equatable, Sendable {
             case .yaml: ["file", "key", "separator", "root"]
             case .glob: ["glob", "contains", "exists", "stem", "root"]
             case .regex: ["glob", "pattern", "root"]
+            case .command: ["command", "root"]
             }
         }
     }
 
     /// Every key a rule can have, over all the sources.
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case from, map, key, file, separator, glob, contains, exists, stem, pattern, root
+        case from, map, key, file, separator, glob, contains, exists, stem, pattern, command, root
     }
 
     /// The keys every rule can have.
@@ -364,6 +379,8 @@ public struct InferRule: Codable, Equatable, Sendable {
             )
         case .regex:
             from = .regex(glob: try container.text(.glob), pattern: try container.text(.pattern))
+        case .command:
+            from = .command(try container.text(.command))
         }
         map = try container.decodeIfPresent([String: String].self, forKey: .map)
         root = try container.decodeIfPresent(Bool.self, forKey: .root) ?? false
@@ -391,6 +408,8 @@ public struct InferRule: Codable, Equatable, Sendable {
         case .regex(let glob, let pattern):
             try container.encode(glob, forKey: .glob)
             try container.encode(pattern, forKey: .pattern)
+        case .command(let command):
+            try container.encode(command, forKey: .command)
         }
         try container.encodeIfPresent(map, forKey: .map)
         if root { try container.encode(root, forKey: .root) }
@@ -742,6 +761,31 @@ public struct Doc: Codable, Equatable, Sendable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         title = try container.text(.title)
         anchor = try container.text(.anchor, .anchor)
+    }
+}
+
+/// A link to one of the project's own pages for the component, such as its
+/// Linear workspace or its Fly dashboard, which bootstrap writes in the root
+/// README.md's "Further reading". The URL can have placeholders; a link whose
+/// input has no value is left out.
+public struct ProjectLink: Codable, Equatable, Sendable {
+    public var title: String
+    public var url: String
+
+    enum CodingKeys: String, CodingKey, CaseIterable {
+        case title, url
+    }
+
+    public init(title: String, url: String) {
+        self.title = title
+        self.url = url
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectKeys(unknownTo: CodingKeys.self)
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        title = try container.text(.title)
+        url = try container.text(.url)
     }
 }
 

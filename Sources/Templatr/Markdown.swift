@@ -104,11 +104,22 @@ enum Markdown {
 
         lines += ["", "### Further reading", ""]
         var seenLinks: Set<String> = []
-        for link in Guide.sections + components.flatMap(\.component.guide) + links
+        for link in Guide.sections + components.flatMap(\.component.guide) + components.flatMap(projectLinks) + links
         where seenLinks.insert(link.url).inserted {
             lines.append("* [\(link.title)](\(link.url))")
         }
         return lines.joined(separator: "\n") + "\n"
+    }
+
+    /// The component's `links` with their placeholders filled in. A link whose
+    /// URL names an input with no value, or an empty one, is left out.
+    static func projectLinks(_ resolved: ResolvedComponent) -> [Link] {
+        let values = PlaceholderValues(inputs: resolved.values, templates: URL(fileURLWithPath: "/"), tag: resolved.tag)
+        return resolved.component.manifest.links.compactMap { link in
+            let empty = Placeholders.names(in: link.url).contains { values.values[$0]?.isEmpty != false }
+            let (url, missing) = values.render(link.url, quoted: false)
+            return empty || !missing.isEmpty ? nil : Link(title: link.title, url: url)
+        }
     }
 
     private static func origin(of secret: Secret) -> String {

@@ -26,6 +26,15 @@ description = "Whether the project's spec should be under an initiative, which n
 example = "true"
 default = "false"
 
+# The workspace's URL key, which the API gives for the key in the environment.
+# Without a key, an interactive bootstrap asks for it one time; without a
+# terminal, it stays missing, and the link below is left out of the README.
+[[inputs]]
+name = "linear_workspace"
+description = "The workspace's URL key: the path after linear.app/, such as babysittr for https://linear.app/babysittr."
+example = "babysittr"
+infer = [{ from = "command", command = "{{templates}}/components/linear-workspace/bin/linear-workspace print workspace" }]
+
 [[steps]]
 id = "linear-key"
 description = "LINEAR_API_KEY, else LINCTL_API_KEY, is set, Linear accepts it, and its user is an admin of each team."
@@ -84,7 +93,11 @@ fix = { human = { text = "Turn on initiatives in the Linear workspace's settings
 kind = "script"
 path = "components/linear-workspace/bin/linear-workspace"
 version = "v1"
-description = "Checks, and sets up, a Linear workspace's teams' states, Triage and labels, the superlinear proposals view, the onboarding issues and the initiatives, with Linear's API and a key from the environment."
+description = "Checks, and sets up, a Linear workspace's teams' states, Triage and labels, the superlinear proposals view, the onboarding issues and the initiatives, with Linear's API and a key from the environment, and prints the workspace's URL key."
+
+[[links]]
+title = "Linear workspace"
+url = "https://linear.app/{{inputs.linear_workspace}}"
 
 [[docs]]
 title = "Components"

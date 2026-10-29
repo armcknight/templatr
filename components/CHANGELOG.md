@@ -25,6 +25,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- The linear-workspace component links the Linear workspace from the README's
+  "Further reading". Its new input `linear_workspace` is the workspace's URL
+  key, the path after `linear.app/`, which its script reads from the API with
+  `print workspace` when the key is in the environment. A project that already
+  uses the component gets the input on its next `bootstrap`.
 - The root Makefile downloads its fragments to `.templatr/make/`, next to the
   components' `CLAUDE.md` copies, and no longer to `.superlinear/make/`. The
   base component's `.gitignore` check and fix follow. A project with the old

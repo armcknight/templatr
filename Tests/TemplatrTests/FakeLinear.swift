@@ -48,6 +48,8 @@ final class FakeLinear: @unchecked Sendable {
     private let listener: NWListener
     private(set) var url = ""
 
+    /// The workspace's URL key, the path after linear.app/.
+    var urlKey = "demo"
     var viewerAdmin = false
     /// The keys of the teams the viewer owns.
     var viewerOwns: Set<String> = []
@@ -222,6 +224,8 @@ final class FakeLinear: @unchecked Sendable {
                 "id": "viewer", "name": "owner@example.com", "admin": viewerAdmin,
                 "teamMemberships": ["nodes": teams.map { ["owner": viewerOwns.contains($0.key), "team": ["key": $0.key]] }],
             ]])
+        case "Organization":
+            return data(["organization": ["urlKey": urlKey]])
         case "List":
             return list(query: query, after: variables["after"] as? String)
         case "Initiatives":

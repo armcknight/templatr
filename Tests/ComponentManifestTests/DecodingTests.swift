@@ -25,6 +25,7 @@ struct DecodingTests {
         #expect(decoded.detect?.any == [DetectRule(glob: "Package.swift", contains: "vapor", root: false)])
         #expect(decoded.inputs[0].infer == [InferRule(from: .toml(file: "fly.toml", key: "app"), map: nil, root: false)])
         #expect(decoded.inputs[1].infer?[0].from == .regex(glob: "fly.toml", pattern: #"primary_region = "([a-z]+)""#))
+        #expect(decoded.links == [ProjectLink(title: "Fly dashboard", url: "https://fly.io/apps/{{inputs.app}}")])
         #expect(decoded.secrets[0].source == .keychain(item: "demo.fly-token"))
         #expect(decoded.secrets[0].scope == .app)
         #expect(decoded.secrets[0].human == Human(text: "Make a deploy token for {{inputs.app}}.", twoFactor: true))
@@ -129,7 +130,27 @@ struct DecodingTests {
     @Test func anUnknownSourceIsAnError() {
         let error = error(decoding: manifest.replacingOccurrences(of: #"from = "toml""#, with: #"from = "json""#))
         #expect(error?.path == "inputs/0/infer/0/from")
-        #expect(error?.message == "'json' is not one of build-setting, fastlane-config, toml, yaml, glob, regex")
+        #expect(error?.message == "'json' is not one of build-setting, fastlane-config, toml, yaml, glob, regex, command")
+    }
+
+    @Test func aCommandRuleHasItsCommand() throws {
+        let decoded = try Manifest(toml: manifest.replacingOccurrences(
+            of: #"{ from = "toml", file = "fly.toml", key = "app" }"#,
+            with: #"{ from = "command", command = "{{templates}}/bin/app-name", root = true }"#
+        ))
+        #expect(decoded.inputs[0].infer == [InferRule(from: .command("{{templates}}/bin/app-name"), map: nil, root: true)])
+        let error = error(decoding: manifest.replacingOccurrences(
+            of: #"{ from = "toml", file = "fly.toml", key = "app" }"#,
+            with: #"{ from = "command", file = "fly.toml" }"#
+        ))
+        #expect(error?.path == "inputs/0/infer/0")
+        #expect(error?.message.contains("'file' was unexpected for from = \"command\"") == true)
+    }
+
+    @Test func aLinkNeedsATitleAndAURL() {
+        let error = error(decoding: manifest.replacingOccurrences(of: #"url = "https://fly.io/apps/{{inputs.app}}""#, with: "url = \"\""))
+        #expect(error?.path == "links/0/url")
+        #expect(error?.message == "is empty")
     }
 
     @Test func aMissingKeyIsAnError() {

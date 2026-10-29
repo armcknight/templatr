@@ -65,8 +65,12 @@ public struct Bootstrapper: Sendable {
 
         resolution.components = names.map { name in
             let component = byName[name]!
-            let inferrer = Inferrer(files: files(of: component), buildSettings: services.buildSettings)
             let entry = record?.components[name]
+            let tag = entry?.tag ?? templates.tag
+            let inferrer = Inferrer(
+                files: files(of: component), buildSettings: services.buildSettings, runner: services.runner,
+                placeholders: PlaceholderValues(inputs: [:], templates: templates.root, tag: tag)
+            )
             let known = (entry?.inputs ?? [:]).merging(answers[name] ?? [:]) { $1 }
             let inferred = inferrer.infer(component.manifest.inputs, known: known)
             var values = known.merging(inferred) { first, _ in first }
@@ -78,9 +82,7 @@ public struct Bootstrapper: Sendable {
                     missing.append(input)
                 }
             }
-            return ResolvedComponent(
-                component: component, tag: entry?.tag ?? templates.tag, values: values, inferred: inferred, missing: missing
-            )
+            return ResolvedComponent(component: component, tag: tag, values: values, inferred: inferred, missing: missing)
         }
         return resolution
     }
