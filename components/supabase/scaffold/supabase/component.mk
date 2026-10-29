@@ -23,7 +23,7 @@ SUPABASE_CA_CERT = server/{{inputs.ca_cert_path}}
 # ignores.
 SUPABASE_TEST_DIR = supabase/.test-pgdata
 SUPABASE_STATUS_DIR = supabase/status
-SUPABASE_LOG_DIR = supabase
+SUPABASE_LOG_DIR = supabase/logs
 # Targets `make local-db reset` runs first, such as one that stops the server.
 SUPABASE_DB_RESET_PREREQUISITES =
 
