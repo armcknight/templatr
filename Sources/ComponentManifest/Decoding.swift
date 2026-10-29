@@ -35,10 +35,16 @@ struct Format: Sendable {
         pattern: "^[a-z][a-z0-9_]*$",
         expectation: "a lowercase identifier, such as bundle_id"
     )
-    /// A secret's name or a build setting's key.
+    /// A secret's name.
     static let constant = Format(
         pattern: "^[A-Z][A-Z0-9_]*$",
         expectation: "an uppercase identifier, such as MATCH_PASSWORD"
+    )
+    /// A build setting's key. Most are uppercase; the keys of a generated
+    /// Info.plist are not, such as INFOPLIST_KEY_CFBundleDisplayName.
+    static let buildSetting = Format(
+        pattern: "^[A-Z][A-Za-z0-9_]*$",
+        expectation: "a build setting, such as PRODUCT_NAME or INFOPLIST_KEY_CFBundleDisplayName"
     )
     /// A fastlane configuration call's name.
     static let fastlaneKey = Format(

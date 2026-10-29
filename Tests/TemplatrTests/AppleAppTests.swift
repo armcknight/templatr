@@ -32,7 +32,8 @@ import Testing
             """)
         try project.write("apple/.arkana.yml", "global_secrets:\n  - SentryDSN\n  - FeedbackEmail\n")
         stubs.settings = [
-            "PRODUCT_NAME": "Demo",
+            // The display name, which people see, comes before the product name.
+            "INFOPLIST_KEY_CFBundleDisplayName": "My Demo", "APP_DISPLAY_NAME": "Other Demo", "PRODUCT_NAME": "Demo",
             // xcodebuild prints SDKROOT as a path.
             "SDKROOT": "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS26.1.sdk",
             "SUPPORTED_PLATFORMS": "iphoneos iphonesimulator", "PRODUCT_BUNDLE_IDENTIFIER": "io.example.other",
@@ -71,7 +72,7 @@ import Testing
         let app = try #require(resolution.components.last)
         #expect(app.missing.map(\.name) == [])
         #expect(app.values == [
-            "app_name": "Demo",
+            "app_name": "My Demo",
             "scheme": "Demo",
             "project": "Demo.xcodeproj",
             "workspace": "",
@@ -91,7 +92,7 @@ import Testing
         ])
         // Defaults are not shown as inferred.
         #expect(app.inferred["test_device"] == nil)
-        #expect(app.inferred["app_name"] == "Demo")
+        #expect(app.inferred["app_name"] == "My Demo")
         // xcodebuild runs one time, for the project and scheme found first.
         #expect(stubs.settingsRequests == [["Demo.xcodeproj", nil, "Demo"]])
     }
@@ -198,6 +199,11 @@ import Testing
         let values = PlaceholderValues(inputs: ["name": "it's"], templates: URL(fileURLWithPath: "/t p"), tag: "v1")
         #expect(values.render("echo {{inputs.name}} {{ templates }}/x ${{ github.ref }} {{inputs.other}}", quoted: true)
             == ("echo 'it'\\''s' '/t p'/x ${{ github.ref }} {{inputs.other}}", ["inputs.other"]))
+    }
+
+    @Test func aCompactPlaceholderHasTheValueWithoutWhiteSpace() {
+        let values = PlaceholderValues(inputs: ["app_name": " Bae  Today\t"], templates: URL(fileURLWithPath: "/t"), tag: "v1")
+        #expect(values.render("{{inputs.app_name.compact}}-staging ({{inputs.app_name}})", quoted: false).text == "BaeToday-staging ( Bae  Today\t)")
     }
 
     @Test func keychainModificationDate() {

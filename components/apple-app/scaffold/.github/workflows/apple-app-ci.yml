@@ -17,8 +17,8 @@ jobs:
   ci:
     uses: armcknight/workflows/.github/workflows/ios-ci.yml@4
     with:
-      # The shared `stage` lane's output: <app name>-staging.ipa.
-      ipa-name: "{{inputs.app_name}}-staging"
+      # The shared `stage` lane's output: the app's name without spaces, then -staging.ipa.
+      ipa-name: "{{inputs.app_name.compact}}-staging"
       # The Arkana keys to write to .env. Each value comes from the repository
       # secret of the same name, through `secrets: inherit`.
       arkana-keys: "{{inputs.arkana_keys}}"

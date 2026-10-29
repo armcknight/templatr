@@ -16,6 +16,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   named `templatr.<name>`, such as `templatr.asc.key-id`, and no longer
   `superlinear.<name>`.
 - `templatr --version` prints the version.
+- `{{inputs.<name>.compact}}` is an input's value without white space, for a
+  name people see, such as `Bae Today`, where a file or an identifier needs
+  `BaeToday`.
 - `make install` builds with the git commit in the version: `templatr --version`
   prints `0.1.0+<commit>`, and `.dirty` when the working tree had changes. A
   release build prints the version alone.

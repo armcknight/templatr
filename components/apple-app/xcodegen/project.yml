@@ -19,7 +19,10 @@ targets:
       - @SCHEME@
     settings:
       base:
-        PRODUCT_NAME: @APP_NAME@
+        # The name people see can have spaces; the product, which names the
+        # .app, is it without them.
+        PRODUCT_NAME: @PRODUCT_NAME@
+        INFOPLIST_KEY_CFBundleDisplayName: @APP_NAME@
         PRODUCT_BUNDLE_IDENTIFIER: @BUNDLE_ID@
         GENERATE_INFOPLIST_FILE: YES
         INFOPLIST_KEY_UILaunchScreen_Generation: YES

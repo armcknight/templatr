@@ -4,10 +4,17 @@ import Foundation
 /// secrets' sources and human texts. GitHub Actions' `${{ expression }}` is not
 /// one.
 public enum Placeholders {
-    /// The placeholders every component can use, besides `inputs.<name>`:
-    /// `templates`, the path of a checkout of this repository at the project's
-    /// tag, and `templates.tag`, that tag.
+    /// The placeholders every component can use, besides `inputs.<name>` and
+    /// `inputs.<name>.compact`, the value without white space: `templates`,
+    /// the path of a checkout of this repository at the project's tag, and
+    /// `templates.tag`, that tag.
     public static let builtin: Set<String> = ["templates", "templates.tag"]
+
+    /// The placeholders of an input: its value, and its value without white
+    /// space.
+    public static func names(ofInput name: String) -> [String] {
+        ["inputs.\(name)", "inputs.\(name).compact"]
+    }
 
     /// The names in each `{{…}}` in `text`, trimmed.
     public static func names(in text: String) -> Set<String> {

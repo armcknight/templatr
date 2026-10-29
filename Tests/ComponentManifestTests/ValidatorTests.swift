@@ -126,6 +126,12 @@ struct ValidatorTests {
         expectProblem("blurb: unknown placeholder {{inputs.name}}")
     }
 
+    @Test func anInputsCompactPlaceholderIsKnownAndOtherSuffixesAreNot() throws {
+        try repository.editManifest("The demo server, {{inputs.app}}.", "The demo server, {{inputs.app.compact}} {{inputs.app.upper}}.")
+        let problems = repository.problems()
+        #expect(problems == ["components/demo/component.toml: blurb: unknown placeholder {{inputs.app.upper}}"])
+    }
+
     @Test func unknownPlaceholderInHumanText() throws {
         try repository.editManifest("Point the domain at {{inputs.app}}.", "Point {{inputs.domain}} at the app.")
         expectProblem("step domain fix: unknown placeholder {{inputs.domain}}")

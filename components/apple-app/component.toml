@@ -18,11 +18,18 @@ any = [
   { glob = "Project.swift", contains = "product:\\s*\\.app\\b" },
 ]
 
+# The name people see, which can have spaces. Where a file or an identifier
+# needs it, such as the staging IPA and a new app's PRODUCT_NAME, the
+# placeholder {{inputs.app_name.compact}} is the name without them.
 [[inputs]]
 name = "app_name"
-description = "The app's product name in the Release configuration, as App Store Connect names the app."
-example = "Babysittr"
-infer = [{ from = "build-setting", key = "PRODUCT_NAME" }]
+description = "The app's name as people see it, which can have spaces: the display name, and the app's name in App Store Connect. The staging IPA and a new app's product name are it without spaces."
+example = "Bae Today"
+infer = [
+  { from = "build-setting", key = "INFOPLIST_KEY_CFBundleDisplayName" },
+  { from = "build-setting", key = "APP_DISPLAY_NAME" },
+  { from = "build-setting", key = "PRODUCT_NAME" },
+]
 
 [[inputs]]
 name = "scheme"

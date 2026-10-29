@@ -25,7 +25,7 @@ jobs:
     uses: armcknight/workflows/.github/workflows/ios-ci.yml@4
     with:
       # Keep these inputs in step with apple-app-ci.yml.
-      ipa-name: "{{inputs.app_name}}-staging"
+      ipa-name: "{{inputs.app_name.compact}}-staging"
       arkana-keys: "{{inputs.arkana_keys}}"
       # The Xcode project, the Gemfile and fastlane/ are in apple/.
       working-directory: apple

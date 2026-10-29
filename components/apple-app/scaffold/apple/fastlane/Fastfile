@@ -6,7 +6,8 @@
 ENV["APPLE_APP_SCHEME"] ||= "{{inputs.scheme}}"
 ENV["APPLE_APP_PROJECT"] ||= "{{inputs.project}}"
 ENV["APPLE_APP_WORKSPACE"] ||= "{{inputs.workspace}}"
-ENV["APPLE_APP_NAME"] ||= "{{inputs.app_name}}"
+# The app's name without spaces: it names the staging IPA.
+ENV["APPLE_APP_NAME"] ||= "{{inputs.app_name.compact}}"
 ENV["APPLE_APP_BUNDLE_ID"] ||= "{{inputs.bundle_id}}"
 ENV["APPLE_APP_ADHOC_BUNDLE_ID"] ||= "{{inputs.adhoc_bundle_id}}"
 ENV["APPLE_APP_IDENTIFIERS"] ||= "{{inputs.app_identifiers}}"

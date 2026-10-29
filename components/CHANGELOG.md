@@ -12,6 +12,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The apple-app component's `app_name` is the name people see, which can have
+  spaces, such as `Bae Today`: it is inferred from the display name
+  (`INFOPLIST_KEY_CFBundleDisplayName`, else `APP_DISPLAY_NAME`) before
+  `PRODUCT_NAME`. The staging IPA, `apple/fastlane/Fastfile`'s
+  `APPLE_APP_NAME` and a new app's `PRODUCT_NAME` are the name without spaces,
+  and a new app's display name is the name as given. The shared `stage` lane
+  also removes spaces from `APPLE_APP_NAME`. A project whose name has no
+  spaces changes nothing.
+
 ### Added
 
 - The root Makefile downloads its fragments to `.templatr/make/`, next to the

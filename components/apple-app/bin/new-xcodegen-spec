@@ -14,6 +14,9 @@
 # <scheme>Tests/. It changes no file that exists, and writes nothing when
 # project.yml exists. The files come from the templates in ../xcodegen/, where
 # each @NAME@ placeholder is replaced with its value.
+#
+# <app_name> is the name people see, which can have spaces: it becomes the
+# display name. The product name, which names the .app, is it without spaces.
 
 templates="$(cd "$(dirname "$0")/../xcodegen" && pwd)" || exit 1
 
@@ -23,6 +26,7 @@ if [ "$#" -ne 7 ]; then
 fi
 
 app_name="$1"
+product="$(printf '%s' "$app_name" | tr -d '[:space:]')"
 scheme="$2"
 project="$3"
 bundle_id="$4"
@@ -107,10 +111,11 @@ SCHEME="$(quote "$scheme")" \
 TEST_SCHEME="$(quote "${scheme}Tests")" \
 DESTINATIONS="$destination_list" \
 APP_NAME="$(quote "$app_name")" \
+PRODUCT_NAME="$(quote "$product")" \
 BUNDLE_ID="$(quote "$bundle_id")" \
 TEST_BUNDLE_ID="$(quote "$bundle_id.tests")" \
-TEST_HOST="$(quote "\$(BUILT_PRODUCTS_DIR)/$app_name.app/$app_name")" \
-MAC_TEST_HOST="$(quote "\$(BUILT_PRODUCTS_DIR)/$app_name.app/Contents/MacOS/$app_name")" \
+TEST_HOST="$(quote "\$(BUILT_PRODUCTS_DIR)/$product.app/$product")" \
+MAC_TEST_HOST="$(quote "\$(BUILT_PRODUCTS_DIR)/$product.app/Contents/MacOS/$product")" \
   render project.yml project.yml
 
 # The build number is CURRENT_PROJECT_VERSION, which deploy-beta raises, and

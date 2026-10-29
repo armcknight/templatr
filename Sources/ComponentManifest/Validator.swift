@@ -175,7 +175,7 @@ public struct Validator: Sendable {
             }
         }
 
-        let allowed = Placeholders.builtin.union(manifest.inputs.map { "inputs.\($0.name)" })
+        let allowed = Placeholders.builtin.union(manifest.inputs.flatMap { Placeholders.names(ofInput: $0.name) })
         var sources: [(label: String, text: String)] = []
         for file in textFiles(under: scaffold) {
             sources.append((relative(file.url), file.text))

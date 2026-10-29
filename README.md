@@ -205,6 +205,7 @@ renew = { text = "Renew them with match.", twoFactor = true }
 Scaffold files, step commands, certificates' `list` commands, secrets' sources, human texts and blurbs can contain:
 
 * `{{inputs.<name>}}`: an input's value. In `check`, `fix` and `list` commands, the value is quoted for the shell.
+* `{{inputs.<name>.compact}}`: the value without white space, for a name people see, such as `Bae Today`, where a file or an identifier needs `BaeToday`.
 * `{{templates}}`: the path of a checkout of this repository at the project's tag, for the scripts in `components/<name>/bin/`.
 * `{{templates.tag}}`: the project's tag, such as `v1`.
 
@@ -365,7 +366,7 @@ For each `components/<name>/component.toml`:
 * a component with a `directory` has `scaffold/<directory>/README.md`, without the generated section's markers, and its other scaffold files are under `scaffold/<directory>/` or are workflows named `.github/workflows/<name>-*`; a component with neither has only such workflows;
 * the base component has `scaffold/README.md`, with the generated section's markers, one time each and in order;
 * there is at most one base component, no two components have the same `directory`, no two scaffolds have a file at the same path, and no scaffold has a file in another component's directory;
-* each `{{placeholder}}` in the scaffold, the steps, the certificates' `list` commands, the secrets' sources, the human texts and the blurb names a declared input, `templates` or `templates.tag`;
+* each `{{placeholder}}` in the scaffold, the steps, the certificates' `list` commands, the secrets' sources, the human texts and the blurb names a declared input, with or without `.compact`, `templates` or `templates.tag`;
 * each regular expression compiles, and each `regex` infer rule has a capture group;
 * a `detect` or `infer` rule has `root = true` only in a component with a `directory`;
 * each shared path in this repository exists; a path in another `repo` is not checked;

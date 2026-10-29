@@ -346,7 +346,7 @@ public struct InferRule: Codable, Equatable, Sendable {
         try decoder.rejectKeys(outside: Self.commonKeys.union(source.keys), context: " for from = \"\(source.rawValue)\"")
         switch source {
         case .buildSetting:
-            from = .buildSetting(key: try container.text(.key, .constant), separator: try container.textIfPresent(.separator))
+            from = .buildSetting(key: try container.text(.key, .buildSetting), separator: try container.textIfPresent(.separator))
         case .fastlaneConfig:
             from = .fastlaneConfig(file: try container.text(.file), key: try container.text(.key, .fastlaneKey))
         case .toml:

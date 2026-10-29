@@ -117,7 +117,7 @@ struct SchemaParityTests {
         let branches = try #require(try definition("inferRule")["oneOf"] as? [[String: Any]])
         for branch in branches {
             switch try property("from", of: branch)["const"] as? String {
-            case "build-setting": #expect(try pattern(property("key", of: branch)) == Format.constant.pattern)
+            case "build-setting": #expect(try pattern(property("key", of: branch)) == Format.buildSetting.pattern)
             case "fastlane-config": #expect(try pattern(property("key", of: branch)) == Format.fastlaneKey.pattern)
             default: break
             }

@@ -2,13 +2,17 @@ import Foundation
 
 /// The values of a component's placeholders in one project.
 struct PlaceholderValues {
-    /// By placeholder name: `inputs.<name>`, `templates` and `templates.tag`.
+    /// By placeholder name: `inputs.<name>`, `inputs.<name>.compact`,
+    /// `templates` and `templates.tag`.
     var values: [String: String]
 
     init(inputs: [String: String], templates: URL, tag: String) {
         values = ["templates": templates.path, "templates.tag": tag]
         for (name, value) in inputs {
             values["inputs.\(name)"] = value
+            // The value without white space, for a name people see, such as
+            // "Bae Today", where a file or an identifier needs "BaeToday".
+            values["inputs.\(name).compact"] = value.filter { !$0.isWhitespace }
         }
     }
 

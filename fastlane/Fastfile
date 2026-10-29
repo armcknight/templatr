@@ -11,7 +11,8 @@
 # of its own, as fastlane rejects a lane defined twice.
 #
 # test runs on each pull request, in armcknight/workflows' ios-ci.yml. stage
-# builds an ad-hoc IPA, <app name>-staging.ipa, for a staging build that a
+# builds an ad-hoc IPA, <app name>-staging.ipa, with the spaces removed from
+# the name, for a staging build that a
 # `/build-staging` comment asks for. ios-ci.yml sets MATCH_PASSWORD and gives
 # read access to the match repository through the MATCH_DEPLOY_KEY secret.
 #
@@ -165,8 +166,9 @@ def apple_app_stage(options)
     export_method: "ad-hoc",
     clean: true,
     xcodebuild_formatter: "xcbeautify",
-    # ios-ci.yml's ipa-name input must be this name.
-    output_name: "#{app_name}-staging",
+    # ios-ci.yml's ipa-name input must be this name. A name people see can
+    # have spaces; a file is better without them.
+    output_name: "#{app_name.gsub(/\s+/, "")}-staging",
     export_options: export_options
   }
   # Such as a build setting that switches the app to its ad-hoc bundle ID.
