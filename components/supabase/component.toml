@@ -145,8 +145,8 @@ fix = { human = { text = "Make the Supabase project as the DATABASE_URL secret s
 [[steps]]
 id = "gitignore"
 description = "Git ignores the root's .envrc, and in supabase/, the test database's directory, the parity snapshots, the logs and the Supabase CLI's local state."
-check = "for p in ../.envrc .test-pgdata/ status/local.json .temp/x .branches/x supabase-db-init.log; do git check-ignore -q --no-index \"$p\" || exit 1; done"
-fix = "{ git check-ignore -q --no-index ../.envrc || printf '%s\\n' .envrc >> ../.gitignore; } && for p in .test-pgdata/ status/ .temp/ .branches/ '*.log'; do grep -qxF \"$p\" .gitignore 2>/dev/null || printf '%s\\n' \"$p\" >> .gitignore; done"
+check = "for p in ../.envrc .test-pgdata/ status/local.json .temp/x .branches/x logs/supabase-db-init.log; do git check-ignore -q --no-index \"$p\" || exit 1; done"
+fix = "{ git check-ignore -q --no-index ../.envrc || printf '%s\\n' .envrc >> ../.gitignore; } && for p in .test-pgdata/ status/ .temp/ .branches/ logs/; do grep -qxF \"$p\" .gitignore 2>/dev/null || printf '%s\\n' \"$p\" >> .gitignore; done"
 
 [[steps]]
 id = "envrc-example"

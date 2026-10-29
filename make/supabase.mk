@@ -46,7 +46,7 @@ SUPABASE_TEST_DIR ?= .test-pgdata
 SUPABASE_TEST_DATABASE_URL ?= postgres://$(USER)@localhost:$(SUPABASE_TEST_PORT)/postgres
 
 SUPABASE_STATUS_DIR ?= status
-SUPABASE_LOG_DIR ?= .
+SUPABASE_LOG_DIR ?= logs
 SUPABASE_BREW_PREFIX := $(shell brew --prefix 2>/dev/null)
 SUPABASE_PG_BIN ?= $(SUPABASE_BREW_PREFIX)/opt/postgresql@$(SUPABASE_PG_VERSION)/bin
 # macOS's openssl cannot start TLS in the Postgres protocol; OpenSSL 3 can.
@@ -81,9 +81,9 @@ SHELL := /bin/bash
 supabase-db-init: supabase-style
 ifeq ($(SUPABASE_MIGRATION_STYLE),cli)
 	@# supabase start applies supabase/migrations and supabase/seed.sql the first time.
-	@set -o pipefail; supabase start 2>&1 | tee $(SUPABASE_LOG_DIR)/supabase-db-init.log
+	@mkdir -p $(SUPABASE_LOG_DIR); set -o pipefail; supabase start 2>&1 | tee $(SUPABASE_LOG_DIR)/supabase-db-init.log
 else
-	@set -o pipefail; { \
+	@mkdir -p $(SUPABASE_LOG_DIR); set -o pipefail; { \
 	  export PATH="$(SUPABASE_PG_BIN):$$PATH"; \
 	  if psql -lqt | cut -d '|' -f 1 | grep -qw "$(SUPABASE_DB_NAME)"; then \
 	    echo "The database $(SUPABASE_DB_NAME) exists."; \
@@ -97,19 +97,19 @@ endif
 ## supabase-db-reset: delete the local database and make it again
 supabase-db-reset: supabase-style $(SUPABASE_DB_RESET_PREREQUISITES)
 ifeq ($(SUPABASE_MIGRATION_STYLE),cli)
-	@set -o pipefail; supabase db reset 2>&1 | tee $(SUPABASE_LOG_DIR)/supabase-db-reset.log
+	@mkdir -p $(SUPABASE_LOG_DIR); set -o pipefail; supabase db reset 2>&1 | tee $(SUPABASE_LOG_DIR)/supabase-db-reset.log
 else
-	@set -o pipefail; PATH="$(SUPABASE_PG_BIN):$$PATH" dropdb --if-exists "$(SUPABASE_DB_NAME)" 2>&1 | tee $(SUPABASE_LOG_DIR)/supabase-db-reset.log
+	@mkdir -p $(SUPABASE_LOG_DIR); set -o pipefail; PATH="$(SUPABASE_PG_BIN):$$PATH" dropdb --if-exists "$(SUPABASE_DB_NAME)" 2>&1 | tee $(SUPABASE_LOG_DIR)/supabase-db-reset.log
 	@$(MAKE) --no-print-directory supabase-db-init
 endif
 
 ## supabase-db-migrate: run the migrations that the local database does not have yet
 supabase-db-migrate: supabase-style
 ifeq ($(SUPABASE_MIGRATION_STYLE),cli)
-	@set -o pipefail; supabase migration up 2>&1 | tee $(SUPABASE_LOG_DIR)/supabase-db-migrate.log
+	@mkdir -p $(SUPABASE_LOG_DIR); set -o pipefail; supabase migration up 2>&1 | tee $(SUPABASE_LOG_DIR)/supabase-db-migrate.log
 else
 	@test -n "$(SUPABASE_PRODUCT)" || { echo "Set SUPABASE_PRODUCT to the executable product that runs the migrations." >&2; exit 1; }
-	@set -o pipefail; swift run --package-path $(SUPABASE_PACKAGE_PATH) $(SUPABASE_PRODUCT) $(SUPABASE_MIGRATE_ARGS) 2>&1 | tee $(SUPABASE_LOG_DIR)/supabase-db-migrate.log
+	@mkdir -p $(SUPABASE_LOG_DIR); set -o pipefail; swift run --package-path $(SUPABASE_PACKAGE_PATH) $(SUPABASE_PRODUCT) $(SUPABASE_MIGRATE_ARGS) 2>&1 | tee $(SUPABASE_LOG_DIR)/supabase-db-migrate.log
 endif
 
 # The test database is made the first time; to make it again, run
@@ -120,7 +120,7 @@ endif
 # not set.
 ## supabase-db-test-start: start the isolated test database, at SUPABASE_TEST_DATABASE_URL
 supabase-db-test-start: supabase-style
-	@set -o pipefail; { \
+	@mkdir -p $(SUPABASE_LOG_DIR); set -o pipefail; { \
 	  export PATH="$(SUPABASE_PG_BIN):$$PATH"; \
 	  export LC_ALL="$${LC_ALL:-C}"; \
 	  made=0; \
@@ -147,11 +147,11 @@ supabase-db-test-start: supabase-style
 
 ## supabase-db-test-stop: stop the isolated test database
 supabase-db-test-stop:
-	@PATH="$(SUPABASE_PG_BIN):$$PATH" pg_ctl -D "$(SUPABASE_TEST_DIR)" stop 2>&1 | tee $(SUPABASE_LOG_DIR)/supabase-db-test-stop.log || echo "The test database is not running."
+	@mkdir -p $(SUPABASE_LOG_DIR); PATH="$(SUPABASE_PG_BIN):$$PATH" pg_ctl -D "$(SUPABASE_TEST_DIR)" stop 2>&1 | tee $(SUPABASE_LOG_DIR)/supabase-db-test-stop.log || echo "The test database is not running."
 
 ## supabase-db-status: write the local database's state to SUPABASE_STATUS_DIR/local.json
 supabase-db-status: $(SUPABASE_BIN)/db-snapshot
-	@set -o pipefail; \
+	@mkdir -p $(SUPABASE_LOG_DIR); set -o pipefail; \
 	PATH="$(SUPABASE_PG_BIN):$$PATH" DATABASE_URL="$(SUPABASE_LOCAL_DATABASE_URL)" \
 	  $(SUPABASE_BIN)/db-snapshot local "$(SUPABASE_STATUS_DIR)/local.json" 2>&1 | tee $(SUPABASE_LOG_DIR)/supabase-db-status.log
 
@@ -159,7 +159,7 @@ supabase-db-status: $(SUPABASE_BIN)/db-snapshot
 # can run it first.
 ## supabase-status-diff: compare the local and the remote databases' tables, columns, row counts and migrations
 supabase-status-diff: supabase-database-url supabase-db-status $(SUPABASE_BIN)/db-snapshot $(SUPABASE_BIN)/db-snapshot-diff
-	@set -o pipefail; { \
+	@mkdir -p $(SUPABASE_LOG_DIR); set -o pipefail; { \
 	  PATH="$(SUPABASE_PG_BIN):$$PATH" $(SUPABASE_BIN)/db-snapshot remote "$(SUPABASE_STATUS_DIR)/remote.json" >/dev/null && \
 	  $(SUPABASE_BIN)/db-snapshot-diff "$(SUPABASE_STATUS_DIR)/local.json" "$(SUPABASE_STATUS_DIR)/remote.json"; \
 	} 2>&1 | tee $(SUPABASE_LOG_DIR)/supabase-status-diff.log
@@ -168,7 +168,7 @@ supabase-status-diff: supabase-database-url supabase-db-status $(SUPABASE_BIN)/d
 # commit it. The Dockerfile copies it into the image.
 ## supabase-refresh-ca: download Supabase's root CA to SUPABASE_CA_CERT and verify the database's TLS against it
 supabase-refresh-ca: $(SUPABASE_BIN)/supabase-ca
-	@set -o pipefail; { \
+	@mkdir -p $(SUPABASE_LOG_DIR); set -o pipefail; { \
 	  host="$${SUPABASE_DB_HOST:-$$(printf '%s' "$$DATABASE_URL" | sed -E 's#^[^@]*@([^:/?]+).*#\1#')}"; \
 	  test -n "$$host" || { echo "Set DATABASE_URL, or SUPABASE_DB_HOST to the database's host." >&2; exit 1; }; \
 	  OPENSSL="$(SUPABASE_OPENSSL)" $(SUPABASE_BIN)/supabase-ca "$$host" "$(SUPABASE_CA_CERT)"; \

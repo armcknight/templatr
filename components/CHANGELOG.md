@@ -12,6 +12,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The `make/*.mk` fragments write their logs to a `logs/` directory in the
+  component's directory, such as `apple/logs/deploy-beta-44.log` and
+  `server/logs/vapor-fly-deploy-abc1234.log`, and no longer next to the
+  project files. The scaffolds' `.gitignore` files ignore `logs/`, and the
+  supabase component's `gitignore` step checks for it. `APPLE_APP_LOG_DIR`,
+  `VAPOR_FLY_LOG_DIR` and `SUPABASE_LOG_DIR` change the directory.
+
 ### Added
 
 - The root Makefile downloads its fragments to `.templatr/make/`, next to the

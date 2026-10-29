@@ -5,4 +5,4 @@
 # local-db commands.
 .test-pgdata/
 status/
-*.log
+logs/

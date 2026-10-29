@@ -22,6 +22,7 @@
 #   APPLE_APP_XCCONFIG              the xcconfig with MARKETING_VERSION and CURRENT_PROJECT_VERSION, relative to APPLE_APP_DIR
 #   APPLE_APP_BUILD_PREREQUISITES   targets each build runs first, such as one that runs XcodeGen
 #   APPLE_APP_DEPLOY_PREREQUISITES  targets a deploy-beta target also runs first, such as a schema check
+#   APPLE_APP_LOG_DIR               where the targets write their logs, relative to APPLE_APP_DIR
 #
 # prepare-release and vrsn come from the armcknight/tools cask.
 
@@ -30,6 +31,7 @@ APPLE_APP_PLATFORMS ?= ios
 APPLE_APP_XCCONFIG ?=
 APPLE_APP_BUILD_PREREQUISITES ?=
 APPLE_APP_DEPLOY_PREREQUISITES ?=
+APPLE_APP_LOG_DIR ?= logs
 FASTLANE ?= bundle exec fastlane
 
 # The platforms that a deploy-beta target uploads. Each apple-app-P-deploy-beta
@@ -45,16 +47,17 @@ apple-app-test: $(foreach p,$(APPLE_APP_PLATFORMS),apple-app-$(p)-test)
 # candidate's version, raises CURRENT_PROJECT_VERSION in the xcconfig, commits,
 # tags, pushes and makes a GitHub prerelease. The beta lane of each platform in
 # APPLE_APP_DEPLOY_PLATFORMS then uploads that commit to TestFlight, with the
-# new entry as "What to Test". The log is named with the build number.
+# new entry as "What to Test". The log, in APPLE_APP_LOG_DIR, is named with the
+# build number.
 ## apple-app-deploy-beta: cut a release candidate and upload it to TestFlight for every platform; only the owner runs it
 apple-app-deploy-beta: apple-app-xcconfig $(APPLE_APP_BUILD_PREREQUISITES) $(APPLE_APP_DEPLOY_PREREQUISITES)
-	@cd $(APPLE_APP_DIR) || exit 1; set -o pipefail; { \
+	@cd $(APPLE_APP_DIR) || exit 1; mkdir -p $(APPLE_APP_LOG_DIR); set -o pipefail; { \
 	  prepare-release rc --file $(APPLE_APP_XCCONFIG) --key MARKETING_VERSION --build-number-key CURRENT_PROJECT_VERSION --push --github-release --prerelease && \
 	  for platform in $(APPLE_APP_DEPLOY_PLATFORMS); do $(FASTLANE) $$platform beta || exit 1; done; \
-	} 2>&1 | tee deploy-beta.log; \
+	} 2>&1 | tee $(APPLE_APP_LOG_DIR)/deploy-beta.log; \
 	status=$$?; \
 	BUILD=$$(grep -Eo 'CURRENT_PROJECT_VERSION[[:space:]]*=[[:space:]]*[0-9]+' $(APPLE_APP_XCCONFIG) | grep -Eo '[0-9]+$$'); \
-	mv -f deploy-beta.log "deploy-beta-$$BUILD.log"; \
+	mv -f $(APPLE_APP_LOG_DIR)/deploy-beta.log "$(APPLE_APP_LOG_DIR)/deploy-beta-$$BUILD.log"; \
 	exit $$status
 
 # The targets for one platform, $(1).
