@@ -16,6 +16,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   named `templatr.<name>`, such as `templatr.asc.key-id`, and no longer
   `superlinear.<name>`.
 - `templatr --version` prints the version.
+- A manifest's `shared` pieces can be of the kind `template`, such as the
+  static-site component's CloudFormation template.
 - `{{inputs.<name>.compact}}` is an input's value without white space, for a
   name people see, such as `Bae Today`, where a file or an identifier needs
   `BaeToday`.

@@ -1,0 +1,258 @@
+name = "static-site"
+description = "A static website in site/, built with Jekyll, Hugo, Vite or nothing, served from a private S3 bucket through CloudFront with its own certificate and DNS records, which one CloudFormation stack owns, and deployed by the owner with `make site deploy`, which records the commit that is live."
+
+# The site's files are in site/: the generator's sources, its output directory,
+# component.mk, the DEPLOYED stamp and the site's README.md, with the checklist
+# of what a site needs before and after it is deployed. The detect and infer
+# rules read files there, and the steps run there.
+#
+# One site for each repository. A repository with several sites, such as
+# mcknight.io with its home, travel and books sites, needs the component more
+# than once, in a directory for each, which templatr does not do yet.
+directory = "site"
+blurb = "The website at https://{{inputs.domain}}, served from `site/{{inputs.output}}`. `make site build` builds it, `make site serve` serves the build on this Mac, and the owner publishes it with `make site deploy`, which uploads the build, clears CloudFront and commits `site/DEPLOYED`, the commit that is live. `site/README.md` has the checklist for a new site."
+
+# The AWS profile's credentials are the owner's, on their Mac; a deploy from CI
+# is not part of the component yet.
+secrets = []
+
+# A Jekyll, Hugo or Vite site, a CNAME file as GitHub Pages leaves one, a
+# DEPLOYED stamp, or a component.mk from this scaffold.
+[detect]
+any = [
+  { glob = "_config.yml" },
+  { glob = "hugo.toml" },
+  { glob = "hugo.yaml" },
+  { glob = "vite.config.*" },
+  { glob = "CNAME" },
+  { glob = "DEPLOYED" },
+  { glob = "component.mk", contains = "static-site\\.mk" },
+]
+
+# The domain, from the site's own idea of its address: Jekyll's url, Hugo's
+# baseURL, a page's canonical link, or a CNAME file.
+[[inputs]]
+name = "domain"
+description = "The domain the site is served at, such as travel.mcknight.io or nocookies.fun, without a scheme or a path. It names the bucket and the CloudFormation stack."
+example = "travel.mcknight.io"
+infer = [
+  { from = "regex", glob = "component.mk", pattern = "(?m)^STATIC_SITE_DOMAIN\\s*=\\s*(\\S+)" },
+  { from = "regex", glob = "_config.yml", pattern = "(?m)^url:\\s*[\"']?https?://([A-Za-z0-9.-]+)" },
+  { from = "regex", glob = "hugo.toml", pattern = "(?m)^baseURL\\s*=\\s*[\"']https?://([A-Za-z0-9.-]+)" },
+  { from = "regex", glob = "hugo.yaml", pattern = "(?m)^baseURL:\\s*[\"']?https?://([A-Za-z0-9.-]+)" },
+  { from = "regex", glob = "index.html", pattern = "rel=\"canonical\"\\s+href=\"https?://([A-Za-z0-9.-]+)" },
+  { from = "regex", glob = "CNAME", pattern = "^\\s*([A-Za-z0-9.-]+)" },
+]
+
+[[inputs]]
+name = "with_www"
+description = "Whether www.<domain> is served too, on the same certificate, and redirects to the domain: true for an apex domain such as nocookies.fun, false for a subdomain."
+example = "true"
+default = "false"
+infer = [{ from = "regex", glob = "component.mk", pattern = "(?m)^STATIC_SITE_WITH_WWW\\s*=\\s*(true|false)" }]
+
+# The generator's build command, run in site/. Each generator is known by the
+# file that configures it. Empty: the files in the output directory are
+# uploaded as they are.
+[[inputs]]
+name = "build"
+description = "The command, run in site/, that builds the site into the output directory: `bundle exec jekyll build`, `hugo --minify`, `npm run build`, or empty for a directory of files that is uploaded as it is."
+example = "bundle exec jekyll build"
+default = ""
+infer = [
+  { from = "regex", glob = "component.mk", pattern = "(?m)^STATIC_SITE_BUILD\\s*=\\s*(.+?)\\s*$" },
+  { from = "glob", glob = "_config.yml", exists = true, map = { "true" = "bundle exec jekyll build" } },
+  { from = "glob", glob = "hugo.toml", exists = true, map = { "true" = "hugo --minify" } },
+  { from = "glob", glob = "hugo.yaml", exists = true, map = { "true" = "hugo --minify" } },
+  { from = "glob", glob = "vite.config.*", exists = true, map = { "true" = "npm run build" } },
+]
+
+[[inputs]]
+name = "output"
+description = "The directory in site/ that the build writes, and that is uploaded: `_site` for Jekyll, `public` for Hugo, `dist` for Vite. With no build command, the directory of files that is uploaded as it is."
+example = "_site"
+default = "public"
+infer = [
+  { from = "regex", glob = "component.mk", pattern = "(?m)^STATIC_SITE_OUTPUT\\s*=\\s*(\\S+)" },
+  { from = "glob", glob = "_config.yml", exists = true, map = { "true" = "_site" } },
+  { from = "glob", glob = "hugo.toml", exists = true, map = { "true" = "public" } },
+  { from = "glob", glob = "hugo.yaml", exists = true, map = { "true" = "public" } },
+  { from = "glob", glob = "vite.config.*", exists = true, map = { "true" = "dist" } },
+]
+
+[[inputs]]
+name = "port"
+description = "The port `make site serve` serves the built site on."
+example = "4000"
+default = "4000"
+infer = [{ from = "regex", glob = "component.mk", pattern = "(?m)^STATIC_SITE_PORT\\s*=\\s*([0-9]+)" }]
+
+[[inputs]]
+name = "aws_profile"
+description = "The AWS CLI profile that owns the hosted zone, and that the commands and the steps run with."
+example = "armcknight"
+default = "default"
+infer = [{ from = "regex", glob = "component.mk", pattern = "(?m)^STATIC_SITE_PROFILE\\s*=\\s*(\\S+)" }]
+
+[[inputs]]
+name = "price_class"
+description = "Which CloudFront edge locations serve the site: PriceClass_100 is North America and Europe, the cheapest; PriceClass_200 adds most of Asia; PriceClass_All is every location."
+example = "PriceClass_100"
+default = "PriceClass_100"
+infer = [{ from = "regex", glob = "component.mk", pattern = "(?m)^STATIC_SITE_PRICE_CLASS\\s*=\\s*(PriceClass_[A-Za-z0-9]+)" }]
+
+[[steps]]
+id = "aws-cli"
+description = "The AWS CLI is installed."
+check = "command -v aws >/dev/null"
+fix = "brew install awscli"
+
+[[steps]]
+id = "aws-profile"
+description = "The AWS profile has credentials that work."
+check = "aws sts get-caller-identity --profile {{inputs.aws_profile}} --no-cli-pager >/dev/null 2>&1"
+fix = { human = { text = "Give the AWS CLI credentials for the profile {{inputs.aws_profile}}: `aws configure --profile {{inputs.aws_profile}}` with an access key, or `aws configure sso --profile {{inputs.aws_profile}}` and `aws sso login --profile {{inputs.aws_profile}}` for IAM Identity Center. The profile needs Route 53, CloudFormation, S3, CloudFront and ACM in the account that owns the hosted zone." } }
+
+[[steps]]
+id = "build-tools"
+description = "The build command's tool is installed."
+check = "build={{inputs.build}}; test -z \"$build\" || command -v \"${build%% *}\" >/dev/null"
+fix = { human = { text = "Install what `{{inputs.build}}` runs, and add it to site/Brewfile: rbenv and `bundle install` for Jekyll, hugo for Hugo, node and `npm install` for Vite." } }
+
+[[steps]]
+id = "hosted-zone"
+description = "Route 53 has a hosted zone for the domain, or for a parent of it."
+check = "{{templates}}/components/static-site/bin/site-zone {{inputs.domain}} {{inputs.aws_profile}} >/dev/null"
+fix = { human = { text = "Make a public hosted zone in Route 53 for {{inputs.domain}}, or for its parent domain, in the account of the profile {{inputs.aws_profile}}, and set the domain's name servers at its registrar to the zone's four. A zone costs about half a dollar a month. The stack writes the site's records into it." } }
+
+# The stack takes 5 to 20 minutes the first time: it waits for the certificate
+# to be issued and the distribution to reach every edge location.
+[[steps]]
+id = "hosting-stack"
+description = "The CloudFormation stack for the domain is complete, was made from the component's template, and has the with_www and price_class given: the private bucket, the certificate, the distribution with its security headers, 404 page and directory indexes, and the A and AAAA records."
+check = "{{templates}}/components/static-site/bin/check-site-stack {{inputs.domain}} {{inputs.aws_profile}} {{inputs.with_www}} {{inputs.price_class}} {{templates}}/components/static-site/cloudformation/site.yml"
+fix = "{{templates}}/components/static-site/bin/deploy-site-stack {{inputs.domain}} {{inputs.aws_profile}} {{inputs.with_www}} {{inputs.price_class}} {{templates}}/components/static-site/cloudformation/site.yml"
+
+[[steps]]
+id = "make-fragment"
+description = "site/component.mk includes make/static-site.mk, with the site commands, and adds the site namespace."
+check = "grep -qs 'static-site\\.mk' component.mk && grep -qs 'NAMESPACES *+= *site' component.mk"
+fix = { human = { text = "Copy site/component.mk from the static-site scaffold, with its STATIC_SITE_* values (STATIC_SITE_DOMAIN is {{inputs.domain}}, STATIC_SITE_BUILD is `{{inputs.build}}` and STATIC_SITE_OUTPUT is {{inputs.output}}), the include and the site-* targets, and move any build, serve, deploy or cache targets in the root Makefile to it, pointed at the static-site-* targets." } }
+
+# A directory of files uploaded as it is has no build output to ignore.
+[[steps]]
+id = "output-ignored"
+description = "Git ignores the build output and the logs."
+check = "test -z {{inputs.build}} || git check-ignore -q {{inputs.output}}/index.html && git check-ignore -q logs/static-site-build.log"
+fix = "test -z {{inputs.build}} || printf '\\n# The built site, which `make site build` writes.\\n/%s/\\n' {{inputs.output}} >> .gitignore; git check-ignore -q logs/static-site-build.log || printf '\\n# The logs of the make site commands.\\n/logs/\\n' >> .gitignore"
+
+# The distribution answers a page that does not exist with /404.html, and S3's
+# 403 for a file that is not there too, so the page must be in the upload.
+[[steps]]
+id = "not-found-page"
+description = "The site has a 404.html, which CloudFront serves for a page that does not exist."
+check = "test -f 404.html || test -f public/404.html || test -f static/404.html || test -f layouts/404.html || test -f {{inputs.output}}/404.html"
+fix = { human = { text = "Write a 404 page that the build puts at /404.html in the output: 404.html in site/ for Jekyll, layouts/404.html for Hugo, public/404.html for Vite. Give it the site's look, a link home and `<meta name=\"robots\" content=\"noindex\">`, and keep it out of the sitemap. The distribution serves it, with a 404 status, for any address that has no file." } }
+
+[[steps]]
+id = "robots-and-sitemap"
+description = "The site has a robots.txt that names its sitemap."
+check = "grep -qs '^Sitemap:' robots.txt public/robots.txt static/robots.txt {{inputs.output}}/robots.txt"
+fix = { human = { text = "Add a robots.txt to the site's sources (site/ for Jekyll, static/ for Hugo, public/ for Vite) with `User-agent: *`, `Allow: /` and `Sitemap: https://{{inputs.domain}}/sitemap.xml`, and make the sitemap: the jekyll-sitemap gem, Hugo's built-in sitemap, or a hand-written sitemap.xml for a site of a few pages. site/README.md has the rest of the checklist." } }
+
+# The last step: the site answers only after the first `make site deploy`.
+[[steps]]
+id = "site-answers"
+description = "The site answers over HTTPS, HTTP redirects to it, a page that does not exist is a 404, and www redirects when it is served."
+check = "{{templates}}/components/static-site/bin/check-site-answers {{inputs.domain}} {{inputs.with_www}}"
+fix = { human = { text = "Build and publish the site for the first time: `make site build`, then `make site deploy` from a clean checkout, which only the owner runs. A new distribution takes some minutes to answer at https://{{inputs.domain}}; `make site status` shows what is live. Then go through the checklist in site/README.md." } }
+
+[[shared]]
+kind = "make"
+path = "make/static-site.mk"
+version = "v1"
+description = "The static-site-build, static-site-serve, static-site-endserve, static-site-deploy, static-site-bust-cache, static-site-invalidations, static-site-stack and static-site-status targets."
+
+[[shared]]
+kind = "brewfile"
+path = "components/static-site/scaffold/site/Brewfile"
+version = "v1"
+description = "The tools the Makefile targets use."
+
+[[shared]]
+kind = "template"
+path = "components/static-site/cloudformation/site.yml"
+version = "v1"
+description = "The CloudFormation stack that hosts a site: a private S3 bucket that only the distribution reads, an ACM certificate validated through the hosted zone, a CloudFront distribution with the managed security headers, a 404 page and the viewer-request function, and the A and AAAA records."
+
+[[shared]]
+kind = "template"
+path = "components/static-site/cloudformation/viewer-request.js"
+version = "v1"
+description = "The distribution's viewer-request function: a directory's address with a slash gets its index.html, one without redirects to the one with, and www.<domain> redirects to the domain. site-template puts it into site.yml."
+
+[[shared]]
+kind = "script"
+path = "components/static-site/bin/site-template"
+version = "v1"
+description = "Prints site.yml with viewer-request.js in place of its marker line: the template that deploy-site-stack deploys and check-site-stack compares with."
+
+[[shared]]
+kind = "script"
+path = "components/static-site/bin/site-zone"
+version = "v1"
+description = "Prints the ID of the Route 53 hosted zone that has the domain, or its nearest parent."
+
+[[shared]]
+kind = "script"
+path = "components/static-site/bin/check-site-stack"
+version = "v1"
+description = "Checks that the domain's CloudFormation stack is complete, was made from the component's template, and has the parameters given."
+
+[[shared]]
+kind = "script"
+path = "components/static-site/bin/deploy-site-stack"
+version = "v1"
+description = "Makes or updates the domain's CloudFormation stack from the component's template, in us-east-1, and prints its outputs."
+
+[[shared]]
+kind = "script"
+path = "components/static-site/bin/check-site-answers"
+version = "v1"
+description = "Checks that the site answers over HTTPS, that HTTP redirects to it, that a page that does not exist is a 404, and that www redirects when it is served."
+
+[[shared]]
+kind = "script"
+path = "components/static-site/bin/deploy-site"
+version = "v1"
+description = "Uploads the built site to the stack's bucket, with immutable caching for content-hashed directories and no-cache for the rest, clears CloudFront, then writes and commits the DEPLOYED stamp as `deploy(<name>): <commit>`. It refuses a working tree with uncommitted changes."
+
+[[shared]]
+kind = "script"
+path = "components/static-site/bin/serve-site.py"
+version = "v1"
+description = "Serves the built site on localhost as the distribution does: directory indexes, and 404.html with a 404 status for a page that does not exist."
+
+[[docs]]
+title = "Components"
+anchor = "bootstrap.md#components"
+
+[[docs]]
+title = "Manifests"
+anchor = "bootstrap.md#manifests"
+
+[[docs]]
+title = "Steps that need a person"
+anchor = "bootstrap.md#needs-human-steps"
+
+[[docs]]
+title = "The release rule"
+anchor = "builds.md#release-rule"
+
+[[links]]
+title = "The site"
+url = "https://{{inputs.domain}}"
+
+[[links]]
+title = "What is live"
+url = "https://{{inputs.domain}}/DEPLOYED"

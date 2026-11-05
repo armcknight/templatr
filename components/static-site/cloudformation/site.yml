@@ -1,0 +1,243 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >-
+  A static site: a private S3 bucket that only a CloudFront distribution reads,
+  with an ACM certificate and Route 53 alias records for the domain, and for
+  www.<domain> when WithWww is true. The stack is in us-east-1, where
+  CloudFront needs the certificate. The static-site component of
+  armcknight/templatr deploys it with bin/deploy-site-stack, and `templatr
+  check` compares the stack's template with this file, as bin/site-template
+  renders it with viewer-request.js.
+
+Parameters:
+  DomainName:
+    Type: String
+    Description: The domain the site is served at, such as travel.mcknight.io.
+  HostedZoneId:
+    Type: AWS::Route53::HostedZone::Id
+    Description: The Route 53 hosted zone that has DomainName, or a parent of it.
+  WithWww:
+    Type: String
+    Default: 'false'
+    AllowedValues: ['true', 'false']
+    Description: >-
+      Whether www.<DomainName> is also on the certificate and the distribution,
+      and redirects to DomainName. Only for an apex domain.
+  BucketName:
+    Type: String
+    Default: ''
+    Description: The bucket's name; DomainName when empty.
+  PriceClass:
+    Type: String
+    Default: PriceClass_100
+    AllowedValues: [PriceClass_100, PriceClass_200, PriceClass_All]
+    Description: >-
+      Which edge locations serve the site: PriceClass_100 is North America and
+      Europe, the cheapest; PriceClass_All is every location.
+
+Conditions:
+  HasWww: !Equals [!Ref WithWww, 'true']
+  NamedBucket: !Not [!Equals [!Ref BucketName, '']]
+
+# Fixed IDs that AWS publishes. They are the same in every account and region.
+Mappings:
+  AwsIds:
+    CloudFront:
+      # The hosted zone ID for every alias record that points at CloudFront.
+      AliasHostedZoneId: Z2FDTNDATAQYW2
+    CachePolicy:
+      # Managed-CachingOptimized. It keeps what the Cache-Control header that
+      # deploy-site puts on each file allows.
+      CachingOptimized: 658327ea-f89d-4fab-a63d-7e88639e58f6
+    ResponseHeadersPolicy:
+      # Managed-SecurityHeadersPolicy: HSTS, nosniff, frame options, referrer
+      # policy and XSS protection.
+      SecurityHeaders: 67f7725c-6f97-4210-82d7-5512b31e9d03
+
+Resources:
+  # The built files. Nothing reads the bucket directly; only the distribution
+  # does, through origin access control. The bucket stays when the stack is
+  # deleted, so a deleted stack never deletes the site.
+  SiteBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !If [NamedBucket, !Ref BucketName, !Ref DomainName]
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  OriginAccessControl:
+    Type: AWS::CloudFront::OriginAccessControl
+    Properties:
+      OriginAccessControlConfig:
+        Name: !Sub '${AWS::StackName}-oac'
+        OriginAccessControlOriginType: s3
+        SigningBehavior: always
+        SigningProtocol: sigv4
+
+  # Validated through DNS: CloudFormation writes the validation records into
+  # the hosted zone itself, and the stack waits here until the certificate is
+  # issued. The records stay, so ACM renews the certificate by itself.
+  Certificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Ref DomainName
+      SubjectAlternativeNames: !If
+        - HasWww
+        - [!Sub 'www.${DomainName}']
+        - !Ref AWS::NoValue
+      ValidationMethod: DNS
+      DomainValidationOptions: !If
+        - HasWww
+        - - DomainName: !Ref DomainName
+            HostedZoneId: !Ref HostedZoneId
+          - DomainName: !Sub 'www.${DomainName}'
+            HostedZoneId: !Ref HostedZoneId
+        - - DomainName: !Ref DomainName
+            HostedZoneId: !Ref HostedZoneId
+
+  # Runs on each request before the cache: directory indexes, the
+  # trailing-slash redirect and the www redirect. Its code is viewer-request.js,
+  # next to this file; bin/site-template puts it in place of the marker line
+  # below, and deploy-site-stack and check-site-stack read that rendering.
+  ViewerRequestFunction:
+    Type: AWS::CloudFront::Function
+    Properties:
+      Name: !Sub '${AWS::StackName}-viewer-request'
+      AutoPublish: true
+      FunctionConfig:
+        Comment: Directory indexes, the trailing-slash redirect and the www redirect.
+        Runtime: cloudfront-js-2.0
+      FunctionCode: !Sub |
+        @VIEWER_REQUEST_FUNCTION@
+
+  Distribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Ref DomainName
+        Aliases: !If
+          - HasWww
+          - [!Ref DomainName, !Sub 'www.${DomainName}']
+          - [!Ref DomainName]
+        DefaultRootObject: index.html
+        HttpVersion: http2and3
+        IPV6Enabled: true
+        PriceClass: !Ref PriceClass
+        Origins:
+          - Id: site-bucket
+            DomainName: !GetAtt SiteBucket.RegionalDomainName
+            OriginAccessControlId: !GetAtt OriginAccessControl.Id
+            S3OriginConfig:
+              OriginAccessIdentity: ''
+        DefaultCacheBehavior:
+          TargetOriginId: site-bucket
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD]
+          CachedMethods: [GET, HEAD]
+          Compress: true
+          CachePolicyId: !FindInMap [AwsIds, CachePolicy, CachingOptimized]
+          ResponseHeadersPolicyId: !FindInMap [AwsIds, ResponseHeadersPolicy, SecurityHeaders]
+          FunctionAssociations:
+            - EventType: viewer-request
+              FunctionARN: !GetAtt ViewerRequestFunction.FunctionMetadata.FunctionARN
+        # With origin access control, S3 answers 403, not 404, for a file that
+        # is not in the bucket. Both become a real 404 with the site's own
+        # page, so that search engines see "not found", not "forbidden".
+        CustomErrorResponses:
+          - ErrorCode: 403
+            ResponseCode: 404
+            ResponsePagePath: /404.html
+            ErrorCachingMinTTL: 60
+          - ErrorCode: 404
+            ResponseCode: 404
+            ResponsePagePath: /404.html
+            ErrorCachingMinTTL: 60
+        ViewerCertificate:
+          AcmCertificateArn: !Ref Certificate
+          SslSupportMethod: sni-only
+          MinimumProtocolVersion: TLSv1.2_2021
+
+  # This distribution, and only this one, reads the bucket.
+  SiteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref SiteBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowCloudFrontRead
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: s3:GetObject
+            Resource: !Sub '${SiteBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                AWS:SourceArn: !Sub 'arn:aws:cloudfront::${AWS::AccountId}:distribution/${Distribution}'
+
+  # A and AAAA alias records to the distribution.
+  RecordIPv4:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt Distribution.DomainName
+        HostedZoneId: !FindInMap [AwsIds, CloudFront, AliasHostedZoneId]
+
+  RecordIPv6:
+    Type: AWS::Route53::RecordSet
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Ref DomainName
+      Type: AAAA
+      AliasTarget:
+        DNSName: !GetAtt Distribution.DomainName
+        HostedZoneId: !FindInMap [AwsIds, CloudFront, AliasHostedZoneId]
+
+  RecordWwwIPv4:
+    Type: AWS::Route53::RecordSet
+    Condition: HasWww
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Sub 'www.${DomainName}'
+      Type: A
+      AliasTarget:
+        DNSName: !GetAtt Distribution.DomainName
+        HostedZoneId: !FindInMap [AwsIds, CloudFront, AliasHostedZoneId]
+
+  RecordWwwIPv6:
+    Type: AWS::Route53::RecordSet
+    Condition: HasWww
+    Properties:
+      HostedZoneId: !Ref HostedZoneId
+      Name: !Sub 'www.${DomainName}'
+      Type: AAAA
+      AliasTarget:
+        DNSName: !GetAtt Distribution.DomainName
+        HostedZoneId: !FindInMap [AwsIds, CloudFront, AliasHostedZoneId]
+
+Outputs:
+  BucketName:
+    Value: !Ref SiteBucket
+  DistributionId:
+    Value: !Ref Distribution
+  DistributionDomain:
+    Value: !GetAtt Distribution.DomainName
+  CertificateArn:
+    Value: !Ref Certificate
+  Url:
+    Value: !Sub 'https://${DomainName}'

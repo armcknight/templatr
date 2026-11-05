@@ -12,6 +12,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The static-site component: a website in `site/`, built with Jekyll, Hugo,
+  Vite or nothing, served from a private S3 bucket through CloudFront. One
+  CloudFormation template, `components/static-site/cloudformation/site.yml`,
+  owns the bucket, the certificate, the distribution (with the managed
+  security headers, a 404 page, and a viewer-request function for directory
+  indexes, the trailing-slash redirect and the www redirect) and the DNS
+  records; the `hosting-stack` step deploys it, and `templatr check` compares
+  the stack with it. `make/static-site.mk` has `build`, `serve`,
+  `endserve`, `deploy`, `bust-cache`, `invalidations`, `stack` and `status`.
+  `make site deploy` refuses uncommitted changes, uploads the build, clears
+  CloudFront, and commits `site/DEPLOYED`, the commit that is live, as
+  `deploy(site): <commit>`; `https://<domain>/DEPLOYED` is the same file. The
+  scaffold's `site/README.md` is the checklist of what a site needs before
+  and after it is deployed: titles, descriptions, canonical links, Open Graph
+  tags, icons, `404.html`, `robots.txt`, the sitemap, Search Console, Bing,
+  the link-preview debuggers and the quality checks. The manifest's `shared`
+  pieces have a new kind, `template`.
+
 ### Changed
 
 - The apple-app component's `app_name` is the name people see, which can have

@@ -1,0 +1,14 @@
+# The generators' caches and lock files. The build output itself, such as
+# /_site/ or /dist/, is added by templatr's output-ignored step, as it is named
+# in component.mk.
+/.jekyll-cache/
+/.jekyll-metadata
+/.sass-cache/
+/.hugo_build.lock
+/resources/_gen/
+/node_modules/
+/.bundle/
+/vendor/
+
+# The logs of the make site commands.
+/logs/

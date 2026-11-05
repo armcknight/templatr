@@ -328,7 +328,7 @@
       "additionalProperties": false,
       "required": ["kind", "path", "version", "description"],
       "properties": {
-        "kind": { "enum": ["workflow", "fastlane", "make", "brewfile", "script"] },
+        "kind": { "enum": ["workflow", "fastlane", "make", "brewfile", "script", "template"] },
         "repo": {
           "description": "The GitHub repository that has the piece, as owner/name, when it is not this one.",
           "type": "string",

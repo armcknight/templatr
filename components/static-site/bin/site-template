@@ -1,0 +1,38 @@
+#!/bin/sh
+# Usage: site-template <template>
+#
+# Prints the static-site component's CloudFormation template, <template>, with
+# the viewer-request function's code, viewer-request.js next to it, in place of
+# its @VIEWER_REQUEST_FUNCTION@ line, indented as that line is. CloudFormation
+# has no include of its own, so the function is kept in a file of its own, where
+# it can be read and run, and put into the template here. deploy-site-stack
+# deploys what this prints, and check-site-stack compares the stack with it.
+
+template=${1:-}
+
+if [ -z "$template" ]; then
+  echo "Usage: site-template <template>" >&2
+  exit 2
+fi
+if [ ! -f "$template" ]; then
+  echo "The template, $template, does not exist." >&2
+  exit 1
+fi
+function="$(dirname "$template")/viewer-request.js"
+if [ ! -f "$function" ]; then
+  echo "The function, $function, does not exist." >&2
+  exit 1
+fi
+
+awk -v js="$function" '
+  /^[[:space:]]*@VIEWER_REQUEST_FUNCTION@[[:space:]]*$/ {
+    match($0, /^[[:space:]]*/)
+    indent = substr($0, 1, RLENGTH)
+    while ((getline line < js) > 0) {
+      print (line == "" ? "" : indent line)
+    }
+    close(js)
+    next
+  }
+  { print }
+' "$template"

@@ -1,0 +1,9 @@
+# The tools the static-site Makefile targets use. `brew bundle --file
+# site/Brewfile` installs them.
+brew "awscli"                 # aws: the deploy, the stack and the cache
+
+# The generator. Keep the one the site uses, and remove the others.
+# brew "rbenv"                # Jekyll: Ruby through rbenv, then `bundle install` in site/
+# brew "ruby-build"
+# brew "hugo"                 # Hugo
+# brew "node"                 # Vite: then `npm install` in site/

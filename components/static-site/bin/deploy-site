@@ -1,0 +1,129 @@
+#!/bin/sh
+# Uploads a built site to its bucket, clears CloudFront, and records what is
+# live. `make site deploy` runs it, from the repository's root, with these in
+# the environment, which make/static-site.mk sets:
+#
+#   STATIC_SITE_NAME        the site's namespace, such as site: the commit that
+#                           records the deploy is "deploy(<name>): <commit>"
+#   STATIC_SITE_DOMAIN      the domain, such as travel.mcknight.io
+#   STATIC_SITE_OUTPUT      the built site, relative to the root, such as site/_site
+#   STATIC_SITE_STAMP       the DEPLOYED file in the repository, such as site/DEPLOYED
+#   STATIC_SITE_PROFILE     the AWS profile
+#   STATIC_SITE_IMMUTABLE   directories under the output whose file names change
+#                           with their contents, such as assets for Vite,
+#                           separated by spaces; they are cached for a year
+#   STATIC_SITE_INVALIDATE  the paths to clear from CloudFront afterwards, such
+#                           as /*, separated by spaces
+#
+# The stack for the domain, site-<domain with dashes> in us-east-1, names the
+# bucket and the distribution.
+#
+# It refuses a working tree with uncommitted changes, so that the commit the
+# stamp names is what was uploaded. It writes DEPLOYED, the commit and the UTC
+# time, into the output first, so that https://<domain>/DEPLOYED says what is
+# live with no checkout. Only after the upload succeeds does it copy the stamp
+# into the repository and commit it, alone: a failed upload never claims to be
+# live. The commit is local; push it yourself.
+#
+# Every file but the immutable ones is uploaded with Cache-Control: no-cache,
+# so CloudFront asks the bucket whether a page changed before it serves a kept
+# copy, and a deploy is visible as soon as the invalidation finishes.
+
+set -eu
+
+for name in STATIC_SITE_NAME STATIC_SITE_DOMAIN STATIC_SITE_OUTPUT STATIC_SITE_STAMP STATIC_SITE_PROFILE; do
+  eval "value=\${$name:-}"
+  if [ -z "$value" ]; then
+    echo "Set $name; make/static-site.mk sets it for make site deploy." >&2
+    exit 2
+  fi
+done
+immutable=${STATIC_SITE_IMMUTABLE:-}
+invalidate=${STATIC_SITE_INVALIDATE:-}
+
+output=${STATIC_SITE_OUTPUT%/}
+if [ ! -d "$output" ]; then
+  echo "Nothing to deploy: $output does not exist. Build the site first." >&2
+  exit 1
+fi
+
+# The stamp is left out: every deploy rewrites it, so counting it would stop
+# the next deploy over what the last one wrote.
+changes=$(git status --porcelain -- . ":!$STATIC_SITE_STAMP")
+if [ -n "$changes" ]; then
+  echo "Refusing to deploy: the working tree has uncommitted changes." >&2
+  echo "$changes" >&2
+  echo "Commit or stash them, build again, then deploy. Otherwise the stamp would name a commit that is not what was uploaded." >&2
+  exit 1
+fi
+
+stack="site-$(printf '%s' "$STATIC_SITE_DOMAIN" | tr . -)"
+aws_cf() {
+  aws cloudformation describe-stacks --stack-name "$stack" --output text \
+    --query "Stacks[0].Outputs[?OutputKey=='$1'].OutputValue | [0]" \
+    --profile "$STATIC_SITE_PROFILE" --region us-east-1 --no-cli-pager
+}
+if ! bucket=$(aws_cf BucketName) || [ "$bucket" = None ] || [ -z "$bucket" ]; then
+  echo "No stack $stack for $STATIC_SITE_DOMAIN. Run templatr bootstrap, or make $STATIC_SITE_NAME stack." >&2
+  exit 1
+fi
+distribution=$(aws_cf DistributionId)
+
+sha=$(git rev-parse HEAD)
+printf '%s\n%s\n' "$sha" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$output/DEPLOYED"
+echo "Deploying $STATIC_SITE_DOMAIN at $sha, from $output to s3://$bucket."
+
+sync() {
+  aws s3 sync "$@" --profile "$STATIC_SITE_PROFILE" --no-cli-pager
+}
+forever='public, max-age=31536000, immutable'
+excludes=""
+for directory in $immutable; do
+  directory=${directory%/}
+  if [ -d "$output/$directory" ]; then
+    # New files first, so that a page never asks for a file that is not there.
+    sync "$output/$directory" "s3://$bucket/$directory" --cache-control "$forever"
+  fi
+  excludes="$excludes --exclude $directory/*"
+done
+# shellcheck disable=SC2086
+sync "$output" "s3://$bucket" $excludes --cache-control no-cache --delete
+for directory in $immutable; do
+  directory=${directory%/}
+  if [ -d "$output/$directory" ]; then
+    sync "$output/$directory" "s3://$bucket/$directory" --cache-control "$forever" --delete
+  fi
+done
+
+if [ -n "$invalidate" ] && [ "$distribution" != None ] && [ -n "$distribution" ]; then
+  # set -f keeps the shell from expanding /* against the local files.
+  set -f
+  # shellcheck disable=SC2086
+  aws cloudfront create-invalidation --distribution-id "$distribution" --paths $invalidate \
+    --query Invalidation.Id --output text --profile "$STATIC_SITE_PROFILE" --no-cli-pager >/dev/null
+  set +f
+  echo "Cleared $invalidate from the distribution $distribution."
+fi
+
+# Only now that the upload succeeded does the repository say this is live.
+cp "$output/DEPLOYED" "$STATIC_SITE_STAMP"
+echo "Stamped $STATIC_SITE_STAMP: $sha."
+
+# The tree was clean before the upload, so the stamp is the only thing that may
+# differ. Anything else moved underneath the deploy, and is for a person to look
+# at, not for this to commit.
+unexpected=$(git status --porcelain | grep -v " $STATIC_SITE_STAMP\$" || true)
+if [ -n "$unexpected" ]; then
+  echo "Deployed, but something other than $STATIC_SITE_STAMP changed, so the stamp was not committed. Look at these, then commit it yourself:" >&2
+  printf '%s\n' "$unexpected" >&2
+  exit 1
+fi
+
+if [ -z "$(git status --porcelain -- "$STATIC_SITE_STAMP")" ]; then
+  echo "$STATIC_SITE_STAMP is unchanged; nothing to commit."
+else
+  git add -- "$STATIC_SITE_STAMP"
+  git commit --quiet --only -m "deploy($STATIC_SITE_NAME): $(printf '%s' "$sha" | cut -c1-12)" -- "$STATIC_SITE_STAMP"
+  echo "Committed the stamp as $(git rev-parse --short HEAD). Push it when you are ready."
+fi
+echo "Published: https://$STATIC_SITE_DOMAIN"

@@ -1,0 +1,34 @@
+#!/bin/sh
+# Usage: site-zone <domain> <profile>
+#
+# Prints the ID of the Route 53 hosted zone that has <domain>: the zone named
+# for the domain itself, else for the nearest parent, such as mcknight.io for
+# travel.mcknight.io. Exits 1, with a message on stderr, when the profile has
+# no such zone. The static-site component's hosted-zone step checks with it,
+# and deploy-site-stack reads the zone from it.
+
+domain=${1:-}
+profile=${2:-}
+
+if [ -z "$domain" ] || [ -z "$profile" ]; then
+  echo "Usage: site-zone <domain> <profile>" >&2
+  exit 2
+fi
+
+candidate=$domain
+# Stop before the top-level domain: a zone is never named "io".
+while [ "${candidate#*.}" != "$candidate" ]; do
+  if ! id=$(aws route53 list-hosted-zones-by-name --dns-name "$candidate." --max-items 1 \
+      --query "HostedZones[?Name=='$candidate.'].Id | [0]" --output text \
+      --profile "$profile" --region us-east-1 --no-cli-pager 2>&1); then
+    echo "Could not list the hosted zones of profile $profile: $id" >&2
+    exit 1
+  fi
+  case $id in
+    None|"") candidate=${candidate#*.} ;;
+    *) printf '%s\n' "${id##*/}"; exit 0 ;;
+  esac
+done
+
+echo "Profile $profile has no Route 53 hosted zone for $domain or a parent of it." >&2
+exit 1

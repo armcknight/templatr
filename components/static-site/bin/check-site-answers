@@ -1,0 +1,38 @@
+#!/bin/sh
+# Usage: check-site-answers <domain> <with-www>
+#
+# Exits 0 when the site at <domain> answers as the stack serves it:
+# https://<domain>/ is 200, http://<domain>/ redirects to it, a page that does
+# not exist is 404, and, with <with-www> true, https://www.<domain>/ redirects
+# to <domain>. Each answer is printed; the wrong ones go to stderr.
+
+domain=${1:-}
+with_www=${2:-false}
+
+if [ -z "$domain" ]; then
+  echo "Usage: check-site-answers <domain> <with-www>" >&2
+  exit 2
+fi
+
+wrong=0
+answer() {
+  curl -s -o /dev/null -w '%{http_code} %{redirect_url}' --max-time 15 "$1" 2>/dev/null | sed -e 's/ *$//'
+}
+check() {
+  found=$(answer "$2")
+  if [ "$found" = "$3" ]; then
+    echo "  ok     $1: $found"
+  else
+    echo "  WRONG  $1: found ${found:-(no answer)}, expected $3" >&2
+    wrong=$((wrong + 1))
+  fi
+}
+
+check "https://$domain/" "https://$domain/" "200"
+check "http://$domain/ redirects" "http://$domain/" "301 https://$domain/"
+check "a missing page is 404" "https://$domain/templatr-check-site-answers-$(date +%s)" "404"
+if [ "$with_www" = true ]; then
+  check "https://www.$domain/ redirects" "https://www.$domain/" "301 https://$domain/"
+fi
+
+[ "$wrong" -eq 0 ]

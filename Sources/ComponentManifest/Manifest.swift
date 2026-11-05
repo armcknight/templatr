@@ -708,7 +708,7 @@ public struct Shared: Codable, Equatable, Sendable {
     public var description: String
 
     public enum Kind: String, CaseIterable, Codable, Sendable {
-        case workflow, fastlane, make, brewfile, script
+        case workflow, fastlane, make, brewfile, script, template
     }
 
     enum CodingKeys: String, CodingKey, CaseIterable {

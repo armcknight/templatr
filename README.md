@@ -19,6 +19,7 @@ This repository holds no secrets: only their names and where to get them.
 | [linear-workspace](components/linear-workspace) | A Linear workspace that superlinear works from: each team has an In Review state after In Progress, a Todo state, Triage, and superlinear's labels; the owner has a "superlinear proposals" view in their favorites; and no onboarding issue is open. See [The linear-workspace component](#the-linear-workspace-component). |
 | [vapor-fly](components/vapor-fly) | A Swift server in `server/`, built with Vapor and run on Fly.io, built and tested on Linux on each pull request, and deployed by the owner, by hand with `make server deploy` or on a merge. |
 | [supabase](components/supabase) | A Postgres database on Supabase for a Vapor server on Fly.io, with its files in `supabase/`, local and test databases, Supabase's root CA in the server's image, a local and remote parity check, and migrations with the Supabase CLI before each deploy or with Fluent when the server starts. |
+| [static-site](components/static-site) | A static website in `site/`, built with Jekyll, Hugo, Vite or nothing, served from a private S3 bucket through CloudFront with its own certificate and DNS records, which one CloudFormation stack owns, and deployed by the owner with `make site deploy`, which records the commit that is live in `site/DEPLOYED` and on the site. Its `site/README.md` has the checklist of what a site needs before and after it is deployed. One site for each repository. |
 
 ## Layout
 
@@ -29,6 +30,7 @@ components/<name>/CLAUDE.md        conventions for agents, included by projects
 components/<name>/bin/             scripts the manifest's steps run
 components/apple-app/match-certificates/  the Swift package that bin/list-match-certificates builds and runs
 components/apple-app/xcodegen/     the templates of the files that bin/new-xcodegen-spec writes
+components/static-site/cloudformation/  the stack that hosts a site, and its viewer-request function
 .github/workflows/ci.yml           this repository's own CI
 fastlane/                          shared lanes, imported with import_from_git
 make/                              Makefile fragments
@@ -88,6 +90,17 @@ The `templatr` command has releases of its own, with three-part tags without the
 | [components/github-repo/bin/check-rulesets-available](components/github-repo/bin/check-rulesets-available) | script | github-repo | Checks that GitHub offers rulesets for the repository, which it does not for a private repository on the free plan. |
 | [components/github-repo/bin/check-default-branch-protection](components/github-repo/bin/check-default-branch-protection) | script | github-repo | Checks that a ruleset that the owner can bypass stops the default branch from being deleted or force-pushed, when GitHub offers rulesets for the repository. |
 | [components/github-repo/bin/protect-default-branch](components/github-repo/bin/protect-default-branch) | script | github-repo | Makes or updates the `Default branch` ruleset, which stops the default branch from being deleted or force-pushed, with a bypass for the repository's admins. |
+| [make/static-site.mk](make/static-site.mk) | make | static-site | The `static-site-build`, `static-site-serve`, `static-site-endserve`, `static-site-deploy`, `static-site-bust-cache`, `static-site-invalidations`, `static-site-stack` and `static-site-status` targets, which `site/component.mk` runs as `make site <command>`. |
+| [components/static-site/scaffold/site/Brewfile](components/static-site/scaffold/site/Brewfile) | brewfile | static-site | The tools the Makefile targets use. |
+| [components/static-site/cloudformation/site.yml](components/static-site/cloudformation/site.yml) | template | static-site | The CloudFormation stack that hosts a site: a private S3 bucket that only the distribution reads, an ACM certificate validated through the hosted zone, a CloudFront distribution with the managed security headers, a 404 page and the viewer-request function, and the A and AAAA records. `templatr check` compares the stack with it. |
+| [components/static-site/cloudformation/viewer-request.js](components/static-site/cloudformation/viewer-request.js) | template | static-site | The distribution's viewer-request function: a directory's address with a slash gets its `index.html`, one without redirects to the one with, and `www.<domain>` redirects to the domain. |
+| [components/static-site/bin/site-template](components/static-site/bin/site-template) | script | static-site | Prints `site.yml` with `viewer-request.js` in place of its marker line: the template that `deploy-site-stack` deploys and `check-site-stack` compares with. |
+| [components/static-site/bin/site-zone](components/static-site/bin/site-zone) | script | static-site | Prints the ID of the Route 53 hosted zone that has the domain, or its nearest parent. |
+| [components/static-site/bin/check-site-stack](components/static-site/bin/check-site-stack) | script | static-site | Checks that the domain's CloudFormation stack is complete, was made from the component's template, and has the parameters given. |
+| [components/static-site/bin/deploy-site-stack](components/static-site/bin/deploy-site-stack) | script | static-site | Makes or updates the domain's CloudFormation stack from the component's template, in us-east-1, and prints its outputs. The first run waits for the certificate and the distribution. |
+| [components/static-site/bin/check-site-answers](components/static-site/bin/check-site-answers) | script | static-site | Checks that the site answers over HTTPS, that HTTP redirects to it, that a page that does not exist is a 404, and that www redirects when it is served. |
+| [components/static-site/bin/deploy-site](components/static-site/bin/deploy-site) | script | static-site | Uploads the built site to the stack's bucket, with immutable caching for content-hashed directories and `no-cache` for the rest, clears CloudFront, then writes and commits the `DEPLOYED` stamp as `deploy(<name>): <commit>`. It refuses a working tree with uncommitted changes, and a failed upload never stamps. |
+| [components/static-site/bin/serve-site.py](components/static-site/bin/serve-site.py) | script | static-site | Serves the built site on localhost as the distribution does: directory indexes, and `404.html` with a 404 status for a page that does not exist. |
 | [components/mcknight-io-listing/bin/check-secrets-inherit](components/mcknight-io-listing/bin/check-secrets-inherit) | script | mcknight-io-listing | Checks that each job that calls a workflow in armcknight/workflows passes its secrets, with `secrets: inherit`, so that the shared workflows' notify step gets `SITE_DISPATCH_TOKEN`; and that at least one job calls one. |
 | [components/linear-workspace/bin/linear-workspace](components/linear-workspace/bin/linear-workspace) | script | linear-workspace | Checks, and sets up, the Linear workspace's teams' states, Triage and labels, the proposals view, the onboarding issues and the initiatives, with Linear's API. |
 
@@ -183,7 +196,7 @@ Ordered. Each has an `id`, a `description`, a `check` — a shell command, run i
 
 ### `shared`
 
-The reusable pieces that the component uses: `kind` (`workflow`, `fastlane`, `make`, `brewfile` or `script`), `path`, `version` and a `description`. A piece in another repository has `repo`, such as `armcknight/workflows`, and its `version` is the tag projects call it at, such as `4`; the validator does not look for its path here. For a piece in this repository, `version` is the tag that has it in its current form, such as `v1`. This README links to each piece: one in another repository at `https://github.com/<repo>/blob/<version>/<path>`.
+The reusable pieces that the component uses: `kind` (`workflow`, `fastlane`, `make`, `brewfile`, `script` or `template`, such as a CloudFormation template), `path`, `version` and a `description`. A piece in another repository has `repo`, such as `armcknight/workflows`, and its `version` is the tag projects call it at, such as `4`; the validator does not look for its path here. For a piece in this repository, `version` is the tag that has it in its current form, such as `v1`. This README links to each piece: one in another repository at `https://github.com/<repo>/blob/<version>/<path>`.
 
 ### `docs`
 
