@@ -1,12 +1,13 @@
 #!/bin/sh
 # Usage: site-template <template>
 #
-# Prints the static-site component's CloudFormation template, <template>, with
-# the viewer-request function's code, viewer-request.js next to it, in place of
-# its @VIEWER_REQUEST_FUNCTION@ line, indented as that line is. CloudFormation
-# has no include of its own, so the function is kept in a file of its own, where
-# it can be read and run, and put into the template here. deploy-site-stack
-# deploys what this prints, and check-site-stack compares the stack with it.
+# Prints one of the static-site component's CloudFormation templates, <template>,
+# with each `@FUNCTION <file>@` line replaced by that file, next to the
+# template, indented as the line was: site.yml takes viewer-request.js, and
+# redirect.yml takes redirect.js. CloudFormation has no include of its own, so
+# each function is kept in a file of its own, where it can be read and run,
+# and put into the template here. deploy-stack deploys what this prints, and
+# check-stack compares the stack with it.
 
 template=${1:-}
 
@@ -18,20 +19,27 @@ if [ ! -f "$template" ]; then
   echo "The template, $template, does not exist." >&2
   exit 1
 fi
-function="$(dirname "$template")/viewer-request.js"
-if [ ! -f "$function" ]; then
-  echo "The function, $function, does not exist." >&2
-  exit 1
-fi
+directory=$(dirname "$template")
 
-awk -v js="$function" '
-  /^[[:space:]]*@VIEWER_REQUEST_FUNCTION@[[:space:]]*$/ {
+for file in $(sed -n 's/^[[:space:]]*@FUNCTION \([^@]*\)@[[:space:]]*$/\1/p' "$template"); do
+  if [ ! -f "$directory/$file" ]; then
+    echo "The function, $directory/$file, does not exist." >&2
+    exit 1
+  fi
+done
+
+awk -v directory="$directory" '
+  /^[[:space:]]*@FUNCTION [^@]*@[[:space:]]*$/ {
     match($0, /^[[:space:]]*/)
     indent = substr($0, 1, RLENGTH)
-    while ((getline line < js) > 0) {
+    file = $0
+    sub(/^[[:space:]]*@FUNCTION /, "", file)
+    sub(/@[[:space:]]*$/, "", file)
+    path = directory "/" file
+    while ((getline line < path) > 0) {
       print (line == "" ? "" : indent line)
     }
-    close(js)
+    close(path)
     next
   }
   { print }

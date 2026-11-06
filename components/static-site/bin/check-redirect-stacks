@@ -1,0 +1,32 @@
+#!/bin/sh
+# Usage: check-redirect-stacks <site-domain> <profile> <template> [<domains>]
+#
+# Exits 0 when each domain in <domains> has a complete redirect stack,
+# redirect-<domain with dashes>, made from <template>, the component's
+# cloudformation/redirect.yml, that redirects to <site-domain> with its www.
+# <domains> is one argument of domains separated by spaces, or several
+# arguments; with none, there is nothing to check. Read-only; check-stack does
+# each one, and deploy-redirect-stacks puts them right.
+
+site=${1:-}
+profile=${2:-}
+template=${3:-}
+
+if [ -z "$site" ] || [ -z "$profile" ] || [ -z "$template" ]; then
+  echo "Usage: check-redirect-stacks <site-domain> <profile> <template> [<domains>]" >&2
+  exit 2
+fi
+shift 3
+
+# Each argument can hold several domains.
+# shellcheck disable=SC2048,SC2086
+set -- $*
+if [ $# -eq 0 ]; then
+  exit 0
+fi
+
+status=0
+for domain in "$@"; do
+  "$(dirname "$0")/check-stack" redirect "$domain" "$profile" "$template" "RedirectTo=$site" "WithWww=true" || status=1
+done
+exit $status

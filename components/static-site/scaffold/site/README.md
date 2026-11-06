@@ -8,7 +8,7 @@ Run these from the repository's root:
 * `make site deploy` uploads the build, clears CloudFront, and commits `DEPLOYED`, the commit that is live. Only the owner deploys, from a clean checkout. The commit is local: push it.
 * `make site status` shows the bucket, the distribution and the certificate, and https://{{inputs.domain}}/DEPLOYED, what is live.
 * `make site bust-cache PATHS="/ /index.html"` clears pages from CloudFront by hand, and `make site invalidations` shows whether a clear has finished.
-* `make site stack` changes the hosting after a change to `component.mk`'s `STATIC_SITE_WITH_WWW` or `STATIC_SITE_PRICE_CLASS`. Only the owner runs it.
+* `make site stack` changes the hosting after a change to `component.mk`'s `STATIC_SITE_WITH_WWW` or `STATIC_SITE_PRICE_CLASS`, and `make site redirects` makes the stack of each old domain in `STATIC_SITE_REDIRECT_FROM`, which then redirects every address, with its www, to the same path here. Only the owner runs them.
 * `brew bundle --file site/Brewfile` installs the tools these commands use.
 
 ## Before the first deploy
@@ -81,7 +81,8 @@ One time, after the site answers at https://{{inputs.domain}}.
 - [ ] [validator.w3.org](https://validator.w3.org/nu/) on the home page and one of each kind of page: a crawler forgives less than a browser.
 - [ ] [securityheaders.com](https://securityheaders.com): the distribution's managed policy gives an A; a Content-Security-Policy is the one header it does not set.
 - [ ] [SSL Labs](https://www.ssllabs.com/ssltest/): the certificate and TLS 1.2 or later, an A.
-- [ ] `curl -sI https://www.{{inputs.domain}}/` redirects to the apex when `with_www` is true, and `curl -sI http://{{inputs.domain}}/` redirects to HTTPS. `templatr check` checks both.
+- [ ] `curl -sI https://www.{{inputs.domain}}/` redirects to the apex when `with_www` is true, and `curl -sI http://{{inputs.domain}}/` redirects to HTTPS. `templatr check` checks both, and that each old domain in `redirect_from` redirects here.
+- [ ] When an old domain redirects here, tell Search Console with its Change of Address tool, under the old domain's property, so that its ranking moves with the pages; keep the redirect for at least a year.
 
 **Keep**
 

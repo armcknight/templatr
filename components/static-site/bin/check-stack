@@ -1,0 +1,87 @@
+#!/bin/sh
+# Usage: check-stack <kind> <domain> <profile> <template> [<Key>=<Value> ...]
+#
+# Exits 0 when the CloudFormation stack <kind>-<domain with dashes>, in
+# us-east-1, is complete, was made from <template> as site-template renders it,
+# has <domain> as its DomainName, and has each parameter given. <kind> is site,
+# for the stack that hosts a site from cloudformation/site.yml, or redirect, for
+# a domain that redirects to one from cloudformation/redirect.yml. Read-only: it
+# describes and gets, and changes nothing. Each problem is printed to stderr.
+# deploy-stack, with the same arguments, puts the stack right.
+#
+#   check-stack site travel.mcknight.io armcknight …/site.yml WithWww=false PriceClass=PriceClass_100
+#   check-stack redirect armcknight.com armcknight …/redirect.yml RedirectTo=mcknight.io WithWww=true
+
+kind=${1:-}
+domain=${2:-}
+profile=${3:-}
+template=${4:-}
+
+if [ -z "$kind" ] || [ -z "$domain" ] || [ -z "$profile" ] || [ -z "$template" ]; then
+  echo "Usage: check-stack <kind> <domain> <profile> <template> [<Key>=<Value> ...]" >&2
+  exit 2
+fi
+if [ ! -f "$template" ]; then
+  echo "The template, $template, does not exist." >&2
+  exit 1
+fi
+shift 4
+
+stack="$kind-$(printf '%s' "$domain" | tr . -)"
+
+rendered=$(mktemp)
+trap 'rm -f "$rendered"' EXIT
+"$(dirname "$0")/site-template" "$template" > "$rendered" || exit 1
+
+aws_get() {
+  aws "$@" --output text --profile "$profile" --region us-east-1 --no-cli-pager
+}
+
+# The status, then each parameter's value, one for each line.
+query="Stacks[0].[StackStatus, Parameters[?ParameterKey==\`DomainName\`].ParameterValue | [0]"
+for parameter in "$@"; do
+  query="$query, Parameters[?ParameterKey==\`${parameter%%=*}\`].ParameterValue | [0]"
+done
+query="$query]"
+if ! description=$(aws_get cloudformation describe-stacks --stack-name "$stack" --query "$query" 2>&1); then
+  echo "No stack $stack in us-east-1 for profile $profile: $description" >&2
+  exit 1
+fi
+
+wrong=0
+check() {
+  if [ "$2" = "$3" ]; then
+    echo "  ok     $stack $1: $3"
+  else
+    echo "  WRONG  $stack $1: found ${3:-(nothing)}, expected $2" >&2
+    wrong=$((wrong + 1))
+  fi
+}
+
+status=$(printf '%s' "$description" | cut -f1)
+case $status in
+  CREATE_COMPLETE|UPDATE_COMPLETE) echo "  ok     $stack status: $status" ;;
+  *) echo "  WRONG  $stack status: $status, expected CREATE_COMPLETE or UPDATE_COMPLETE" >&2; wrong=$((wrong + 1)) ;;
+esac
+check "DomainName" "$domain" "$(printf '%s' "$description" | cut -f2)"
+field=3
+for parameter in "$@"; do
+  check "${parameter%%=*}" "${parameter#*=}" "$(printf '%s' "$description" | cut -f$field)"
+  field=$((field + 1))
+done
+
+# The stack's template, as it was given: the same text as the rendering when
+# the stack was made from this version of the template and its function.
+if deployed=$(aws_get cloudformation get-template --stack-name "$stack" --template-stage Original --query TemplateBody 2>&1); then
+  if [ "$(printf '%s' "$deployed" | sed -e 's/[[:space:]]*$//')" = "$(sed -e 's/[[:space:]]*$//' "$rendered")" ]; then
+    echo "  ok     $stack template: $(basename "$template") and its function"
+  else
+    echo "  WRONG  $stack template: the stack was not made from the current $(basename "$template") and its function; run deploy-stack to update it" >&2
+    wrong=$((wrong + 1))
+  fi
+else
+  echo "  WRONG  $stack template: could not read the stack's template: $deployed" >&2
+  wrong=$((wrong + 1))
+fi
+
+[ "$wrong" -eq 0 ]

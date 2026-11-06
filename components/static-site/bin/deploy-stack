@@ -1,0 +1,54 @@
+#!/bin/sh
+# Usage: deploy-stack <kind> <domain> <profile> <template> [<Key>=<Value> ...]
+#
+# Makes or updates the CloudFormation stack <kind>-<domain with dashes>, in
+# us-east-1, from <template> as site-template renders it, with <domain> as its
+# DomainName, the domain's Route 53 hosted zone as its HostedZoneId, and each
+# parameter given. <kind> is site, for the stack that hosts a site from
+# cloudformation/site.yml, or redirect, for a domain that redirects to one from
+# cloudformation/redirect.yml. It can be run again: a stack that is already as
+# the template says is left as it is.
+#
+#   deploy-stack site travel.mcknight.io armcknight …/site.yml WithWww=false PriceClass=PriceClass_100
+#   deploy-stack redirect armcknight.com armcknight …/redirect.yml RedirectTo=mcknight.io WithWww=true
+#
+# The first run waits for the certificate and the distribution: 5 to 20
+# minutes. The static-site component's hosting-stack and redirect-stacks steps
+# run it, and so do `make site stack` and `make site redirects`.
+
+set -eu
+
+kind=${1:-}
+domain=${2:-}
+profile=${3:-}
+template=${4:-}
+
+if [ -z "$kind" ] || [ -z "$domain" ] || [ -z "$profile" ] || [ -z "$template" ]; then
+  echo "Usage: deploy-stack <kind> <domain> <profile> <template> [<Key>=<Value> ...]" >&2
+  exit 2
+fi
+if [ ! -f "$template" ]; then
+  echo "The template, $template, does not exist." >&2
+  exit 1
+fi
+shift 4
+
+stack="$kind-$(printf '%s' "$domain" | tr . -)"
+zone=$("$(dirname "$0")/site-zone" "$domain" "$profile")
+
+rendered=$(mktemp)
+trap 'rm -f "$rendered"' EXIT
+"$(dirname "$0")/site-template" "$template" > "$rendered"
+
+echo "Deploying the stack $stack for $domain, in the hosted zone $zone, with profile $profile."
+echo "A new stack waits for the certificate and the distribution: 5 to 20 minutes."
+aws cloudformation deploy \
+  --stack-name "$stack" \
+  --template-file "$rendered" \
+  --parameter-overrides "DomainName=$domain" "HostedZoneId=$zone" "$@" \
+  --no-fail-on-empty-changeset \
+  --profile "$profile" --region us-east-1 --no-cli-pager
+
+aws cloudformation describe-stacks --stack-name "$stack" \
+  --query 'Stacks[0].Outputs[].[OutputKey,OutputValue]' --output table \
+  --profile "$profile" --region us-east-1 --no-cli-pager

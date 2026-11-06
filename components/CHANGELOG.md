@@ -29,8 +29,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   scaffold's `site/README.md` is the checklist of what a site needs before
   and after it is deployed: titles, descriptions, canonical links, Open Graph
   tags, icons, `404.html`, `robots.txt`, the sitemap, Search Console, Bing,
-  the link-preview debuggers and the quality checks. The manifest's `shared`
-  pieces have a new kind, `template`.
+  the link-preview debuggers and the quality checks. Old domains in the
+  `redirect_from` input, such as `armcknight.com tworingsoft.com`, each get a
+  stack from `redirect.yml`: a certificate for the domain and its www, and a
+  distribution whose function answers every request with a permanent redirect
+  to the same path on the site; `make site redirects` makes them, and
+  `templatr check` checks them and that each domain redirects. The manifest's
+  `shared` pieces have a new kind, `template`.
 
 ### Changed
 

@@ -1,0 +1,30 @@
+#!/bin/sh
+# Usage: deploy-redirect-stacks <site-domain> <profile> <template> [<domains>]
+#
+# Makes or updates the redirect stack of each domain in <domains>,
+# redirect-<domain with dashes>, from <template>, the component's
+# cloudformation/redirect.yml: a distribution that answers every request to the
+# domain, and to its www, with a permanent redirect to the same path on
+# <site-domain>, with the certificate and the DNS records. <domains> is one
+# argument of domains separated by spaces, or several arguments; with none,
+# there is nothing to do. deploy-stack does each one, in turn, and a new stack
+# takes 5 to 20 minutes.
+
+set -eu
+
+site=${1:-}
+profile=${2:-}
+template=${3:-}
+
+if [ -z "$site" ] || [ -z "$profile" ] || [ -z "$template" ]; then
+  echo "Usage: deploy-redirect-stacks <site-domain> <profile> <template> [<domains>]" >&2
+  exit 2
+fi
+shift 3
+
+# Each argument can hold several domains.
+# shellcheck disable=SC2048,SC2086
+set -- $*
+for domain in "$@"; do
+  "$(dirname "$0")/deploy-stack" redirect "$domain" "$profile" "$template" "RedirectTo=$site" "WithWww=true"
+done

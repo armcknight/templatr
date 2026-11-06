@@ -5,7 +5,7 @@
 # for the domain itself, else for the nearest parent, such as mcknight.io for
 # travel.mcknight.io. Exits 1, with a message on stderr, when the profile has
 # no such zone. The static-site component's hosted-zone step checks with it,
-# and deploy-site-stack reads the zone from it.
+# and deploy-stack reads the zone from it.
 
 domain=${1:-}
 profile=${2:-}

@@ -19,8 +19,8 @@ The site's files are in `site/`: the generator's sources, its output directory, 
 
 ## Rules
 
-* Never deploy. Do not run `make site deploy`, `make site stack`, `aws s3 sync`, `aws cloudformation deploy` or `aws cloudfront create-invalidation`. Only the owner publishes, by hand.
-* Do not change `site/component.mk`'s `STATIC_SITE_DOMAIN`, `STATIC_SITE_WITH_WWW` or `STATIC_SITE_PRICE_CLASS` without being asked: each changes the stack, the certificate or what it costs. The bucket, the distribution and the DNS records come from the component's CloudFormation template; `templatr check` compares the stack with it. Do not change them in the AWS console.
+* Never deploy. Do not run `make site deploy`, `make site stack`, `make site redirects`, `aws s3 sync`, `aws cloudformation deploy` or `aws cloudfront create-invalidation`. Only the owner publishes, by hand.
+* Do not change `site/component.mk`'s `STATIC_SITE_DOMAIN`, `STATIC_SITE_WITH_WWW`, `STATIC_SITE_PRICE_CLASS` or `STATIC_SITE_REDIRECT_FROM` without being asked: each changes a stack, a certificate or what it costs. The bucket, the distribution and the DNS records come from the component's CloudFormation templates, and so does each old domain's redirect; `templatr check` compares the stacks with them. Do not change them in the AWS console.
 * The `static-site-*` targets come from the templatr repository; `site/component.mk` includes them from `make/static-site.mk`, and the root Makefile includes `site/component.mk`. Do not copy them into this project. To change them, change the templatr repository and move this project to its new tag.
 * Put each page's address in its canonical link and every address in the sitemap, and keep `404.html` out of the sitemap, with `noindex`. When a page moves, keep the old address with a page that links to the new one, or a meta refresh to it: the distribution has no redirects of its own.
 * The AWS profile in `site/component.mk` has the owner's credentials. Never print, log or commit a key, and never put credentials in a file that git tracks.

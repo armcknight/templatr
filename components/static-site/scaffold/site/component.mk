@@ -4,8 +4,8 @@
 #
 # `make site <command>` runs site-<command>, such as `make site build`.
 #
-# `make site deploy` publishes the site, and `make site stack` changes its
-# hosting. Only the owner runs them.
+# `make site deploy` publishes the site, and `make site stack` and `make site
+# redirects` change its hosting. Only the owner runs them.
 
 STATIC_SITE_DIR = site
 STATIC_SITE_NAME = site
@@ -24,6 +24,8 @@ STATIC_SITE_IMMUTABLE =
 STATIC_SITE_PORT = {{inputs.port}}
 STATIC_SITE_PROFILE = {{inputs.aws_profile}}
 STATIC_SITE_PRICE_CLASS = {{inputs.price_class}}
+# Domains that redirect to the site, each with its www, separated by spaces.
+STATIC_SITE_REDIRECT_FROM = {{inputs.redirect_from}}
 # Targets each build runs first, such as a check of the site's data.
 STATIC_SITE_BUILD_PREREQUISITES =
 # Targets `make site deploy` also runs first.
@@ -34,7 +36,7 @@ TEMPLATES_FRAGMENTS += $(TEMPLATES_MAKE)/static-site.mk
 
 include $(TEMPLATES_MAKE)/static-site.mk
 
-.PHONY: site-build site-serve site-endserve site-deploy site-bust-cache site-invalidations site-stack site-status
+.PHONY: site-build site-serve site-endserve site-deploy site-bust-cache site-invalidations site-stack site-redirects site-status
 
 ## site-build: build the site into site/{{inputs.output}}
 site-build: static-site-build
@@ -56,6 +58,9 @@ site-invalidations: static-site-invalidations
 
 ## site-stack: make or update the bucket, certificate, distribution and DNS records
 site-stack: static-site-stack
+
+## site-redirects: make or update the stack of each domain that redirects to the site
+site-redirects: static-site-redirects
 
 ## site-status: show the hosting and the commit that is live
 site-status: static-site-status

@@ -1,18 +1,23 @@
 #!/bin/sh
-# Usage: check-site-answers <domain> <with-www>
+# Usage: check-site-answers <domain> <with-www> [<redirect-domains>]
 #
 # Exits 0 when the site at <domain> answers as the stack serves it:
 # https://<domain>/ is 200, http://<domain>/ redirects to it, a page that does
 # not exist is 404, and, with <with-www> true, https://www.<domain>/ redirects
-# to <domain>. Each answer is printed; the wrong ones go to stderr.
+# to <domain>; and when each domain in <redirect-domains>, and its www,
+# redirects to <domain>. <redirect-domains> is one argument of domains
+# separated by spaces, or several arguments. Each answer is printed; the wrong
+# ones go to stderr.
 
 domain=${1:-}
 with_www=${2:-false}
 
 if [ -z "$domain" ]; then
-  echo "Usage: check-site-answers <domain> <with-www>" >&2
+  echo "Usage: check-site-answers <domain> <with-www> [<redirect-domains>]" >&2
   exit 2
 fi
+shift
+[ $# -gt 0 ] && shift
 
 wrong=0
 answer() {
@@ -34,5 +39,13 @@ check "a missing page is 404" "https://$domain/templatr-check-site-answers-$(dat
 if [ "$with_www" = true ]; then
   check "https://www.$domain/ redirects" "https://www.$domain/" "301 https://$domain/"
 fi
+
+# Each argument can hold several domains.
+# shellcheck disable=SC2048,SC2086
+set -- $*
+for old in "$@"; do
+  check "https://$old/ redirects" "https://$old/" "301 https://$domain/"
+  check "https://www.$old/ redirects" "https://www.$old/" "301 https://$domain/"
+done
 
 [ "$wrong" -eq 0 ]

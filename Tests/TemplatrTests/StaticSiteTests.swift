@@ -40,6 +40,7 @@ let siteComponentMk = """
     STATIC_SITE_PORT = 5199
     STATIC_SITE_PROFILE = armcknight
     STATIC_SITE_PRICE_CLASS = PriceClass_All
+    STATIC_SITE_REDIRECT_FROM = armcknight.com tworingsoft.com
 
     NAMESPACES += site
     TEMPLATES_FRAGMENTS += $(TEMPLATES_MAKE)/static-site.mk
@@ -79,6 +80,7 @@ struct StaticSiteTests {
             "port": "4000",
             "aws_profile": "default",
             "price_class": "PriceClass_100",
+            "redirect_from": "",
         ])
     }
 
@@ -120,6 +122,7 @@ struct StaticSiteTests {
             "port": "5199",
             "aws_profile": "armcknight",
             "price_class": "PriceClass_All",
+            "redirect_from": "armcknight.com tworingsoft.com",
         ])
     }
 
@@ -269,36 +272,47 @@ struct StaticSiteDeployTests {
     }
 }
 
-/// The check-site-stack script, with a stand-in `aws`.
-@Suite("static-site check-site-stack")
+/// The check-stack and check-redirect-stacks scripts, with a stand-in `aws`.
+@Suite("static-site check-stack")
 struct StaticSiteStackCheckTests {
     let bin: Directory
-    let template = repositoryRoot.appending(path: "components/static-site/cloudformation/site.yml")
+    let cloudformation = repositoryRoot.appending(path: "components/static-site/cloudformation")
+    var template: URL { cloudformation.appending(path: "site.yml") }
+    var redirectTemplate: URL { cloudformation.appending(path: "redirect.yml") }
 
     init() throws {
         bin = try Directory()
     }
 
-    /// Writes an `aws` whose stack has `status` and the parameters given, and
-    /// whose template is the component's as site-template renders it, or
-    /// `templateBody` when given.
-    func stubAWS(status: String = "UPDATE_COMPLETE", www: String = "false", price: String = "PriceClass_100", templateBody: String? = nil) throws {
+    /// Writes an `aws` that logs each call to aws.log, whose stacks have
+    /// `status`, the domain their name was made from, and `parameters` as the
+    /// values of the parameters the check asks for, in that order, and whose
+    /// template is `template` as site-template renders it, or `templateBody`
+    /// when given.
+    func stubAWS(
+        status: String = "UPDATE_COMPLETE", parameters: [String] = ["false", "PriceClass_100"],
+        template: URL? = nil, templateBody: String? = nil
+    ) throws {
         let render = repositoryRoot.appending(path: "components/static-site/bin/site-template").path
-        let body = templateBody.map { "printf '%s' \"\($0)\"" } ?? "'\(render)' '\(template.path)'"
+        let body = templateBody.map { "printf '%s' \"\($0)\"" } ?? "'\(render)' '\((template ?? self.template).path)'"
+        let fields = parameters.map { "\\t" + $0 }.joined()
         try bin.writeExecutable("aws", """
             #!/bin/sh
+            echo "$*" >> "\(bin.root.path)/aws.log"
             case "$*" in
-              "cloudformation describe-stacks"*) printf '%s\\t%s\\t%s\\t%s\\n' "\(status)" "travel.mcknight.io" "\(www)" "\(price)" ;;
+              "cloudformation describe-stacks"*)
+                domain=$(printf '%s' "$*" | sed -n 's/.*--stack-name [a-z]*-\\([^ ]*\\).*/\\1/p' | tr - .)
+                printf '%s\\t%s\(fields)\\n' "\(status)" "$domain" ;;
               "cloudformation get-template"*) \(body) ;;
               *) echo "unexpected: $*" >&2; exit 1 ;;
             esac
             """)
     }
 
-    func check(www: String = "false", price: String = "PriceClass_100") throws -> (status: Int32, output: String) {
+    func run(_ script: String, _ arguments: [String]) throws -> (status: Int32, output: String) {
         let process = Process()
-        process.executableURL = repositoryRoot.appending(path: "components/static-site/bin/check-site-stack")
-        process.arguments = ["travel.mcknight.io", "test", www, price, template.path]
+        process.executableURL = repositoryRoot.appending(path: "components/static-site/bin/\(script)")
+        process.arguments = arguments
         var env = ProcessInfo.processInfo.environment
         env["PATH"] = bin.root.path + ":" + (env["PATH"] ?? "/usr/bin:/bin")
         process.environment = env
@@ -311,26 +325,29 @@ struct StaticSiteStackCheckTests {
         return (process.terminationStatus, String(decoding: data, as: UTF8.self))
     }
 
+    func check(www: String = "false", price: String = "PriceClass_100") throws -> (status: Int32, output: String) {
+        try run("check-stack", ["site", "travel.mcknight.io", "test", template.path, "WithWww=\(www)", "PriceClass=\(price)"])
+    }
+
+    var calls: [String] {
+        (bin.read("aws.log") ?? "").split(separator: "\n").map(String.init)
+    }
+
     @Test func aStackFromTheTemplatePasses() throws {
         try stubAWS()
         let result = try check()
         #expect(result.status == 0, Comment(rawValue: result.output))
+        #expect(calls.first?.contains("--stack-name site-travel-mcknight-io") == true)
     }
 
     /// The template as the stack gets it: the function's code in place of the
     /// marker, indented as the marker was, so that it stays inside the `!Sub`
     /// block.
     @Test func siteTemplatePutsTheFunctionInTheTemplate() throws {
-        let process = Process()
-        process.executableURL = repositoryRoot.appending(path: "components/static-site/bin/site-template")
-        process.arguments = [template.path]
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        try process.run()
-        let rendered = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
-        process.waitUntilExit()
-        #expect(process.terminationStatus == 0)
-        #expect(!rendered.contains("@VIEWER_REQUEST_FUNCTION@"))
+        let result = try run("site-template", [template.path])
+        let rendered = result.output
+        #expect(result.status == 0)
+        #expect(!rendered.contains("@FUNCTION"))
         #expect(rendered.contains("      FunctionCode: !Sub |\n        // The distribution's viewer-request function"))
         #expect(rendered.contains("\n        function handler(event) {\n          var request = event.request;\n"))
         // Every ${…} in the template is one that !Sub knows: the function's
@@ -340,24 +357,61 @@ struct StaticSiteStackCheckTests {
         #expect(substitutions.isSubset(of: known), Comment(rawValue: substitutions.sorted().joined(separator: ", ")))
     }
 
+    @Test func siteTemplateRendersTheRedirectTemplateToo() throws {
+        let result = try run("site-template", [redirectTemplate.path])
+        let rendered = result.output
+        #expect(result.status == 0)
+        #expect(!rendered.contains("@FUNCTION"))
+        #expect(rendered.contains("\n        function handler(event) {\n"))
+        #expect(rendered.contains("'https://${RedirectTo}' + request.uri + query"))
+        let known: Set<String> = ["AWS::StackName", "DomainName", "RedirectTo"]
+        let substitutions = Set(rendered.matches(of: /\$\{([A-Za-z:.]+)\}/).map { String($0.1) })
+        #expect(substitutions.isSubset(of: known), Comment(rawValue: substitutions.sorted().joined(separator: ", ")))
+    }
+
     @Test func anotherTemplateFails() throws {
         try stubAWS(templateBody: "Resources: {}")
         let result = try check()
         #expect(result.status == 1)
-        #expect(result.output.contains("WRONG  template"))
+        #expect(result.output.contains("WRONG  site-travel-mcknight-io template"))
     }
 
     @Test func otherParametersFail() throws {
-        try stubAWS(www: "true")
+        try stubAWS(parameters: ["true", "PriceClass_100"])
         let result = try check()
         #expect(result.status == 1)
-        #expect(result.output.contains("WRONG  WithWww: found true, expected false"))
+        #expect(result.output.contains("WRONG  site-travel-mcknight-io WithWww: found true, expected false"))
     }
 
     @Test func anIncompleteStackFails() throws {
         try stubAWS(status: "UPDATE_ROLLBACK_COMPLETE")
         let result = try check()
         #expect(result.status == 1)
-        #expect(result.output.contains("WRONG  status"))
+        #expect(result.output.contains("WRONG  site-travel-mcknight-io status"))
+    }
+
+    @Test func redirectStacksAreCheckedOneByOne() throws {
+        try stubAWS(parameters: ["mcknight.io", "true"], template: redirectTemplate)
+        let result = try run("check-redirect-stacks", ["mcknight.io", "test", redirectTemplate.path, "armcknight.com tworingsoft.com"])
+        #expect(result.status == 0, Comment(rawValue: result.output))
+        let stacks = calls.filter { $0.hasPrefix("cloudformation describe-stacks") }
+        #expect(stacks.count == 2)
+        #expect(stacks[0].contains("--stack-name redirect-armcknight-com"))
+        #expect(stacks[1].contains("--stack-name redirect-tworingsoft-com"))
+        #expect(result.output.contains("ok     redirect-tworingsoft-com RedirectTo: mcknight.io"))
+    }
+
+    @Test func noRedirectDomainsIsNothingToCheck() throws {
+        try stubAWS()
+        let result = try run("check-redirect-stacks", ["mcknight.io", "test", redirectTemplate.path, ""])
+        #expect(result.status == 0)
+        #expect(calls.isEmpty)
+    }
+
+    @Test func oneWrongRedirectStackFailsThemAll() throws {
+        try stubAWS(parameters: ["elsewhere.example", "true"], template: redirectTemplate)
+        let result = try run("check-redirect-stacks", ["mcknight.io", "test", redirectTemplate.path, "armcknight.com"])
+        #expect(result.status == 1)
+        #expect(result.output.contains("WRONG  redirect-armcknight-com RedirectTo: found elsewhere.example, expected mcknight.io"))
     }
 }

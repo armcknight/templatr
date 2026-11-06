@@ -21,6 +21,7 @@
 #   STATIC_SITE_PORT                 the port static-site-serve serves the built site on
 #   STATIC_SITE_PROFILE              the AWS profile the commands run with
 #   STATIC_SITE_PRICE_CLASS          the distribution's price class
+#   STATIC_SITE_REDIRECT_FROM        domains that redirect to the site, each with its www, separated by spaces
 #   STATIC_SITE_BUILD_PREREQUISITES  targets each build runs first
 #   STATIC_SITE_DEPLOY_PREREQUISITES targets static-site-deploy also runs first, such as a link check
 #   STATIC_SITE_LOG_DIR              where the targets write their logs
@@ -40,6 +41,7 @@ STATIC_SITE_INVALIDATE ?= /*
 STATIC_SITE_PORT ?= 4000
 STATIC_SITE_PROFILE ?= default
 STATIC_SITE_PRICE_CLASS ?= PriceClass_100
+STATIC_SITE_REDIRECT_FROM ?=
 STATIC_SITE_BUILD_PREREQUISITES ?=
 STATIC_SITE_DEPLOY_PREREQUISITES ?=
 STATIC_SITE_LOG_DIR ?= $(STATIC_SITE_DIR)/logs
@@ -48,13 +50,16 @@ STATIC_SITE_STAMP ?= $(STATIC_SITE_DIR)/DEPLOYED
 STATIC_SITE_STACK ?= site-$(subst .,-,$(STATIC_SITE_DOMAIN))
 STATIC_SITE_OUTPUT_PATH = $(STATIC_SITE_DIR)/$(STATIC_SITE_OUTPUT)
 
-# The scripts that the targets run, and the stack's template with its
-# function, downloaded from templatr at TEMPLATES_TAG on first use, like the
+# The scripts that the targets run, and the stacks' templates with their
+# functions, downloaded from templatr at TEMPLATES_TAG on first use, like the
 # fragments.
 STATIC_SITE_BIN = $(TEMPLATES_MAKE)/static-site
-STATIC_SITE_SCRIPTS = $(STATIC_SITE_BIN)/deploy-site $(STATIC_SITE_BIN)/deploy-site-stack $(STATIC_SITE_BIN)/site-zone $(STATIC_SITE_BIN)/site-template $(STATIC_SITE_BIN)/serve-site.py
+STATIC_SITE_SCRIPTS = $(STATIC_SITE_BIN)/deploy-site $(STATIC_SITE_BIN)/deploy-stack $(STATIC_SITE_BIN)/deploy-redirect-stacks $(STATIC_SITE_BIN)/site-zone $(STATIC_SITE_BIN)/site-template $(STATIC_SITE_BIN)/serve-site.py
 STATIC_SITE_TEMPLATE = $(STATIC_SITE_BIN)/site.yml
 STATIC_SITE_FUNCTION = $(STATIC_SITE_BIN)/viewer-request.js
+STATIC_SITE_REDIRECT_TEMPLATE = $(STATIC_SITE_BIN)/redirect.yml
+STATIC_SITE_REDIRECT_FUNCTION = $(STATIC_SITE_BIN)/redirect.js
+STATIC_SITE_STACK_SCRIPTS = $(STATIC_SITE_BIN)/deploy-stack $(STATIC_SITE_BIN)/site-zone $(STATIC_SITE_BIN)/site-template
 
 $(STATIC_SITE_BIN)/%:
 	@test -n "$(TEMPLATES_TAG)" || { echo "Set TEMPLATES_TAG to the templatr tag that the project is pinned to." >&2; exit 1; }
@@ -62,7 +67,7 @@ $(STATIC_SITE_BIN)/%:
 	curl -fsSL https://raw.githubusercontent.com/armcknight/templatr/$(TEMPLATES_TAG)/components/static-site/bin/$* -o $@
 	chmod +x $@
 
-$(STATIC_SITE_TEMPLATE) $(STATIC_SITE_FUNCTION):
+$(STATIC_SITE_TEMPLATE) $(STATIC_SITE_FUNCTION) $(STATIC_SITE_REDIRECT_TEMPLATE) $(STATIC_SITE_REDIRECT_FUNCTION):
 	@test -n "$(TEMPLATES_TAG)" || { echo "Set TEMPLATES_TAG to the templatr tag that the project is pinned to." >&2; exit 1; }
 	mkdir -p $(@D)
 	curl -fsSL https://raw.githubusercontent.com/armcknight/templatr/$(TEMPLATES_TAG)/components/static-site/cloudformation/$(@F) -o $@
@@ -74,7 +79,7 @@ STATIC_SITE_AWS = aws --profile $(STATIC_SITE_PROFILE) --no-cli-pager
 # An output of the stack, read when a recipe runs: $(call static_site_output,DistributionId).
 static_site_output = $$($(STATIC_SITE_AWS) cloudformation describe-stacks --stack-name $(STATIC_SITE_STACK) --region us-east-1 --query "Stacks[0].Outputs[?OutputKey=='$(1)'].OutputValue | [0]" --output text)
 
-.PHONY: static-site-build static-site-serve static-site-endserve static-site-deploy static-site-bust-cache static-site-invalidations static-site-stack static-site-status static-site-domain
+.PHONY: static-site-build static-site-serve static-site-endserve static-site-deploy static-site-bust-cache static-site-invalidations static-site-stack static-site-redirects static-site-status static-site-domain
 
 ## static-site-build: build the site into its output directory; nothing to do when STATIC_SITE_BUILD is empty
 static-site-build: $(STATIC_SITE_BUILD_PREREQUISITES)
@@ -127,8 +132,13 @@ static-site-invalidations: static-site-domain
 	@$(STATIC_SITE_AWS) cloudfront list-invalidations --distribution-id $(call static_site_output,DistributionId) --query 'InvalidationList.Items[].[CreateTime,Status,Id]' --output table
 
 ## static-site-stack: make or update the bucket, certificate, distribution and DNS records from the component's template; only the owner runs it
-static-site-stack: static-site-domain $(STATIC_SITE_BIN)/deploy-site-stack $(STATIC_SITE_BIN)/site-zone $(STATIC_SITE_BIN)/site-template $(STATIC_SITE_TEMPLATE) $(STATIC_SITE_FUNCTION)
-	$(STATIC_SITE_BIN)/deploy-site-stack $(STATIC_SITE_DOMAIN) $(STATIC_SITE_PROFILE) $(STATIC_SITE_WITH_WWW) $(STATIC_SITE_PRICE_CLASS) $(STATIC_SITE_TEMPLATE)
+static-site-stack: static-site-domain $(STATIC_SITE_STACK_SCRIPTS) $(STATIC_SITE_TEMPLATE) $(STATIC_SITE_FUNCTION)
+	$(STATIC_SITE_BIN)/deploy-stack site $(STATIC_SITE_DOMAIN) $(STATIC_SITE_PROFILE) $(STATIC_SITE_TEMPLATE) WithWww=$(STATIC_SITE_WITH_WWW) PriceClass=$(STATIC_SITE_PRICE_CLASS)
+
+## static-site-redirects: make or update the stack of each domain in STATIC_SITE_REDIRECT_FROM that redirects to the site; only the owner runs it
+static-site-redirects: static-site-domain $(STATIC_SITE_STACK_SCRIPTS) $(STATIC_SITE_BIN)/deploy-redirect-stacks $(STATIC_SITE_REDIRECT_TEMPLATE) $(STATIC_SITE_REDIRECT_FUNCTION)
+	@test -n "$(STATIC_SITE_REDIRECT_FROM)" || { echo "No domain redirects to $(STATIC_SITE_DOMAIN): set STATIC_SITE_REDIRECT_FROM."; exit 0; }
+	$(STATIC_SITE_BIN)/deploy-redirect-stacks $(STATIC_SITE_DOMAIN) $(STATIC_SITE_PROFILE) $(STATIC_SITE_REDIRECT_TEMPLATE) $(STATIC_SITE_REDIRECT_FROM)
 
 ## static-site-status: show the stack's bucket, distribution and certificate, and the commit that is live
 static-site-status: static-site-domain

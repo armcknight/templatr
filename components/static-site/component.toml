@@ -94,6 +94,15 @@ example = "armcknight"
 default = "default"
 infer = [{ from = "regex", glob = "component.mk", pattern = "(?m)^STATIC_SITE_PROFILE\\s*=\\s*(\\S+)" }]
 
+# Old domains, each with its www, that redirect to the site: one redirect
+# stack for each, with no bucket.
+[[inputs]]
+name = "redirect_from"
+description = "Domains that redirect to the site, each with its www, separated by spaces, such as an old name of the site: every request to one is answered with a permanent redirect to the same path on the site. Empty for none."
+example = "armcknight.com tworingsoft.com"
+default = ""
+infer = [{ from = "regex", glob = "component.mk", pattern = "(?m)^STATIC_SITE_REDIRECT_FROM\\s*=\\s*(.+?)\\s*$" }]
+
 [[inputs]]
 name = "price_class"
 description = "Which CloudFront edge locations serve the site: PriceClass_100 is North America and Europe, the cheapest; PriceClass_200 adds most of Asia; PriceClass_All is every location."
@@ -130,8 +139,17 @@ fix = { human = { text = "Make a public hosted zone in Route 53 for {{inputs.dom
 [[steps]]
 id = "hosting-stack"
 description = "The CloudFormation stack for the domain is complete, was made from the component's template, and has the with_www and price_class given: the private bucket, the certificate, the distribution with its security headers, 404 page and directory indexes, and the A and AAAA records."
-check = "{{templates}}/components/static-site/bin/check-site-stack {{inputs.domain}} {{inputs.aws_profile}} {{inputs.with_www}} {{inputs.price_class}} {{templates}}/components/static-site/cloudformation/site.yml"
-fix = "{{templates}}/components/static-site/bin/deploy-site-stack {{inputs.domain}} {{inputs.aws_profile}} {{inputs.with_www}} {{inputs.price_class}} {{templates}}/components/static-site/cloudformation/site.yml"
+check = "{{templates}}/components/static-site/bin/check-stack site {{inputs.domain}} {{inputs.aws_profile}} {{templates}}/components/static-site/cloudformation/site.yml WithWww={{inputs.with_www}} PriceClass={{inputs.price_class}}"
+fix = "{{templates}}/components/static-site/bin/deploy-stack site {{inputs.domain}} {{inputs.aws_profile}} {{templates}}/components/static-site/cloudformation/site.yml WithWww={{inputs.with_www}} PriceClass={{inputs.price_class}}"
+
+# Each old domain's stack has its own certificate and records, and a
+# distribution whose function answers every request with a redirect to the
+# site, so it has no bucket. With no redirect_from, there is nothing to check.
+[[steps]]
+id = "redirect-stacks"
+description = "Each domain in redirect_from has a complete redirect stack, made from the component's redirect template, that redirects it and its www to the site."
+check = "{{templates}}/components/static-site/bin/check-redirect-stacks {{inputs.domain}} {{inputs.aws_profile}} {{templates}}/components/static-site/cloudformation/redirect.yml {{inputs.redirect_from}}"
+fix = "{{templates}}/components/static-site/bin/deploy-redirect-stacks {{inputs.domain}} {{inputs.aws_profile}} {{templates}}/components/static-site/cloudformation/redirect.yml {{inputs.redirect_from}}"
 
 [[steps]]
 id = "make-fragment"
@@ -163,8 +181,8 @@ fix = { human = { text = "Add a robots.txt to the site's sources (site/ for Jeky
 # The last step: the site answers only after the first `make site deploy`.
 [[steps]]
 id = "site-answers"
-description = "The site answers over HTTPS, HTTP redirects to it, a page that does not exist is a 404, and www redirects when it is served."
-check = "{{templates}}/components/static-site/bin/check-site-answers {{inputs.domain}} {{inputs.with_www}}"
+description = "The site answers over HTTPS, HTTP redirects to it, a page that does not exist is a 404, www redirects when it is served, and each domain in redirect_from redirects to it."
+check = "{{templates}}/components/static-site/bin/check-site-answers {{inputs.domain}} {{inputs.with_www}} {{inputs.redirect_from}}"
 fix = { human = { text = "Build and publish the site for the first time: `make site build`, then `make site deploy` from a clean checkout, which only the owner runs. A new distribution takes some minutes to answer at https://{{inputs.domain}}; `make site status` shows what is live. Then go through the checklist in site/README.md." } }
 
 [[shared]]
@@ -192,10 +210,22 @@ version = "v1"
 description = "The distribution's viewer-request function: a directory's address with a slash gets its index.html, one without redirects to the one with, and www.<domain> redirects to the domain. site-template puts it into site.yml."
 
 [[shared]]
+kind = "template"
+path = "components/static-site/cloudformation/redirect.yml"
+version = "v1"
+description = "The CloudFormation stack for a domain that redirects to the site: a certificate for the domain and its www, a distribution whose function answers every request with a permanent redirect to the same path on the site, and the A and AAAA records. It has no bucket."
+
+[[shared]]
+kind = "template"
+path = "components/static-site/cloudformation/redirect.js"
+version = "v1"
+description = "The redirect distribution's viewer-request function: a permanent redirect of every request to the same path on the site, with the query string kept. site-template puts it into redirect.yml."
+
+[[shared]]
 kind = "script"
 path = "components/static-site/bin/site-template"
 version = "v1"
-description = "Prints site.yml with viewer-request.js in place of its marker line: the template that deploy-site-stack deploys and check-site-stack compares with."
+description = "Prints site.yml or redirect.yml with its function in place of the @FUNCTION marker line: the template that deploy-stack deploys and check-stack compares with."
 
 [[shared]]
 kind = "script"
@@ -205,21 +235,33 @@ description = "Prints the ID of the Route 53 hosted zone that has the domain, or
 
 [[shared]]
 kind = "script"
-path = "components/static-site/bin/check-site-stack"
+path = "components/static-site/bin/check-stack"
 version = "v1"
-description = "Checks that the domain's CloudFormation stack is complete, was made from the component's template, and has the parameters given."
+description = "Checks that a site or redirect stack of a domain is complete, was made from its template, and has the parameters given."
 
 [[shared]]
 kind = "script"
-path = "components/static-site/bin/deploy-site-stack"
+path = "components/static-site/bin/deploy-stack"
 version = "v1"
-description = "Makes or updates the domain's CloudFormation stack from the component's template, in us-east-1, and prints its outputs."
+description = "Makes or updates a site or redirect stack of a domain from its template, in us-east-1, with the domain's hosted zone, and prints its outputs."
+
+[[shared]]
+kind = "script"
+path = "components/static-site/bin/check-redirect-stacks"
+version = "v1"
+description = "Checks each redirect_from domain's stack with check-stack."
+
+[[shared]]
+kind = "script"
+path = "components/static-site/bin/deploy-redirect-stacks"
+version = "v1"
+description = "Makes or updates each redirect_from domain's stack with deploy-stack."
 
 [[shared]]
 kind = "script"
 path = "components/static-site/bin/check-site-answers"
 version = "v1"
-description = "Checks that the site answers over HTTPS, that HTTP redirects to it, that a page that does not exist is a 404, and that www redirects when it is served."
+description = "Checks that the site answers over HTTPS, that HTTP redirects to it, that a page that does not exist is a 404, that www redirects when it is served, and that each redirect_from domain redirects to the site."
 
 [[shared]]
 kind = "script"

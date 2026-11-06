@@ -4,9 +4,9 @@ Description: >-
   with an ACM certificate and Route 53 alias records for the domain, and for
   www.<domain> when WithWww is true. The stack is in us-east-1, where
   CloudFront needs the certificate. The static-site component of
-  armcknight/templatr deploys it with bin/deploy-site-stack, and `templatr
-  check` compares the stack's template with this file, as bin/site-template
-  renders it with viewer-request.js.
+  armcknight/templatr deploys it with bin/deploy-stack, and `templatr check`
+  compares the stack's template with this file, as bin/site-template renders
+  it with viewer-request.js.
 
 Parameters:
   DomainName:
@@ -109,7 +109,7 @@ Resources:
   # Runs on each request before the cache: directory indexes, the
   # trailing-slash redirect and the www redirect. Its code is viewer-request.js,
   # next to this file; bin/site-template puts it in place of the marker line
-  # below, and deploy-site-stack and check-site-stack read that rendering.
+  # below, and deploy-stack and check-stack read that rendering.
   ViewerRequestFunction:
     Type: AWS::CloudFront::Function
     Properties:
@@ -119,7 +119,7 @@ Resources:
         Comment: Directory indexes, the trailing-slash redirect and the www redirect.
         Runtime: cloudfront-js-2.0
       FunctionCode: !Sub |
-        @VIEWER_REQUEST_FUNCTION@
+        @FUNCTION viewer-request.js@
 
   Distribution:
     Type: AWS::CloudFront::Distribution
