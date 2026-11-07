@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v3.0.0] 2026-11-06
+
 ### Added
 
 - The github-repo component's `private` input, `false` by default, which
