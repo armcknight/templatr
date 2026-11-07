@@ -15,6 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   when the input has that value. With another value, `bootstrap` and `check`
   do not read, set, run or report it, and the README does not list it. The
   validator rejects a `when` whose input the component does not declare.
+- `templatr bootstrap` and `check` take `--private` and `--no-private`: they
+  set the github-repo component's `private` input, which `bootstrap` records
+  in `.templatr.toml` and `check` uses for that run only. Without either, a
+  repository is public, or keeps the recorded value.
 
 ### Fixed
 

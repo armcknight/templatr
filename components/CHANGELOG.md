@@ -12,6 +12,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The github-repo component's `private` input, `false` by default, which
+  `templatr bootstrap --private` records as `true`: the owner keeps the
+  repository private and accepts that GitHub's free plan has no rulesets for
+  it. Then the `rulesets-available` step does not run, so it is not a step for
+  a person.
+
 ### Changed
 
 - The supabase component needs `SUPABASE_ACCESS_TOKEN` and

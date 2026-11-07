@@ -69,6 +69,22 @@ import Testing
         #expect(!calls.contains { $0.contains("rulesets") })
     }
 
+    @Test func aRepositoryThatStaysPrivateHasNoHumanStepForRulesets() async throws {
+        try stubGitHub(rules: freePlan)
+        let answers = ["github-repo": ["private": "true"]]
+        let report = try await bootstrapper.check(repository: project.root, answers: answers)
+        #expect(steps(report).failed.map(\.id) == [])
+        #expect(steps(report).human.map(\.id) == [])
+
+        // bootstrap records it, so a later check needs no flag.
+        _ = try await bootstrapper.bootstrap(
+            repository: project.root, options: BootstrapOptions(answers: answers, links: [], setSecret: setEverySecret)
+        )
+        #expect(project.read(".templatr.toml")?.contains("private = \"true\"") == true)
+        let later = try await bootstrapper.check(repository: project.root)
+        #expect(steps(later).human.map(\.id) == [])
+    }
+
     @Test func otherErrorsFromTheRulesAPIFail() async throws {
         try stubGitHub(rules: #"echo 'gh: Not Found (HTTP 404)' >&2; exit 1"#)
         let report = try await bootstrapper.check(repository: project.root)

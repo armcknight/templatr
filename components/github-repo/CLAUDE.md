@@ -12,6 +12,7 @@ This project is on GitHub, with the `github-repo` component from [armcknight/tem
 
 * Never force-push to the default branch, and never delete it. A ruleset stops both; only the owner can bypass it, and an agent never asks to. A private repository on GitHub's free plan has no rulesets, so nothing stops either there: the rule still holds.
 * Do not change the repository's merge settings or its rulesets without being asked: `templatr check` checks them.
+* Do not change the `private` input in `.templatr.toml`, and do not run `templatr bootstrap --private` or `--no-private`, without being asked. `private = "true"` records that the owner keeps the repository private and accepts that it has no rulesets.
 
 ## Further reading
 

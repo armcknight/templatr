@@ -33,8 +33,24 @@ struct TemplatrCommand: AsyncParsableCommand {
         @Option(help: "The tag new components are pinned to. The checkout's newest alias, such as v1, by default.")
         var tag: String?
 
+        @Flag(
+            name: .customLong("private"), inversion: .prefixedNo,
+            help: """
+                Whether the GitHub repository stays private on purpose, as the github-repo component's \
+                private input: then GitHub's free plan has no rulesets for it, and that is not reported. \
+                bootstrap records it in .templatr.toml. Public by default.
+                """
+        )
+        var isPrivate: Bool?
+
         var repositoryURL: URL {
             URL(fileURLWithPath: repository ?? FileManager.default.currentDirectoryPath)
+        }
+
+        /// The input values that the flags give, by component and input name.
+        var answers: [String: [String: String]] {
+            guard let isPrivate else { return [:] }
+            return ["github-repo": ["private": isPrivate ? "true" : "false"]]
         }
 
         func bootstrapper(services: Services) throws -> Bootstrapper {
@@ -78,7 +94,7 @@ struct TemplatrCommand: AsyncParsableCommand {
             try await TemplatrCommand.finish {
                 let bootstrapper = try options.bootstrapper(services: .system())
                 return try await TemplatrCommand.bootstrap(
-                    bootstrapper, repository: options.repositoryURL, yes: yes, links: links
+                    bootstrapper, repository: options.repositoryURL, answers: options.answers, yes: yes, links: links
                 )
             }
         }
@@ -103,7 +119,8 @@ struct TemplatrCommand: AsyncParsableCommand {
                 if offline {
                     services.links = OfflineLinkChecker()
                 }
-                let report = try await options.bootstrapper(services: services).check(repository: options.repositoryURL)
+                let report = try await options.bootstrapper(services: services)
+                    .check(repository: options.repositoryURL, answers: options.answers)
                 if json {
                     print(String(decoding: try report.json(), as: UTF8.self))
                 } else {
@@ -129,10 +146,12 @@ struct TemplatrCommand: AsyncParsableCommand {
         }
     }
 
-    static func bootstrap(_ bootstrapper: Bootstrapper, repository: URL, yes: Bool, links: [Link]) async throws -> Report {
+    static func bootstrap(
+        _ bootstrapper: Bootstrapper, repository: URL, answers given: [String: [String: String]], yes: Bool, links: [Link]
+    ) async throws -> Report {
         let interactive = isatty(STDIN_FILENO) == 1 && !yes
-        let resolution = try bootstrapper.resolve(repository: repository, answers: [:])
-        var answers: [String: [String: String]] = [:]
+        let resolution = try bootstrapper.resolve(repository: repository, answers: given)
+        var answers = given
 
         for resolved in resolution.components where interactive {
             let name = resolved.component.name

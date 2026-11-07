@@ -1,8 +1,16 @@
 name = "github-repo"
 description = "A repository on GitHub whose pull requests are squashed when they merge, and whose default branch cannot be deleted or force-pushed except by the owner."
 
-inputs = []
 secrets = []
+
+# Whether the repository stays private on purpose. `templatr bootstrap
+# --private` records it; without it, a repository is taken to be public, or
+# to have rulesets.
+[[inputs]]
+name = "private"
+description = "Whether the repository stays private on purpose, so that GitHub's free plan has no rulesets for it and the owner accepts that: true or false."
+example = "false"
+default = "false"
 
 # A .github directory. Whether a repository is on GitHub is not in its files:
 # its remote is in .git, which is not searched. Each project that superlinear
@@ -37,12 +45,14 @@ fix = "gh api --method PATCH 'repos/{owner}/{repo}' -F allow_squash_merge=true -
 
 # A private repository of an account on the free plan has no rulesets. Then
 # default-branch-protection passes without a ruleset, and this step asks a
-# person to decide.
+# person to decide. A repository whose `private` input is true has had that
+# decision: the owner accepted the risk, so the step does not run.
 [[steps]]
 id = "rulesets-available"
 description = "GitHub offers rulesets for the repository: it is public, or its owner has a paid plan."
 check = "{{templates}}/components/github-repo/bin/check-rulesets-available"
-fix = { human = { text = "The repository is private on GitHub's free plan, so GitHub offers no rulesets, and nothing stops its default branch from being deleted or force-pushed. Make the repository public, or upgrade to GitHub Pro; or accept the risk." } }
+fix = { human = { text = "The repository is private on GitHub's free plan, so GitHub offers no rulesets, and nothing stops its default branch from being deleted or force-pushed. Make the repository public, or upgrade to GitHub Pro; or accept the risk, with `templatr bootstrap --private`, which records it." } }
+when = { input = "private", equals = "false" }
 
 [[steps]]
 id = "default-branch-protection"

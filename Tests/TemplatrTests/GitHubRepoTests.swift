@@ -15,7 +15,8 @@ struct GitHubRepoTests {
 
     @Test func repositoryWithWorkflows() throws {
         try repository.write(".github/workflows/ci.yml", "name: ci\n")
-        #expect(try #require(try resolve("github-repo", in: repository.root)).inputs.isEmpty)
+        // A repository is public unless bootstrap --private records otherwise.
+        #expect(try #require(try resolve("github-repo", in: repository.root)).inputs == ["private": "false"])
     }
 
     @Test func repositoryWithoutGitHubDirectory() throws {

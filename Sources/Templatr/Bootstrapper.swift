@@ -159,10 +159,11 @@ public struct Bootstrapper: Sendable {
     /// What `repository` still needs, without changing anything: the steps'
     /// checks, missing secrets by name, secrets due for a new value,
     /// certificates near their expiry, components behind the newest alias, and
-    /// README links that no longer resolve.
-    public func check(repository: URL) async throws -> Report {
+    /// README links that no longer resolve. `answers` win over the recorded
+    /// and inferred input values for this run only, as the `--private` flag.
+    public func check(repository: URL, answers: [String: [String: String]] = [:]) async throws -> Report {
         let repository = repository.standardizedFileURL
-        let resolution = try resolve(repository: repository, answers: [:])
+        let resolution = try resolve(repository: repository, answers: answers)
         var report = Report()
         start(&report, resolution)
         if resolution.components.isEmpty && !resolution.recorded {
