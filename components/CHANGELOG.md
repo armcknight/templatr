@@ -12,6 +12,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The apple-app and vapor-fly components' human steps for the App Store
+  Connect API keys and the Fly deploy token name `templatr store-secrets`,
+  with its flags, in place of the templatr checkout's `bin/store-secrets`,
+  which templatr 2.0.0 removes.
+
 ## [v3.0.0] 2026-11-06
 
 ### Added
