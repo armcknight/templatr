@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] 2026-11-06
+
 ### Changed
 
 - `bin/store-secrets` is now the subcommand `templatr store-secrets`, with the
