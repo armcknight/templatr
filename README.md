@@ -335,12 +335,12 @@ With `--json`, it prints the report in the format of [schema/check-report.schema
 
 The exit status is 0 when nothing is left to do, 1 when the report lists something or an error stops the run, and 64 for a usage error. `templatr --help` and `templatr <subcommand> --help` show all the options.
 
-### Storing the App Store Connect keys and Fly deploy tokens
+### `templatr store-secrets`
 
-[bin/store-secrets](bin/store-secrets) stores the secrets that the owner makes for the `apple-app` and `vapor-fly` components in the Keychain, under the item names that the manifests' `source` fields give. Apple has no command line or API that makes an App Store Connect team API key: first make each key on the website (Users and Access, Integrations, App Store Connect API, Team Keys) and download its `.p8` file, which downloads only one time. Fly deploy tokens it makes itself, with `fly tokens create deploy`, when `fly` is logged in.
+Stores the secrets that the owner makes for the `apple-app` and `vapor-fly` components in the Keychain, under the item names that the manifests' `source` fields give, from any directory. Apple has no command line or API that makes an App Store Connect team API key: first make each key on the website (Users and Access, Integrations, App Store Connect API, Team Keys) and download its `.p8` file, which downloads only one time. Fly deploy tokens it makes itself, with `fly tokens create deploy`, when `fly` is logged in.
 
 ```sh
-bin/store-secrets \
+templatr store-secrets \
   --asc-key ~/Downloads/AuthKey_ABC123DEFG.p8 --asc-key-id ABC123DEFG --asc-issuer-id <issuer-id> \
   --asc-admin-key ~/Downloads/AuthKey_HIJ456KLMN.p8 --asc-admin-key-id HIJ456KLMN --asc-admin-issuer-id <issuer-id> \
   --fly-app mtg-armcknight \
@@ -349,10 +349,11 @@ bin/store-secrets \
 
 * `--asc-key`, `--asc-key-id` and `--asc-issuer-id` are the Uploads key, with the App Manager role, stored as `ASC_KEY_P8_BASE64` (the file, base64 encoded), `ASC_KEY_ID` and `ASC_ISSUER_ID`. The `--asc-admin-…` options are the same for the Admin key, which match needs to make or renew certificates and profiles, stored as `ASC_ADMIN_KEY_P8_BASE64`, `ASC_ADMIN_KEY_ID` and `ASC_ADMIN_ISSUER_ID`. Give a key's three options together, or none of them.
 * `--fly-app`, which can be given more than one time, makes a deploy token for the app that expires in a year, and stores it as the app's `FLY_API_TOKEN`.
-* `--check`, which can be given more than one time, runs `swift run templatr check` on the repository at the end.
+* `--check`, which can be given more than one time, runs `templatr check` on the repository at the end.
 * `--dry-run` prints the item that each value would go in, and stores nothing, makes no token and runs no check.
+* `--templates DIR` and `--tag TAG` are as for `bootstrap`: the checkout whose manifests name the items.
 
-It also looks for `MATCH_PASSWORD` and `MATCH_DEPLOY_KEY` in the Keychain, and says how to add each one that is missing; it does not make them. It never prints a value, and never puts one in a command's arguments, where `ps` can show it: values go to `security -i` on standard input, as `templatr` stores them. Running it again replaces the values. The exit status is 0 when everything was stored and nothing is missing, 1 when something failed or is missing, and 2 for a usage error.
+It also looks for `MATCH_PASSWORD` and `MATCH_DEPLOY_KEY` in the Keychain, and says how to add each one that is missing; it does not make them. It never prints a value, and never puts one in a command's arguments, where `ps` can show it: values go to `security -i` on standard input, as `bootstrap` stores a generated secret. Running it again replaces the values. The exit status is 0 when everything was stored and nothing is missing, 1 when something failed or is missing, and 64 for a usage error.
 
 ## Adding a component
 
@@ -370,7 +371,7 @@ It also looks for `MATCH_PASSWORD` and `MATCH_DEPLOY_KEY` in the Keychain, and s
 * `Templatr`, a library on the `ComponentManifest` types: `Bootstrapper`'s `resolve`, `bootstrap` and `check` do what [Setting up a project](#setting-up-a-project) says, and return a `Report`, the same values that `check --json` prints. Only the `linear-workspace` component's steps use Linear, with a key from the environment: superlinear turns the report into issues. The programs it runs, the Keychain, 1Password and GitHub are behind the protocols in `Services`, which the tests replace. `ProcessRunner(environment:)` adds environment variables to the commands it runs, such as a Linear API key for the steps. Its tests run each component's `detect` and `infer` rules with `resolve`, against fixtures taken from the projects the component comes from; set `MTG_REPOSITORY` to a checkout of mtg to also test `vapor-fly` against it.
 * `templatr`, a command: a thin layer on the library, which asks the questions.
 
-The package builds on macOS and Linux. [TOMLKit](https://github.com/LebJe/TOMLKit) parses the TOML, and [Yams](https://github.com/jpsim/Yams) the YAML.
+The package builds on macOS and Linux. [TOMLKit](https://github.com/LebJe/TOMLKit) parses the TOML, [Yams](https://github.com/jpsim/Yams) the YAML of the `yaml` infer rules, and [swift-tagged](https://github.com/pointfreeco/swift-tagged) gives values that are strings but not the same thing, such as a key ID and its issuer ID, types of their own.
 
 superlinear uses the library at a templates release. The alias `v1` is not a three-part version, so a `Package.swift` pins it as a revision:
 

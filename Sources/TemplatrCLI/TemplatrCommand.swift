@@ -3,19 +3,19 @@ import ComponentManifest
 import Foundation
 import Templatr
 
-/// `templatr bootstrap` and `templatr check`: a thin command line on the
-/// Templatr library.
+/// `templatr bootstrap`, `templatr check` and `templatr store-secrets`: a thin
+/// command line on the Templatr library.
 @main
 struct TemplatrCommand: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "templatr",
-        abstract: "Set a project up from its templatr components, or check what it still needs.",
+        abstract: "Set a project up from its templatr components, check what it still needs, or store the owner's secrets.",
         discussion: """
             Exit status: 0 when nothing is left to do, 1 when the report lists \
             something or an error stops the run, 64 for a usage error.
             """,
         version: fullVersion,
-        subcommands: [Bootstrap.self, Check.self]
+        subcommands: [Bootstrap.self, Check.self, StoreSecrets.self]
     )
 
     /// This checkout, from this file's path: Sources/TemplatrCLI/<file>.

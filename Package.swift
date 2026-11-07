@@ -14,6 +14,7 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.5.0"),
         .package(url: "https://github.com/LebJe/TOMLKit", from: "0.6.0"),
         .package(url: "https://github.com/jpsim/Yams", from: "5.1.0"),
+        .package(url: "https://github.com/pointfreeco/swift-tagged", from: "0.10.0"),
     ],
     targets: [
         .target(
@@ -26,6 +27,7 @@ let package = Package(
                 "ComponentManifest",
                 .product(name: "TOMLKit", package: "TOMLKit"),
                 .product(name: "Yams", package: "Yams"),
+                .product(name: "Tagged", package: "swift-tagged"),
             ]
         ),
         .executableTarget(
@@ -47,7 +49,7 @@ let package = Package(
         ),
         .testTarget(
             name: "TemplatrTests",
-            dependencies: ["Templatr", "ComponentManifest"]
+            dependencies: ["Templatr", "ComponentManifest", .product(name: "Tagged", package: "swift-tagged")]
         ),
     ]
 )

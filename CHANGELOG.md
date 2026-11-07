@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- `bin/store-secrets` is now the subcommand `templatr store-secrets`, with the
+  same flags, so it runs from the installed command in any directory, and no
+  longer from a checkout of this repository. `--check` runs `templatr check`
+  directly, not `swift run`. The apple-app and vapor-fly manifests' human
+  texts name the subcommand with its flags.
+
+### Removed
+
+- `bin/store-secrets`.
+
 ## [1.1.0] 2026-11-06
 
 ### Added
