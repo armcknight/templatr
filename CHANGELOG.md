@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.1] 2026-11-06
+
 ### Fixed
 
 - The cask's binary is signed with the Developer ID certificate and notarized,
