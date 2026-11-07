@@ -31,12 +31,24 @@ public protocol CommandRunner: Sendable {
     /// Runs `arguments`, looked up on `PATH`, in `directory`, with `input` on
     /// standard input; with no input, standard input is empty.
     func run(_ arguments: [String], input: Data?, in directory: URL?) throws -> CommandResult
+
+    /// The same, with `environment` added to the command's environment. A
+    /// variable that the environment already has keeps its value. The values
+    /// are never in the arguments, where `ps` can show them.
+    func run(_ arguments: [String], input: Data?, in directory: URL?, environment: [String: String]) throws -> CommandResult
 }
 
 extension CommandRunner {
-    /// Runs a shell command with `/bin/sh -c`.
-    func shell(_ command: String, in directory: URL) throws -> CommandResult {
-        try run(["/bin/sh", "-c", command], input: nil, in: directory)
+    /// A runner that does not take an environment, such as a test's stand-in,
+    /// runs the command without it.
+    public func run(_ arguments: [String], input: Data?, in directory: URL?, environment: [String: String]) throws -> CommandResult {
+        try run(arguments, input: input, in: directory)
+    }
+
+    /// Runs a shell command with `/bin/sh -c`, with `environment` added to its
+    /// environment.
+    func shell(_ command: String, in directory: URL, environment: [String: String] = [:]) throws -> CommandResult {
+        try run(["/bin/sh", "-c", command], input: nil, in: directory, environment: environment)
     }
 }
 
@@ -55,14 +67,20 @@ public struct ProcessRunner: CommandRunner {
     }
 
     public func run(_ arguments: [String], input: Data?, in directory: URL?) throws -> CommandResult {
+        try run(arguments, input: input, in: directory, environment: [:])
+    }
+
+    public func run(_ arguments: [String], input: Data?, in directory: URL?, environment added: [String: String]) throws -> CommandResult {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
         process.arguments = arguments
         if let directory {
             process.currentDirectoryURL = directory
         }
-        if !environment.isEmpty {
-            process.environment = ProcessInfo.processInfo.environment.merging(environment) { $1 }
+        if !environment.isEmpty || !added.isEmpty {
+            process.environment = ProcessInfo.processInfo.environment
+                .merging(environment) { $1 }
+                .merging(added) { current, _ in current }
         }
         let output = Pipe()
         let error = Pipe()

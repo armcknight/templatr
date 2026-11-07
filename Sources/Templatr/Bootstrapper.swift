@@ -122,8 +122,9 @@ public struct Bootstrapper: Sendable {
             // A step runs in the component's directory, which the scaffold
             // makes unless an input that it needs is missing.
             try FileManager.default.createDirectory(at: resolved.component.root(in: repository), withIntermediateDirectories: true)
+            let environment = localSecrets(of: resolved)
             for step in resolved.component.manifest.steps {
-                run(step, of: resolved, in: repository, fixing: true, result: &result, report: &report)
+                run(step, of: resolved, in: repository, environment: environment, fixing: true, result: &result, report: &report)
             }
         }
         secrets(components, in: repository, setting: options.setSecret, result: &result, report: &report)
@@ -170,8 +171,9 @@ public struct Bootstrapper: Sendable {
         }
         var ignored = BootstrapResult()
         for resolved in resolution.components {
+            let environment = localSecrets(of: resolved)
             for step in resolved.component.manifest.steps {
-                run(step, of: resolved, in: repository, fixing: false, result: &ignored, report: &report)
+                run(step, of: resolved, in: repository, environment: environment, fixing: false, result: &ignored, report: &report)
             }
         }
         secrets(resolution.components, in: repository, setting: nil, result: &ignored, report: &report)
@@ -256,8 +258,30 @@ public struct Bootstrapper: Sendable {
         }
     }
 
+    /// The values of the component's local secrets that are in the Keychain,
+    /// by name, for its step and certificate commands, such as the App Store
+    /// Connect API key that apple-app's App Store Connect checks read. A secret
+    /// that this process's environment already has, as from `.envrc`, is not
+    /// read. The values stay in memory, and go only to the commands'
+    /// environment.
+    private func localSecrets(of resolved: ResolvedComponent) -> [String: String] {
+        let manifest = resolved.component.manifest
+        guard !manifest.steps.isEmpty || !manifest.certificates.isEmpty else { return [:] }
+        let values = PlaceholderValues(inputs: resolved.values, templates: templates.root, tag: resolved.tag)
+        let inherited = ProcessInfo.processInfo.environment
+        var environment: [String: String] = [:]
+        for declared in manifest.secrets where declared.scope == .local && inherited[declared.name] == nil {
+            let (secret, unfilled) = declared.filled(values)
+            guard unfilled.isEmpty, let item = secret.keychainItem,
+                  let value = try? services.keychain.read(item)
+            else { continue }
+            environment[secret.name] = value
+        }
+        return environment
+    }
+
     private func run(
-        _ step: Step, of resolved: ResolvedComponent, in repository: URL, fixing: Bool,
+        _ step: Step, of resolved: ResolvedComponent, in repository: URL, environment: [String: String], fixing: Bool,
         result: inout BootstrapResult, report: inout Report
     ) {
         let name = resolved.component.name
@@ -276,7 +300,7 @@ public struct Bootstrapper: Sendable {
             return
         }
         let directory = resolved.component.root(in: repository)
-        let checked = shell(check.text, in: directory)
+        let checked = shell(check.text, in: directory, environment: environment)
         if checked.succeeded { return }
 
         switch step.fix {
@@ -289,8 +313,8 @@ public struct Bootstrapper: Sendable {
         case .command:
             var output = checked.transcript
             if fixing, let fixCommand {
-                let fixed = shell(fixCommand.text, in: directory)
-                let rechecked = shell(check.text, in: directory)
+                let fixed = shell(fixCommand.text, in: directory, environment: environment)
+                let rechecked = shell(check.text, in: directory, environment: environment)
                 if rechecked.succeeded {
                     result.fixedSteps.append("\(name)/\(step.id)")
                     return
@@ -301,9 +325,9 @@ public struct Bootstrapper: Sendable {
         }
     }
 
-    private func shell(_ command: String, in repository: URL) -> CommandResult {
+    private func shell(_ command: String, in repository: URL, environment: [String: String] = [:]) -> CommandResult {
         do {
-            return try services.runner.shell(command, in: repository)
+            return try services.runner.shell(command, in: repository, environment: environment)
         } catch {
             return CommandResult(status: -1, output: Data(), error: Data("\(error)".utf8))
         }
@@ -434,7 +458,7 @@ public struct Bootstrapper: Sendable {
             ))
             return
         }
-        let listed = shell(list.text, in: resolved.component.root(in: repository))
+        let listed = shell(list.text, in: resolved.component.root(in: repository), environment: localSecrets(of: resolved))
         guard listed.succeeded else {
             report.errors.append("Could not list \(name)/\(certificates.id): \(listed.transcript)")
             return

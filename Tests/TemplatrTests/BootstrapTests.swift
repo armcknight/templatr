@@ -119,6 +119,25 @@ import Testing
         #expect(report.humanSteps.filter { $0.id == "secret:LOCAL_TOKEN" }.map(\.twoFactor) == [true])
     }
 
+    @Test func aStepGetsTheComponentsLocalSecretsInItsEnvironment() async throws {
+        try templates.write("components/demo/component.toml", demoManifest + """
+
+            [[steps]]
+            id = "local-secret"
+            description = "A command that needs the local secret."
+            check = "test \\"$LOCAL_TOKEN\\" = local-token-value"
+            fix = { human = { text = "The step did not get LOCAL_TOKEN." } }
+            """)
+        let report = try await bootstrapper(tags: ["v1"]).check(repository: project.root)
+        #expect(!report.humanSteps.map(\.id).contains("local-secret"))
+
+        // Without the Keychain item, the variable is not set.
+        let empty = Stubs()
+        let without = try await Bootstrapper(templates: Templates(root: templates.root, tag: "v1", tags: []), services: empty.services())
+            .check(repository: project.root)
+        #expect(without.humanSteps.map(\.id).contains("local-secret"))
+    }
+
     @Test func aFailedHumanStepIsReportedOnceWithItsText() async throws {
         let result = try await bootstrap(setSecret: setEverySecret)
         let steps = result.report.humanSteps.filter { $0.id == "dns" }

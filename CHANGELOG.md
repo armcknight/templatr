@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- A component's step and certificate commands get the values of its `local`
+  secrets that are in the Keychain, in their environment. Before, `templatr
+  check` only looked for the Keychain items, so apple-app's `app-record` and
+  `tester-group` checks ran without the App Store Connect API key, stopped
+  with "Missing ASC_KEY_ID.", and were reported as steps for a person. A
+  variable that the environment already has, such as one from `.envrc`, keeps
+  its value. The values go only to the commands' environment, never to their
+  arguments or a report.
+
 ## [1.0.0] 2026-11-06
 
 ### Added
