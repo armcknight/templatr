@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v3.0.1] 2026-11-06
+
 ### Changed
 
 - The apple-app and vapor-fly components' human steps for the App Store
