@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- The cask's binary is signed with the Developer ID certificate and notarized,
+  as tools, workr and superlinear are. 2.1.0's was not.
+
 ## [2.1.0] 2026-11-06
 
 ### Added

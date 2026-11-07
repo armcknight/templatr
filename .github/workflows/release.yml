@@ -11,11 +11,13 @@ name: release
 #
 # The command's releases, `2.1.0`, with the shared swiftpm-cask-release.yml.
 # `make deploy` migrates CHANGELOG.md, tags, pushes and makes the GitHub
-# release from a workstation. This builds the binary, ships it to the templatr
-# cask in armcknight/homebrew-tools, and bumps the cask. The binary is not
-# signed: a shell runs it, and the Gatekeeper check that a quarantined binary
-# gets applies to apps, not to a command a shell starts. The cask's templatr
-# has no checkout of this repository, so it keeps a clone of its own in
+# release from a workstation. This builds the binary, signs and notarizes it
+# with the Developer ID certificate from the fastlane match repository, as
+# tools, workr and superlinear are, ships it to the templatr cask in
+# armcknight/homebrew-tools, and bumps the cask. It needs the MATCH_PASSWORD,
+# MATCH_DEPLOY_KEY, NOTARY_KEY, NOTARY_KEY_ID and NOTARY_ISSUER_ID secrets,
+# from the owner's Keychain. The cask's templatr has no checkout of this
+# repository, so it keeps a clone of its own in
 # ~/Library/Application Support/templatr/templates, fetched on each run.
 
 on:
@@ -53,10 +55,15 @@ jobs:
     if: ${{ !startsWith(github.ref_name, 'v') }}
     uses: armcknight/workflows/.github/workflows/swiftpm-cask-release.yml@4
     # TAP_RELEASE_TOKEN, a fine-grained token with Contents read and write on
-    # armcknight/homebrew-tools, and SITE_DISPATCH_TOKEN when it is set.
+    # armcknight/homebrew-tools, the MATCH_* and NOTARY_* secrets for signing,
+    # and SITE_DISPATCH_TOKEN when it is set.
     secrets: inherit
     with:
       cask-name: templatr
       binaries: templatr
       version-file: Sources/TemplatrCLI/Version.swift
       version-regex: '.*static let version = "([^"]+)".*'
+      sign: true
+      match-git-url: git@github.com:armcknight/fastlane-match.git
+      team-id: 29274SF4VL
+      bundle-id: io.mcknight.templatr
