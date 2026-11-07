@@ -8,6 +8,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] 2026-11-06
+
+### Added
+
+- `templatr` is a Homebrew cask in armcknight/homebrew-tools:
+  `brew install --cask armcknight/tools/templatr`. Each release tag builds the
+  binary and bumps the cask through armcknight/workflows'
+  `swiftpm-cask-release.yml`. The cask's `templatr` keeps a clone of this
+  repository in `~/Library/Application Support/templatr/templates`, made on
+  first use, with its tags fetched on each run, and checked out at the newest
+  alias, so the components it reads are a release's; `--templates` and `--tag`
+  choose another checkout or release. A build from a checkout, with
+  `swift run` or `make install`, uses that checkout as before.
+- `make uninstall` removes the dev build from `~/.local/bin`, so that the
+  cask's `templatr` runs again.
+
 ## [2.0.0] 2026-11-06
 
 ### Changed

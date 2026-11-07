@@ -35,6 +35,35 @@ public struct Templates: Sendable {
         return Templates(root: root, tag: tag, tags: tags)
     }
 
+    /// A clone of the templatr repository that the command keeps for itself,
+    /// at `directory`, for a release build that has no checkout of its own:
+    /// made on first use from `origin`, with its tags fetched on each run, and
+    /// checked out at `tag`, else the newest alias, so that the components it
+    /// reads are a release's. A fetch that fails, as without a network, is not
+    /// an error: the clone stays at the release it last fetched.
+    /// - Throws: `TemplatrError` when the clone cannot be made, has no alias,
+    ///   or cannot be checked out at the tag.
+    public static func managed(at directory: URL, origin: String, tag: String?, runner: any CommandRunner) throws -> Templates {
+        func git(_ arguments: [String]) throws -> CommandResult {
+            try runner.run(["git"] + arguments, input: nil, in: nil)
+        }
+        if !FileManager.default.fileExists(atPath: directory.appending(path: ".git").path) {
+            try FileManager.default.createDirectory(at: directory.deletingLastPathComponent(), withIntermediateDirectories: true)
+            let clone = try git(["clone", "--quiet", origin, directory.path])
+            guard clone.succeeded else {
+                throw TemplatrError("could not clone \(origin) to \(directory.path): \(clone.transcript)")
+            }
+        }
+        // --force moves an alias, such as v1, to the release it now names.
+        _ = try? git(["-C", directory.path, "fetch", "--quiet", "--force", "--tags", "origin"])
+        let templates = try checkout(at: directory, tag: tag, runner: runner)
+        let checkout = try git(["-C", directory.path, "checkout", "--quiet", "--detach", templates.tag])
+        guard checkout.succeeded else {
+            throw TemplatrError("could not check out \(templates.tag) in \(directory.path): \(checkout.transcript)")
+        }
+        return templates
+    }
+
     /// Every component, by name.
     public func components() throws -> [Component] {
         let directory = root.appending(path: "components")

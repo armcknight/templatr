@@ -1,30 +1,42 @@
 name: release
 
-# The templates' releases, with the shared github-release.yml.
+# Two families of tags, two releases.
 #
-# `make templates-deploy` migrates components/CHANGELOG.md, tags and pushes from
-# a workstation. This picks the tag up and does the things that must not depend
-# on which machine tagged: publish the GitHub release from the changelog
-# section, move the major alias, such as `v1`, that projects pin, and ask
-# mcknight.io to refresh its projects page.
+# The templates' releases, `v1.1.0`, with the shared github-release.yml.
+# `make templates-deploy` migrates components/CHANGELOG.md, tags and pushes
+# from a workstation. This picks the tag up and does the things that must not
+# depend on which machine tagged: publish the GitHub release from the
+# changelog section, move the major alias, such as `v1`, that projects pin,
+# and ask mcknight.io to refresh its projects page.
 #
-# The templatr command's tags, such as `0.1.0`, have no `v` prefix and do not
-# start this workflow yet. TEM-38 adds their cask release.
+# The command's releases, `2.1.0`, with the shared swiftpm-cask-release.yml.
+# `make deploy` migrates CHANGELOG.md, tags, pushes and makes the GitHub
+# release from a workstation. This builds the binary, ships it to the templatr
+# cask in armcknight/homebrew-tools, and bumps the cask. The binary is not
+# signed: a shell runs it, and the Gatekeeper check that a quarantined binary
+# gets applies to apps, not to a command a shell starts. The cask's templatr
+# has no checkout of this repository, so it keeps a clone of its own in
+# ~/Library/Application Support/templatr/templates, fetched on each run.
 
 on:
   push:
     tags:
-    # prepare-release names the tag `v` and the version in components/VERSION.
-    # A release candidate carries a `-RC<n>` suffix. The alias `v<major>` has
-    # no dot, so moving it does not start this workflow.
+    # prepare-release names the templates' tag `v` and the version in
+    # components/VERSION, and the command's the version in
+    # Sources/TemplatrCLI/Version.swift alone. A release candidate carries a
+    # `-RC<n>` suffix. The alias `v<major>` has no dot, so moving it does not
+    # start this workflow.
     - 'v[0-9]+.[0-9]+.[0-9]+'
     - 'v[0-9]+.[0-9]+.[0-9]+-*'
+    - '[0-9]+.[0-9]+.[0-9]+'
+    - '[0-9]+.[0-9]+.[0-9]+-*'
 
 permissions:
   contents: write
 
 jobs:
-  release:
+  templates:
+    if: startsWith(github.ref_name, 'v')
     # The major-alias input and the notify step are on armcknight/workflows'
     # main but in no release yet: 4.2.0, the newest, has neither. Pin @4 once a
     # release has them.
@@ -36,3 +48,15 @@ jobs:
       # TEM-56 sets this secret. Without it the release does not notify
       # mcknight.io.
       SITE_DISPATCH_TOKEN: ${{ secrets.SITE_DISPATCH_TOKEN }}
+
+  command:
+    if: ${{ !startsWith(github.ref_name, 'v') }}
+    uses: armcknight/workflows/.github/workflows/swiftpm-cask-release.yml@4
+    # TAP_RELEASE_TOKEN, a fine-grained token with Contents read and write on
+    # armcknight/homebrew-tools, and SITE_DISPATCH_TOKEN when it is set.
+    secrets: inherit
+    with:
+      cask-name: templatr
+      binaries: templatr
+      version-file: Sources/TemplatrCLI/Version.swift
+      version-regex: '.*static let version = "([^"]+)".*'

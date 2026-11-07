@@ -22,7 +22,7 @@ extension TemplatrCommand {
                 """
         )
 
-        @Option(help: ArgumentHelp("A checkout of armcknight/templatr, for the manifests. This checkout by default.", valueName: "dir"))
+        @Option(help: TemplatrCommand.templatesHelp)
         var templates: String?
 
         @Option(help: "The tag the manifests are read at. The checkout's newest alias, such as v1, by default.")
@@ -68,10 +68,10 @@ extension TemplatrCommand {
 
         func run() async throws {
             let services = Services.system()
-            let root = templates.map { URL(fileURLWithPath: $0) } ?? TemplatrCommand.defaultTemplates
             let outcome: SecretStorer.Outcome
+            let templates: Templates
             do {
-                let templates = try Templates.checkout(at: root, tag: tag, runner: services.runner)
+                templates = try TemplatrCommand.templates(path: self.templates, tag: tag, runner: services.runner)
                 let options = SecretStorer.Options(
                     uploadsKey: try Self.key(ascKey, ascKeyID, ascIssuerID, label: "Uploads"),
                     adminKey: try Self.key(ascAdminKey, ascAdminKeyID, ascAdminIssuerID, label: "Admin"),
@@ -95,7 +95,6 @@ extension TemplatrCommand {
                 }
                 print("templatr check \(repository)")
                 do {
-                    let templates = try Templates.checkout(at: root, tag: tag, runner: services.runner)
                     let report = try await Bootstrapper(templates: templates, services: services).check(repository: URL(fileURLWithPath: repository))
                     print(TemplatrCommand.describe(report))
                     if !report.isClean { failed = true }

@@ -19,15 +19,41 @@ struct TemplatrCommand: AsyncParsableCommand {
     )
 
     /// This checkout, from this file's path: Sources/TemplatrCLI/<file>.
-    static let defaultTemplates = URL(fileURLWithPath: #filePath)
+    static let checkoutRoot = URL(fileURLWithPath: #filePath)
         .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
 
-    /// The options that both subcommands take.
+    /// The clone that a release build keeps for itself, such as the cask's.
+    static var managedTemplates: URL {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0].appending(path: "templatr/templates")
+    }
+
+    static let templatesHelp = ArgumentHelp(
+        "A checkout of armcknight/templatr. By default, a build from a checkout (`swift run`, `make install`) uses that checkout, "
+            + "and a release, such as the Homebrew cask, a clone it keeps in ~/Library/Application Support/templatr/templates, "
+            + "fetched on each run and checked out at the newest alias.",
+        valueName: "dir"
+    )
+
+    /// The templates: `path` when given, else this checkout for a build made
+    /// from one, else the clone the command keeps, at `tag` or the newest
+    /// alias.
+    static func templates(path: String?, tag: String?, runner: any CommandRunner) throws -> Templates {
+        if let path {
+            return try Templates.checkout(at: URL(fileURLWithPath: path), tag: tag, runner: runner)
+        }
+        #if DEBUG || TEMPLATR_DEV_BUILD
+        return try Templates.checkout(at: checkoutRoot, tag: tag, runner: runner)
+        #else
+        return try Templates.managed(at: managedTemplates, origin: Templates.url, tag: tag, runner: runner)
+        #endif
+    }
+
+    /// The options that bootstrap and check take.
     struct Options: ParsableArguments {
         @Argument(help: "The project's root. The current directory by default.")
         var repository: String?
 
-        @Option(help: ArgumentHelp("A checkout of armcknight/templatr. This checkout by default.", valueName: "dir"))
+        @Option(help: TemplatrCommand.templatesHelp)
         var templates: String?
 
         @Option(help: "The tag new components are pinned to. The checkout's newest alias, such as v1, by default.")
@@ -54,9 +80,7 @@ struct TemplatrCommand: AsyncParsableCommand {
         }
 
         func bootstrapper(services: Services) throws -> Bootstrapper {
-            let root = templates.map { URL(fileURLWithPath: $0) } ?? TemplatrCommand.defaultTemplates
-            let templates = try Templates.checkout(at: root, tag: tag, runner: services.runner)
-            return Bootstrapper(templates: templates, services: services)
+            Bootstrapper(templates: try TemplatrCommand.templates(path: templates, tag: tag, runner: services.runner), services: services)
         }
     }
 

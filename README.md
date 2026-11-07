@@ -294,16 +294,25 @@ Above it, each component with a `blurb` has its own section, which bootstrap wri
 
 ## Setting up a project
 
-Run `templatr` from a checkout of this repository. It is not in a Homebrew tap. `make init` installs what it and the Makefile targets shell out to, from the [Brewfile](Brewfile); `make install` puts a release build in `~/.local/bin`, which runs against this checkout; its `--version` names the commit it was built from, such as `0.1.0+d0a4bc2`, with `.dirty` when the tree had changes.
+`templatr` is a Homebrew cask in [armcknight/homebrew-tools](https://github.com/armcknight/homebrew-tools):
+
+```sh
+brew install --cask armcknight/tools/templatr
+templatr bootstrap ~/Code/babysittr     # set the project up
+templatr check ~/Code/babysittr         # report what it still needs, and change nothing
+```
+
+The cask's `templatr` has no checkout of this repository, so it keeps a clone of its own in `~/Library/Application Support/templatr/templates`: made on first use, its tags fetched on each run, and checked out at the newest alias, such as `v3`, so the components it reads are a release's. Without a network it stays at the release it last fetched. `--templates DIR` uses a checkout of yours instead, and `--tag` another release.
+
+To work on templatr itself, run it from a checkout: `swift run templatr …` and `make install` use the checkout they are built from, at its working tree, whatever it pins. `make init` installs what the command and the Makefile targets shell out to, from the [Brewfile](Brewfile); `make install` puts a release build in `~/.local/bin`, which comes before Homebrew's bin in PATH and so runs in place of the cask's; its `--version` names the commit it was built from, such as `2.1.0+d0a4bc2`, with `.dirty` when the tree had changes. `make uninstall` removes it, and the cask's `templatr` runs again.
 
 ```sh
 git clone https://github.com/armcknight/templatr && cd templatr
 make init
-swift run templatr bootstrap ~/Code/babysittr     # set the project up
-swift run templatr check ~/Code/babysittr         # report what it still needs, and change nothing
+swift run templatr check ~/Code/babysittr
 ```
 
-`bootstrap` needs `gh`, logged in, in the project's directory to read and set its secrets; `security` for the Keychain; `op` for 1Password secrets; and `xcodebuild` for build settings. `{{templates}}` in the steps is the checkout it runs from.
+`bootstrap` needs `gh`, logged in, in the project's directory to read and set its secrets; `security` for the Keychain; `op` for 1Password secrets; and `xcodebuild` for build settings. `{{templates}}` in the steps is the checkout or the clone it runs from.
 
 ### `templatr bootstrap [<repository>]`
 

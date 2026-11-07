@@ -88,7 +88,7 @@ VRSN_KEY     = version
 TEMPLATES_VERSION_FILE = components/VERSION
 TEMPLATES_CHANGELOG    = components/CHANGELOG.md
 
-.PHONY: init build test validate links install patch minor major deploy deploy-beta \
+.PHONY: init build test validate links install uninstall patch minor major deploy deploy-beta \
 	templates-patch templates-minor templates-major templates-deploy templates-deploy-beta
 
 # Both taps are third-party, and Homebrew refuses to load formulae or casks from
@@ -142,6 +142,18 @@ install:
 	@found="$$(command -v templatr)"; \
 	if [ -n "$$found" ] && [ "$$found" != "$(INSTALL_PATH)" ]; then \
 		echo "warning: templatr resolves to $$found in this shell. Put $(dir $(INSTALL_PATH)) before it in PATH to run this build by name."; \
+	fi
+
+# ~/.local/bin comes before Homebrew's bin in PATH, so the dev build shadows
+# the cask's binary while it is there, and removing it is enough to run the
+# cask's again.
+## uninstall: remove the dev build from ~/.local/bin, so that the Homebrew cask's templatr runs
+uninstall:
+	rm -f $(INSTALL_PATH)
+	@if brew list --cask templatr >/dev/null 2>&1; then \
+		echo "Removed the dev build. templatr is now the cask's: $$(brew --prefix)/bin/templatr. Run hash -r, or rehash in fish, in open shells."; \
+	else \
+		echo "Removed the dev build. There is no cask to fall back to: brew install --cask armcknight/tools/templatr installs one."; \
 	fi
 
 ## patch: bump the patch version (x.y.Z) and commit (also: minor, major)
