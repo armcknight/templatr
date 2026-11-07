@@ -246,18 +246,21 @@ description = "The fastlane match repository can be read."
 check = "git ls-remote {{inputs.match_git_url}} HEAD >/dev/null"
 fix = { human = { text = "Give this machine read access to {{inputs.match_git_url}}, and add the MATCH_DEPLOY_KEY public key to it as a read-only deploy key." } }
 
+# The checks run with /bin/sh, which has no rbenv shims on its PATH, so with
+# rbenv they run `rbenv exec`: the project's Ruby, which its Gemfile.lock was
+# made with, as the apple/component.mk targets do.
 [[steps]]
 id = "app-record"
 description = "The app has a record in App Store Connect."
 scope = "app"
-check = "bundle exec ruby {{templates}}/components/apple-app/bin/check-app-store-connect {{inputs.bundle_id}}"
+check = "$(command -v rbenv >/dev/null && echo rbenv exec) bundle exec ruby {{templates}}/components/apple-app/bin/check-app-store-connect {{inputs.bundle_id}}"
 fix = { human = { text = "In App Store Connect, Apps: make a new app for the bundle ID {{inputs.bundle_id}} (register the bundle ID in the developer portal first if it is not listed), named {{inputs.app_name}}." } }
 
 [[steps]]
 id = "tester-group"
 description = "The app has the internal TestFlight group that gets each build."
 scope = "app"
-check = "bundle exec ruby {{templates}}/components/apple-app/bin/check-app-store-connect {{inputs.bundle_id}} {{inputs.tester_group}}"
+check = "$(command -v rbenv >/dev/null && echo rbenv exec) bundle exec ruby {{templates}}/components/apple-app/bin/check-app-store-connect {{inputs.bundle_id}} {{inputs.tester_group}}"
 fix = { human = { text = "In App Store Connect, {{inputs.app_name}}, TestFlight: add an internal group named {{inputs.tester_group}}, turn on automatic distribution, and add the testers." } }
 
 [[shared]]

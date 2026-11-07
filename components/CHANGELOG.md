@@ -27,6 +27,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   manifests' new `when`. A `fluent` project no longer gets them as missing
   secrets or steps for a person, or in its README.
 
+### Fixed
+
+- The apple-app component's `app-record` and `tester-group` checks run with
+  `rbenv exec` when rbenv is installed. They run with `/bin/sh`, whose PATH
+  has no rbenv shims, so `bundle exec` used another Ruby than the project's,
+  could not load its bundle, and the checks reported the app record and the
+  tester group as missing.
+
 ## [v2.0.0] 2026-11-06
 
 ### Added
