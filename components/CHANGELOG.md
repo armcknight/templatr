@@ -36,26 +36,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   to the same path on the site; `make site redirects` makes them, and
   `templatr check` checks them and that each domain redirects. The manifest's
   `shared` pieces have a new kind, `template`.
-
-### Changed
-
-- The apple-app component's `app_name` is the name people see, which can have
-  spaces, such as `Bae Today`: it is inferred from the display name
-  (`INFOPLIST_KEY_CFBundleDisplayName`, else `APP_DISPLAY_NAME`) before
-  `PRODUCT_NAME`. The staging IPA, `apple/fastlane/Fastfile`'s
-  `APPLE_APP_NAME` and a new app's `PRODUCT_NAME` are the name without spaces,
-  and a new app's display name is the name as given. The shared `stage` lane
-  also removes spaces from `APPLE_APP_NAME`. A project whose name has no
-  spaces changes nothing.
-- The `make/*.mk` fragments write their logs to a `logs/` directory in the
-  component's directory, such as `apple/logs/deploy-beta-44.log` and
-  `server/logs/vapor-fly-deploy-abc1234.log`, and no longer next to the
-  project files. The scaffolds' `.gitignore` files ignore `logs/`, and the
-  supabase component's `gitignore` step checks for it. `APPLE_APP_LOG_DIR`,
-  `VAPOR_FLY_LOG_DIR` and `SUPABASE_LOG_DIR` change the directory.
-
-### Added
-
 - The linear-workspace component links the Linear workspace from the README's
   "Further reading". Its new input `linear_workspace` is the workspace's URL
   key, the path after `linear.app/`, which its script reads from the API with
@@ -89,6 +69,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the Admin role, which match needs to make or renew certificates and
   profiles. `templatr check` reports them as missing until they are in the
   Keychain.
+
+### Changed
+
+- The apple-app component's `app_name` is the name people see, which can have
+  spaces, such as `Bae Today`: it is inferred from the display name
+  (`INFOPLIST_KEY_CFBundleDisplayName`, else `APP_DISPLAY_NAME`) before
+  `PRODUCT_NAME`. The staging IPA, `apple/fastlane/Fastfile`'s
+  `APPLE_APP_NAME` and a new app's `PRODUCT_NAME` are the name without spaces,
+  and a new app's display name is the name as given. The shared `stage` lane
+  also removes spaces from `APPLE_APP_NAME`. A project whose name has no
+  spaces changes nothing.
+- The `make/*.mk` fragments write their logs to a `logs/` directory in the
+  component's directory, such as `apple/logs/deploy-beta-44.log` and
+  `server/logs/vapor-fly-deploy-abc1234.log`, and no longer next to the
+  project files. The scaffolds' `.gitignore` files ignore `logs/`, and the
+  supabase component's `gitignore` step checks for it. `APPLE_APP_LOG_DIR`,
+  `VAPOR_FLY_LOG_DIR` and `SUPABASE_LOG_DIR` change the directory.
 
 ## [v1.0.0] 2026-10-18
 
