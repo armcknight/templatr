@@ -121,6 +121,7 @@ name = "SUPABASE_DB_PASSWORD"
 description = "The Supabase database's password, for `supabase db push` in the deploy workflow. Only the cli style uses it."
 source = "keychain:templatr.supabase.{{inputs.project_ref}}.db-password"
 scope = "repo"
+when = { input = "migration_style", equals = "cli" }
 
 [[secrets]]
 name = "SUPABASE_ACCESS_TOKEN"
@@ -129,6 +130,7 @@ source = "keychain:templatr.supabase.access-token"
 scope = "team"
 human = { text = "In https://supabase.com/dashboard/account/tokens (with two-factor authentication), generate a token named templatr, and store it in the Keychain item templatr.supabase.access-token. It is shown only one time.", twoFactor = true }
 rotateEvery = "1y"
+when = { input = "migration_style", equals = "cli" }
 
 [[steps]]
 id = "tools"

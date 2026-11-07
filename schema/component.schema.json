@@ -271,7 +271,21 @@
           "description": "How often to make a new value: a number of days, weeks, months or years, such as 365d or 1y.",
           "type": "string",
           "pattern": "^[1-9][0-9]*[dwmy]$"
+        },
+        "when": {
+          "description": "When the component needs the secret. Without it, it always does.",
+          "$ref": "#/$defs/condition"
         }
+      }
+    },
+    "condition": {
+      "description": "Holds when the component's input `input` has the value `equals`.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["input", "equals"],
+      "properties": {
+        "input": { "$ref": "#/$defs/identifier" },
+        "equals": { "type": "string" }
       }
     },
     "step": {
@@ -302,6 +316,10 @@
               "properties": { "human": { "$ref": "#/$defs/human" } }
             }
           ]
+        },
+        "when": {
+          "description": "When the step applies. Without it, it always does.",
+          "$ref": "#/$defs/condition"
         }
       }
     },

@@ -47,10 +47,13 @@ struct SchemaParityTests {
         #expect(try properties(of: definition("doc")) == keys(Doc.CodingKeys.self))
         #expect(try properties(of: definition("link")) == keys(ProjectLink.CodingKeys.self))
         #expect(try properties(of: definition("certificate")) == keys(Certificate.CodingKeys.self))
+        #expect(try properties(of: definition("condition")) == keys(Condition.CodingKeys.self))
+        #expect(try property("when", of: definition("secret"))["$ref"] as? String == "#/$defs/condition")
+        #expect(try property("when", of: definition("step"))["$ref"] as? String == "#/$defs/condition")
     }
 
     @Test func everyTableRejectsUnknownKeysLikeTheSchema() throws {
-        for name in ["detectRule", "input", "human", "secret", "step", "shared", "doc", "link", "certificate"] {
+        for name in ["detectRule", "input", "human", "secret", "step", "shared", "doc", "link", "certificate", "condition"] {
             #expect(try definition(name)["additionalProperties"] as? Bool == false, Comment(rawValue: name))
         }
         #expect(schema["additionalProperties"] as? Bool == false)
@@ -140,6 +143,7 @@ struct SchemaParityTests {
         #expect(try required(definition("doc")) == ["title", "anchor"])
         #expect(try required(definition("link")) == ["title", "url"])
         #expect(try required(definition("certificate")) == ["id", "description", "list", "renew"])
+        #expect(try required(definition("condition")) == ["input", "equals"])
         let branches = try #require(try definition("inferRule")["oneOf"] as? [[String: Any]])
         let requiredBySource = Dictionary(uniqueKeysWithValues: try branches.map {
             (try #require(try property("from", of: $0)["const"] as? String), required($0))

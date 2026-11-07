@@ -77,7 +77,7 @@ enum Markdown {
         var seenSecrets: Set<String> = []
         for resolved in components {
             let values = PlaceholderValues(inputs: resolved.values, templates: URL(fileURLWithPath: "/"), tag: resolved.tag)
-            for declared in resolved.component.manifest.secrets where seenSecrets.insert(declared.name).inserted {
+            for declared in resolved.secrets where seenSecrets.insert(declared.name).inserted {
                 let secret = declared.filled(values).secret
                 var line = "* `\(secret.name)` (\(secret.scope.rawValue)): \(secret.description) \(origin(of: secret))"
                 if let human = secret.human {
@@ -93,7 +93,7 @@ enum Markdown {
         var humanSteps: [String] = []
         for resolved in components {
             let values = PlaceholderValues(inputs: resolved.values, templates: URL(fileURLWithPath: "/"), tag: resolved.tag)
-            for step in resolved.component.manifest.steps {
+            for step in resolved.steps {
                 guard case .human(let human) = step.fix else { continue }
                 humanSteps.append("* \(step.description) If not: \(values.render(human.text, quoted: false).text)")
             }

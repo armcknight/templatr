@@ -99,6 +99,12 @@ public struct Validator: Sendable {
             problems.append("\(`where`): secret \(secret.name) is local, so its source must be a keychain: item")
         }
 
+        let inputNames = Set(manifest.inputs.map(\.name))
+        let conditions = manifest.secrets.map { ("secret \($0.name)", $0.when) } + manifest.steps.map { ("step \($0.id)", $0.when) }
+        for case let (label, condition?) in conditions where !inputNames.contains(condition.input) {
+            problems.append("\(`where`): \(label) when.input '\(condition.input)' is not one of the component's inputs")
+        }
+
         // Without a directory, every rule already reads from the root.
         let rootMeansNothing = "root = true means nothing in a component without a directory"
         for (group, rules) in [("all", manifest.detect?.all), ("any", manifest.detect?.any)] {

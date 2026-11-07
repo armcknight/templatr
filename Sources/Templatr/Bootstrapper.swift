@@ -123,7 +123,7 @@ public struct Bootstrapper: Sendable {
             // makes unless an input that it needs is missing.
             try FileManager.default.createDirectory(at: resolved.component.root(in: repository), withIntermediateDirectories: true)
             let environment = localSecrets(of: resolved)
-            for step in resolved.component.manifest.steps {
+            for step in resolved.steps {
                 run(step, of: resolved, in: repository, environment: environment, fixing: true, result: &result, report: &report)
             }
         }
@@ -172,7 +172,7 @@ public struct Bootstrapper: Sendable {
         var ignored = BootstrapResult()
         for resolved in resolution.components {
             let environment = localSecrets(of: resolved)
-            for step in resolved.component.manifest.steps {
+            for step in resolved.steps {
                 run(step, of: resolved, in: repository, environment: environment, fixing: false, result: &ignored, report: &report)
             }
         }
@@ -265,12 +265,11 @@ public struct Bootstrapper: Sendable {
     /// read. The values stay in memory, and go only to the commands'
     /// environment.
     private func localSecrets(of resolved: ResolvedComponent) -> [String: String] {
-        let manifest = resolved.component.manifest
-        guard !manifest.steps.isEmpty || !manifest.certificates.isEmpty else { return [:] }
+        guard !resolved.steps.isEmpty || !resolved.component.manifest.certificates.isEmpty else { return [:] }
         let values = PlaceholderValues(inputs: resolved.values, templates: templates.root, tag: resolved.tag)
         let inherited = ProcessInfo.processInfo.environment
         var environment: [String: String] = [:]
-        for declared in manifest.secrets where declared.scope == .local && inherited[declared.name] == nil {
+        for declared in resolved.secrets where declared.scope == .local && inherited[declared.name] == nil {
             let (secret, unfilled) = declared.filled(values)
             guard unfilled.isEmpty, let item = secret.keychainItem,
                   let value = try? services.keychain.read(item)
@@ -341,7 +340,7 @@ public struct Bootstrapper: Sendable {
         result: inout BootstrapResult, report: inout Report
     ) {
         var github: [String: Date]?
-        let needsGitHub = components.contains { $0.component.manifest.secrets.contains { $0.scope != .local } }
+        let needsGitHub = components.contains { $0.secrets.contains { $0.scope != .local } }
         if needsGitHub {
             do {
                 github = try services.secrets.list(repository: repository)
@@ -354,7 +353,7 @@ public struct Bootstrapper: Sendable {
         for resolved in components {
             let name = resolved.component.name
             let values = PlaceholderValues(inputs: resolved.values, templates: templates.root, tag: resolved.tag)
-            for declared in resolved.component.manifest.secrets where seen.insert(declared.name).inserted {
+            for declared in resolved.secrets where seen.insert(declared.name).inserted {
                 // A source with a placeholder that has no value is not read:
                 // the input is reported as missing.
                 let (secret, unfilled) = declared.filled(values)
@@ -562,6 +561,16 @@ public struct ResolvedComponent: Sendable {
     public var inferred: [String: String]
     /// Inputs with no value, to ask for.
     public var missing: [Input]
+
+    /// The component's steps whose `when` holds for its inputs.
+    public var steps: [Step] {
+        component.manifest.steps.filter { $0.when?.holds(for: values) ?? true }
+    }
+
+    /// The component's secrets whose `when` holds for its inputs.
+    public var secrets: [Secret] {
+        component.manifest.secrets.filter { $0.when?.holds(for: values) ?? true }
+    }
 }
 
 public struct BootstrapOptions: Sendable {

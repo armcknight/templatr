@@ -12,6 +12,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The supabase component needs `SUPABASE_ACCESS_TOKEN` and
+  `SUPABASE_DB_PASSWORD` only when its `migration_style` is `cli`, with the
+  manifests' new `when`. A `fluent` project no longer gets them as missing
+  secrets or steps for a person, or in its README.
+
 ## [v2.0.0] 2026-11-06
 
 ### Added

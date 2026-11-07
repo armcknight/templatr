@@ -138,6 +138,37 @@ import Testing
         #expect(without.humanSteps.map(\.id).contains("local-secret"))
     }
 
+    @Test func aSecretOrAStepWhoseConditionDoesNotHoldIsLeftOut() async throws {
+        try templates.write("components/demo/component.toml", demoManifest + """
+
+            [[secrets]]
+            name = "CORE_TOKEN"
+            description = "A token that only the core team needs."
+            source = "keychain:demo.core-token"
+            scope = "local"
+            human = { text = "Store the core token." }
+            when = { input = "team", equals = "{{TEAM}}" }
+
+            [[steps]]
+            id = "core-only"
+            description = "A step that only the core team does."
+            check = "false"
+            fix = { human = { text = "Do the core step." } }
+            when = { input = "team", equals = "{{TEAM}}" }
+            """.replacingOccurrences(of: "{{TEAM}}", with: "platform"))
+        let report = try await bootstrapper(tags: ["v1"]).check(repository: project.root)
+        #expect(!report.missingSecrets.map(\.name).contains("CORE_TOKEN"))
+        #expect(!report.humanSteps.map(\.id).contains("core-only"))
+        #expect(!report.humanSteps.map(\.id).contains("secret:CORE_TOKEN"))
+
+        // The team input defaults to core, so with core the condition holds.
+        let manifest = try #require(templates.read("components/demo/component.toml"))
+        try templates.write("components/demo/component.toml", manifest.replacingOccurrences(of: "\"platform\"", with: "\"core\""))
+        let holds = try await bootstrapper(tags: ["v1"]).check(repository: project.root)
+        #expect(holds.missingSecrets.map(\.name).contains("CORE_TOKEN"))
+        #expect(holds.humanSteps.map(\.id).contains("core-only"))
+    }
+
     @Test func aFailedHumanStepIsReportedOnceWithItsText() async throws {
         let result = try await bootstrap(setSecret: setEverySecret)
         let steps = result.report.humanSteps.filter { $0.id == "dns" }

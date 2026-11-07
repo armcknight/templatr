@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- A manifest's secret or step can have `when`, such as
+  `{ input = "migration_style", equals = "cli" }`: the component needs it only
+  when the input has that value. With another value, `bootstrap` and `check`
+  do not read, set, run or report it, and the README does not list it. The
+  validator rejects a `when` whose input the component does not declare.
+
 ### Fixed
 
 - A component's step and certificate commands get the values of its `local`

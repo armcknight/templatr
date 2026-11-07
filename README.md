@@ -192,11 +192,13 @@ Any rule can have `map`, which replaces the value found with the value of its ke
 
 ### `secrets`
 
-Secrets, by name. Each has a `description`, a `source` — `keychain:<item>`, `1password:op://<vault>/<item>/<field>`, or `generate:<kind>`, where `<kind>` is `ssh-key`, `password` or `hex32` — and a `scope`: `team` (one value for every project), `app` or `repo`, each set as a GitHub Actions secret; or `local`, a value kept only in the owner's Keychain for commands run on their Mac, such as `make deploy-beta`, and never set as a GitHub secret. A `local` secret's source is a Keychain item. A source can name an input, such as `keychain:templatr.fly.{{inputs.fly_app}}.deploy-token` for a value that each app has. `human` is a step a person must do to get the value, with `twoFactor = true` when it needs a two-factor prompt. `rotateEvery`, such as `90d` or `1y`, is how often to make a new value.
+Secrets, by name. Each has a `description`, a `source` — `keychain:<item>`, `1password:op://<vault>/<item>/<field>`, or `generate:<kind>`, where `<kind>` is `ssh-key`, `password` or `hex32` — and a `scope`: `team` (one value for every project), `app` or `repo`, each set as a GitHub Actions secret; or `local`, a value kept only in the owner's Keychain for commands run on their Mac, such as `make deploy-beta`, and never set as a GitHub secret. A `local` secret's source is a Keychain item. A source can name an input, such as `keychain:templatr.fly.{{inputs.fly_app}}.deploy-token` for a value that each app has. `human` is a step a person must do to get the value, with `twoFactor = true` when it needs a two-factor prompt. `rotateEvery`, such as `90d` or `1y`, is how often to make a new value. `when`, such as `{ input = "migration_style", equals = "cli" }`, is the input value that the component needs the secret for: with another value, the secret is not read, set, reported or listed in the README. Without `when`, the component always needs it.
 
 ### `steps`
 
-Ordered. Each has an `id`, a `description`, a `check` — a shell command, run in the component's `directory`, or at the repository root when it has none, that exits 0 when the step is done — and a `fix`: a shell command, or `{ human = { text = "…" } }`, which becomes a Needs human issue. `scope = "app"` marks a step done one time for each app.
+Ordered. Each has an `id`, a `description`, a `check` — a shell command, run in the component's `directory`, or at the repository root when it has none, that exits 0 when the step is done — and a `fix`: a shell command, or `{ human = { text = "…" } }`, which becomes a Needs human issue. `scope = "app"` marks a step done one time for each app. `when`, as for a secret, is the input value that the step applies for: with another value, it does not run and is not listed in the README.
+
+The commands of the steps and `certificates` get the component's `local` secrets that are in the Keychain in their environment, by name, such as `ASC_KEY_ID`. A variable that the environment already has, such as one from `.envrc`, keeps its value.
 
 ### `shared`
 

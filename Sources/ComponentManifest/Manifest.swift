@@ -440,6 +440,36 @@ public struct Human: Codable, Equatable, Sendable {
     }
 }
 
+/// When a secret or a step applies: when the component's input `input` has the
+/// value `equals`, such as the supabase component's secrets that only its `cli`
+/// migration style uses.
+public struct Condition: Codable, Equatable, Sendable {
+    public var input: String
+    public var equals: String
+
+    enum CodingKeys: String, CodingKey, CaseIterable {
+        case input, equals
+    }
+
+    public init(input: String, equals: String) {
+        self.input = input
+        self.equals = equals
+    }
+
+    public init(from decoder: Decoder) throws {
+        try decoder.rejectKeys(unknownTo: CodingKeys.self)
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        input = try container.text(.input, .identifier)
+        equals = try container.decode(String.self, forKey: .equals)
+    }
+
+    /// Whether the condition holds for these input values. An input with no
+    /// value does not equal anything.
+    public func holds(for values: [String: String]) -> Bool {
+        values[input] == equals
+    }
+}
+
 /// A secret the component needs, by name. Values are never in the manifest.
 public struct Secret: Codable, Equatable, Sendable {
     public var name: String
@@ -451,6 +481,8 @@ public struct Secret: Codable, Equatable, Sendable {
     public var human: Human?
     /// How often to make a new value.
     public var rotateEvery: RotationPeriod?
+    /// When the component needs the secret. Without it, it always does.
+    public var when: Condition?
 
     /// A Keychain item, a 1Password reference, or a value bootstrap generates
     /// and stores in the Keychain.
@@ -514,12 +546,12 @@ public struct Secret: Codable, Equatable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case name, description, source, scope, human, rotateEvery
+        case name, description, source, scope, human, rotateEvery, when
     }
 
     public init(
         name: String, description: String, source: Source, scope: Scope, human: Human?,
-        rotateEvery: RotationPeriod?
+        rotateEvery: RotationPeriod?, when: Condition? = nil
     ) {
         self.name = name
         self.description = description
@@ -527,6 +559,7 @@ public struct Secret: Codable, Equatable, Sendable {
         self.scope = scope
         self.human = human
         self.rotateEvery = rotateEvery
+        self.when = when
     }
 
     public init(from decoder: Decoder) throws {
@@ -538,6 +571,7 @@ public struct Secret: Codable, Equatable, Sendable {
         scope = try container.value(.scope, Scope.self)
         human = try container.decodeIfPresent(Human.self, forKey: .human)
         rotateEvery = try container.decodeIfPresent(RotationPeriod.self, forKey: .rotateEvery)
+        when = try container.decodeIfPresent(Condition.self, forKey: .when)
     }
 }
 
@@ -597,6 +631,8 @@ public struct Step: Codable, Equatable, Sendable {
     /// is done.
     public var check: String
     public var fix: Fix
+    /// When the step applies. Without it, it always does.
+    public var when: Condition?
 
     public enum Scope: String, CaseIterable, Codable, Sendable {
         case team, app, repo
@@ -637,15 +673,16 @@ public struct Step: Codable, Equatable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case id, description, scope, check, fix
+        case id, description, scope, check, fix, when
     }
 
-    public init(id: String, description: String, scope: Scope, check: String, fix: Fix) {
+    public init(id: String, description: String, scope: Scope, check: String, fix: Fix, when: Condition? = nil) {
         self.id = id
         self.description = description
         self.scope = scope
         self.check = check
         self.fix = fix
+        self.when = when
     }
 
     public init(from decoder: Decoder) throws {
@@ -656,6 +693,7 @@ public struct Step: Codable, Equatable, Sendable {
         scope = try container.valueIfPresent(.scope, Scope.self) ?? .repo
         check = try container.text(.check)
         fix = try container.decode(Fix.self, forKey: .fix)
+        when = try container.decodeIfPresent(Condition.self, forKey: .when)
     }
 }
 

@@ -58,6 +58,16 @@ struct ValidatorTests {
         expectProblem("step 'app-exists' is declared more than one time")
     }
 
+    @Test func aConditionNamesAnInput() throws {
+        try repository.editManifest(
+            #"source = "keychain:demo.fly-token""#,
+            "source = \"keychain:demo.fly-token\"\nwhen = { input = \"app\", equals = \"demo\" }"
+        )
+        #expect(repository.problems() == [])
+        try repository.editManifest(#"when = { input = "app""#, #"when = { input = "style""#)
+        expectProblem("when.input 'style' is not one of the component's inputs")
+    }
+
     @Test func regexInferNeedsAGroup() throws {
         try repository.editManifest(#"pattern = "primary_region = \"([a-z]+)\"""#, #"pattern = "primary_region""#)
         expectProblem("has no capture group")
