@@ -1,0 +1,118 @@
+#!/bin/sh
+# Usage: new-release-workflow <distribution> <cask> <binaries> <version_file> <vrsn_key> <sign> <match_git_url> <team_id> <bundle_id>
+#
+# Writes .github/workflows/swift-cli-release.yml in the current directory,
+# which is the repository's root. It runs on each version tag, such as 1.2.0
+# or 1.2.0-RC1, that `make cli deploy` pushes.
+#
+# With <distribution> cask, it calls armcknight/workflows'
+# swiftpm-cask-release.yml, which builds <binaries>, separated by spaces,
+# checks the tag against the version in <version_file>, signs and notarizes
+# them when <sign> is true, with the Developer ID certificate of <team_id> in
+# the fastlane match repository at <match_git_url>, and publishes them to the
+# cask <cask> in armcknight/homebrew-tools. With github-release, it calls
+# github-release.yml, which makes the GitHub release from CHANGELOG.md.
+#
+# It writes nothing when a workflow already calls either of them.
+
+if [ "$#" -ne 9 ]; then
+  echo "Usage: new-release-workflow <distribution> <cask> <binaries> <version_file> <vrsn_key> <sign> <match_git_url> <team_id> <bundle_id>" >&2
+  exit 2
+fi
+
+distribution="$1"
+cask="$2"
+binaries="$3"
+version_file="$4"
+vrsn_key="$5"
+sign="$6"
+match_git_url="$7"
+team_id="$8"
+bundle_id="$9"
+workflow=.github/workflows/swift-cli-release.yml
+
+if grep -qsE 'armcknight/workflows/\.github/workflows/(swiftpm-cask-release|github-release)\.yml@' .github/workflows/*.yml .github/workflows/*.yaml; then
+  exit 0
+fi
+
+case "$distribution" in
+  cask|github-release) ;;
+  *)
+    echo "The distribution is cask or github-release, not $distribution." >&2
+    exit 2
+    ;;
+esac
+
+mkdir -p .github/workflows || exit 1
+
+if [ "$distribution" = github-release ]; then
+  cat > "$workflow" <<EOF
+name: CLI release
+
+# \`make cli deploy\` moves CHANGELOG.md's Unreleased section into a section for
+# the version, tags it and pushes. This makes the GitHub release from that
+# section, so that it does not depend on which machine tagged.
+
+on:
+  push:
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+'
+      - '[0-9]+.[0-9]+.[0-9]+-*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    uses: armcknight/workflows/.github/workflows/github-release.yml@4
+    with:
+      changelog: CHANGELOG.md
+EOF
+  exit 0
+fi
+
+{
+  cat <<EOF
+name: CLI release
+
+# \`make cli deploy\` moves CHANGELOG.md's Unreleased section into a section for
+# the version, tags it, pushes and makes the GitHub release. This builds the
+# binaries, checks the tag against the version, and publishes them to the
+# $cask cask in armcknight/homebrew-tools: Casks/$cask.rb for a version, and
+# Casks/$cask-rc.rb for a release candidate. It updates the cask file, but
+# never makes it. It needs TAP_RELEASE_TOKEN, and to sign, the MATCH_* and
+# NOTARY_* secrets.
+
+on:
+  push:
+    tags:
+      - '[0-9]+.[0-9]+.[0-9]+'
+      - '[0-9]+.[0-9]+.[0-9]+-*'
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    uses: armcknight/workflows/.github/workflows/swiftpm-cask-release.yml@4
+    secrets: inherit
+    with:
+      cask-name: $cask
+      binaries: |
+EOF
+  for binary in $binaries; do
+    echo "        $binary"
+  done
+  cat <<EOF
+      version-file: $version_file
+      version-regex: '.*[^A-Za-z0-9_]$vrsn_key = "([^"]+)".*'
+EOF
+  if [ "$sign" = true ]; then
+    cat <<EOF
+      sign: true
+      match-git-url: $match_git_url
+      team-id: $team_id
+      bundle-id: $bundle_id
+EOF
+  fi
+} > "$workflow"

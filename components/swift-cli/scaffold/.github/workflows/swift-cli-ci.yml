@@ -1,0 +1,14 @@
+name: CLI CI
+
+on:
+  pull_request:
+  push:
+    branches: [{{inputs.default_branch}}]
+
+permissions:
+  contents: read
+
+jobs:
+  # Builds and tests the package at the repository's root on macOS.
+  ci:
+    uses: armcknight/workflows/.github/workflows/swift-package-ci.yml@4

@@ -1,0 +1,280 @@
+name = "swift-cli"
+description = "A command line tool built with the Swift Package Manager: a version that vrsn bumps and that a local build prints with its commit, a Keep a Changelog CHANGELOG.md, CI on each pull request, and a release on each version tag, as a Homebrew cask in armcknight/homebrew-tools or as a GitHub release."
+
+# The Swift package is at the repository's root, as it is in each tool so far,
+# and armcknight/workflows' swift-package-ci.yml and swiftpm-cask-release.yml
+# build there. The component's own files, component.mk, README.md and
+# Brewfile, are in cli/, as each other component's are in its directory. The
+# detect and infer rules read the package at the root, with root = true, and
+# the steps run in cli/, so they read it at ../.
+directory = "cli"
+blurb = "The command line tool, `{{inputs.name}}`. `make cli install` builds it with its commit in `--version`, `make cli test` runs its tests, and the owner releases it with `make cli patch` and `make cli deploy`."
+
+# A Package.swift at the root with an executable target. An app's package, with
+# an Xcode project, a workspace or an XcodeGen spec next to it, and a Vapor
+# server's are not command line tools.
+[detect]
+all = [{ glob = "Package.swift", contains = "\\.executableTarget\\(", root = true }]
+none = [
+  { glob = "**/*.xcodeproj", root = true },
+  { glob = "**/*.xcworkspace", root = true },
+  { glob = "project.yml", root = true },
+  { glob = "*/project.yml", root = true },
+  { glob = "Package.swift", contains = "github\\.com/vapor/vapor", root = true },
+]
+
+[[inputs]]
+name = "name"
+description = "The tool's executable: the executable product whose target has the version, else the package's name, as for armcknight/tools, whose executables share one version."
+example = "superlinear"
+infer = [{ from = "command", command = "{{templates}}/components/swift-cli/bin/swift-cli-package name", root = true }]
+
+[[inputs]]
+name = "binaries"
+description = "The executables that `make cli install` copies and a release ships, separated by spaces: the name, else every executable target."
+example = "work"
+infer = [{ from = "command", command = "{{templates}}/components/swift-cli/bin/swift-cli-package binaries", root = true }]
+
+[[inputs]]
+name = "version_file"
+description = "The Swift file, relative to the root, with the version that vrsn bumps, on a line such as `static let version = \"1.2.0\"`. A new tool gets Version.swift in its first executable target."
+example = "Sources/superlinear/Version.swift"
+infer = [{ from = "command", command = "{{templates}}/components/swift-cli/bin/swift-cli-package version-file", root = true }]
+
+[[inputs]]
+name = "vrsn_key"
+description = "The name on the version's line, which `vrsn -k` takes."
+example = "version"
+default = "version"
+infer = [{ from = "command", command = "{{templates}}/components/swift-cli/bin/swift-cli-package version-key", root = true }]
+
+[[inputs]]
+name = "distribution"
+description = "How a release ships: `cask`, as a Homebrew cask in armcknight/homebrew-tools, or `github-release`, as a GitHub release only."
+example = "cask"
+default = "cask"
+infer = [
+  { from = "glob", glob = ".github/workflows/*.yml", contains = "swiftpm-cask-release\\.yml@", exists = true, root = true, map = { "true" = "cask" } },
+  { from = "glob", glob = ".github/workflows/*.yml", contains = "github-release\\.yml@", exists = true, root = true, map = { "true" = "github-release" } },
+]
+
+[[inputs]]
+name = "cask"
+description = "The cask's name in armcknight/homebrew-tools, Casks/<cask>.rb. Unused when the distribution is github-release."
+example = "work"
+infer = [{ from = "command", command = "{{templates}}/components/swift-cli/bin/swift-cli-package cask", root = true }]
+
+[[inputs]]
+name = "sign"
+description = "Whether the cask's release signs the binaries with the Developer ID certificate in the fastlane match repository, and notarizes them. Each of the owner's tools does. A tool whose distribution is github-release builds nothing to sign: set it to false."
+example = "true"
+default = "true"
+infer = [{ from = "regex", glob = ".github/workflows/*.yml", pattern = "(?m)^\\s*sign:\\s*(true|false)\\b", root = true }]
+
+[[inputs]]
+name = "match_git_url"
+description = "The SSH URL of the fastlane match repository with the Developer ID Application certificate, when the release signs."
+example = "git@github.com:armcknight/fastlane-match.git"
+infer = [{ from = "regex", glob = ".github/workflows/*.yml", pattern = "(?m)^\\s*match-git-url:\\s*[\"']?([^\"'\\s]+)", root = true }]
+
+[[inputs]]
+name = "team_id"
+description = "The Apple Developer team that owns the signing certificate, when the release signs."
+example = "29274SF4VL"
+infer = [{ from = "regex", glob = ".github/workflows/*.yml", pattern = "(?m)^\\s*team-id:\\s*[\"']?([A-Z0-9]{10})\\b", root = true }]
+
+[[inputs]]
+name = "bundle_id"
+description = "The bundle identifier that fastlane match is given to read the team's certificate, when the release signs. Nothing is built with it."
+example = "io.mcknight.work"
+infer = [{ from = "regex", glob = ".github/workflows/*.yml", pattern = "(?m)^\\s*bundle-id:\\s*[\"']?([^\"'\\s]+)", root = true }]
+
+[[inputs]]
+name = "default_branch"
+description = "The branch that CI runs on after a merge."
+example = "main"
+default = "main"
+
+[[secrets]]
+name = "TAP_RELEASE_TOKEN"
+description = "A fine-grained personal access token with Contents read and write on armcknight/homebrew-tools only, with which the release uploads the binaries and updates the cask."
+source = "keychain:templatr.homebrew-tools.release-token"
+scope = "team"
+human = { text = "As armcknight, make a fine-grained personal access token at https://github.com/settings/personal-access-tokens/new: resource owner armcknight, only the repository armcknight/homebrew-tools, the repository permission Contents read and write and no other, and an expiry of one year. Store it in the Keychain item templatr.homebrew-tools.release-token, with `security add-generic-password -U -a templatr -s templatr.homebrew-tools.release-token -w`, which asks for the value so that it is not in the shell history. The token can change every cask in the tap, and nothing in another repository." }
+rotateEvery = "1y"
+when = { input = "distribution", equals = "cask" }
+
+# The same secrets, with the same sources, as the apple-app component's: one
+# match repository and one App Store Connect API key for every project.
+[[secrets]]
+name = "MATCH_PASSWORD"
+description = "The passphrase that decrypts the fastlane match repository."
+source = "keychain:templatr.match.password"
+scope = "team"
+when = { input = "sign", equals = "true" }
+
+[[secrets]]
+name = "MATCH_DEPLOY_KEY"
+description = "The private half of a read-only deploy key on the fastlane match repository."
+source = "generate:ssh-key"
+scope = "team"
+human = { text = "Add the public half of the generated key (the Keychain item templatr.match-deploy-key.pub) to the fastlane match repository as a read-only deploy key." }
+rotateEvery = "1y"
+when = { input = "sign", equals = "true" }
+
+[[secrets]]
+name = "NOTARY_KEY"
+description = "The App Store Connect API key's .p8 file, base64 encoded, with which the release notarizes the binaries."
+source = "keychain:templatr.asc.key-p8-base64"
+scope = "team"
+human = { text = "In App Store Connect, Users and Access, Integrations, App Store Connect API, Team Keys: generate a key with the App Manager role. Store its key ID, its issuer ID and the downloaded .p8 file, base64 encoded, in the Keychain items templatr.asc.key-id, templatr.asc.issuer-id and templatr.asc.key-p8-base64, with `templatr store-secrets --asc-key <file> --asc-key-id <id> --asc-issuer-id <id>`. The .p8 file downloads only one time.", twoFactor = true }
+rotateEvery = "1y"
+when = { input = "sign", equals = "true" }
+
+[[secrets]]
+name = "NOTARY_KEY_ID"
+description = "The key ID of the App Store Connect API key that notarizes."
+source = "keychain:templatr.asc.key-id"
+scope = "team"
+when = { input = "sign", equals = "true" }
+
+[[secrets]]
+name = "NOTARY_ISSUER_ID"
+description = "The issuer ID of the App Store Connect API key that notarizes."
+source = "keychain:templatr.asc.issuer-id"
+scope = "team"
+when = { input = "sign", equals = "true" }
+
+# A new tool has no version yet: the fix writes Version.swift at version_file
+# and BuildMetadata.swift next to it, and a main.swift that prints the version
+# when the target has no sources. A tool with a version file keeps it.
+[[steps]]
+id = "version"
+description = "The version file has the version that vrsn bumps."
+check = "grep -F -- {{inputs.vrsn_key}} ../{{inputs.version_file}} | grep -q ' = \"'"
+fix = "cd .. && {{templates}}/components/swift-cli/bin/new-version-files {{inputs.version_file}} {{inputs.name}}"
+
+[[steps]]
+id = "build-metadata"
+description = "The tool reads the build metadata that `make cli install` writes in the gitignored BuildMetadata.generated.swift, next to the version file."
+check = "metadata=\"$(dirname ../{{inputs.version_file}})/BuildMetadata.generated.swift\" && git check-ignore -q \"$metadata\" && grep -rqsi --include='*.swift' --exclude='*.generated.swift' buildMetadata ../Sources"
+fix = { human = { text = "Add BuildMetadata.swift next to {{inputs.version_file}}, as `{{templates}}/components/swift-cli/bin/new-version-files` writes it for a new tool: a `fullVersion` that appends `+` and `buildMetadata` to the version when it is not nil, and `let buildMetadata: String? = nil` when the build is not a `make cli install` build. The root command's CommandConfiguration takes `version:` with `fullVersion`. Add BuildMetadata.generated.swift, in the same directory, to .gitignore." } }
+
+[[steps]]
+id = "build-ignored"
+description = "Git ignores SwiftPM's build products and its Xcode state."
+check = "git check-ignore -q ../.build/release && git check-ignore -q ../.swiftpm/xcode"
+fix = "printf '\\n# SwiftPM build products and Xcode state.\\n.build/\\n.swiftpm/\\n' >> ../.gitignore"
+
+[[steps]]
+id = "changelog"
+description = "CHANGELOG.md at the root is in Keep a Changelog form, with an Unreleased section, which `make cli deploy` moves into a section for the version."
+check = "grep -qsE '^## \\[Unreleased\\]' ../CHANGELOG.md"
+fix = "test -e ../CHANGELOG.md || cp {{templates}}/components/swift-cli/files/CHANGELOG.md ../CHANGELOG.md"
+
+[[steps]]
+id = "make-fragment"
+description = "cli/component.mk includes make/swift-cli.mk, with the cli commands, and adds the cli namespace."
+check = "grep -qs 'swift-cli\\.mk' component.mk && grep -qs 'NAMESPACES *+= *cli' component.mk"
+fix = { human = { text = "Copy cli/component.mk from the swift-cli scaffold, with its SWIFT_CLI_* values, the include and the cli-* targets, and remove the root Makefile's build, test, install, uninstall, patch, minor, major, deploy and deploy-beta targets, which `make cli <command>` replaces. A tool whose build metadata is not a `let buildMetadata` sets SWIFT_CLI_METADATA_DECLARATION, as armcknight/tools sets `public let toolsBuildMetadata: String?`." } }
+
+[[steps]]
+id = "ci-workflow"
+description = "The repository calls armcknight/workflows' swift-package-ci.yml on each pull request."
+check = "grep -qs 'armcknight/workflows/.github/workflows/swift-package-ci.yml@' ../.github/workflows/*.yml"
+fix = { human = { text = "Copy .github/workflows/swift-cli-ci.yml from the swift-cli scaffold, and remove the workflow that it replaces." } }
+
+[[steps]]
+id = "cask-release-workflow"
+description = "Each version tag calls armcknight/workflows' swiftpm-cask-release.yml, which ships the binaries to the cask."
+check = "grep -qs 'armcknight/workflows/.github/workflows/swiftpm-cask-release.yml@' ../.github/workflows/*.yml"
+fix = "cd .. && {{templates}}/components/swift-cli/bin/new-release-workflow cask {{inputs.cask}} {{inputs.binaries}} {{inputs.version_file}} {{inputs.vrsn_key}} {{inputs.sign}} {{inputs.match_git_url}} {{inputs.team_id}} {{inputs.bundle_id}}"
+when = { input = "distribution", equals = "cask" }
+
+[[steps]]
+id = "github-release-workflow"
+description = "Each version tag calls armcknight/workflows' github-release.yml, which makes the GitHub release from CHANGELOG.md."
+check = "grep -qs 'armcknight/workflows/.github/workflows/github-release.yml@' ../.github/workflows/*.yml"
+fix = "cd .. && {{templates}}/components/swift-cli/bin/new-release-workflow github-release {{inputs.name}} {{inputs.binaries}} {{inputs.version_file}} {{inputs.vrsn_key}} false '' '' ''"
+when = { input = "distribution", equals = "github-release" }
+
+# The release workflow updates the cask file, but never makes it.
+[[steps]]
+id = "cask-file"
+description = "armcknight/homebrew-tools has the cask file, which each release updates."
+check = "gh api repos/armcknight/homebrew-tools/contents/Casks/{{inputs.cask}}.rb >/dev/null 2>&1"
+fix = { human = { text = "Add Casks/{{inputs.cask}}.rb to armcknight/homebrew-tools, as its other casks are, with a `binary` line for each of {{inputs.binaries}}. The release workflow updates its version, sha256 and binary lines, but never makes the file." } }
+when = { input = "distribution", equals = "cask" }
+
+[[shared]]
+kind = "workflow"
+repo = "armcknight/workflows"
+path = ".github/workflows/swift-package-ci.yml"
+version = "4"
+description = "Builds and tests the package on macOS on each pull request."
+
+[[shared]]
+kind = "workflow"
+repo = "armcknight/workflows"
+path = ".github/workflows/swiftpm-cask-release.yml"
+version = "4"
+description = "On a version tag, builds the binaries, checks the tag against the version, signs and notarizes them, and ships them to the cask in armcknight/homebrew-tools."
+
+[[shared]]
+kind = "workflow"
+repo = "armcknight/workflows"
+path = ".github/workflows/github-release.yml"
+version = "4"
+description = "On a version tag, makes the GitHub release from the version's CHANGELOG.md section."
+
+[[shared]]
+kind = "make"
+path = "make/swift-cli.mk"
+version = "v1"
+description = "The swift-cli-init, swift-cli-build, swift-cli-test, swift-cli-install, swift-cli-uninstall, swift-cli-patch, swift-cli-minor, swift-cli-major, swift-cli-deploy and swift-cli-deploy-beta targets."
+
+[[shared]]
+kind = "brewfile"
+path = "components/swift-cli/scaffold/cli/Brewfile"
+version = "v1"
+description = "The tools the Makefile targets use: vrsn and prepare-release."
+
+[[shared]]
+kind = "script"
+path = "components/swift-cli/bin/swift-cli-package"
+version = "v1"
+description = "Reads the tool's executables, version file and cask from Package.swift, Sources/ and the workflows."
+
+[[shared]]
+kind = "script"
+path = "components/swift-cli/bin/new-version-files"
+version = "v1"
+description = "Writes a new tool's Version.swift and BuildMetadata.swift, and gitignores the generated build metadata."
+
+[[shared]]
+kind = "script"
+path = "components/swift-cli/bin/new-release-workflow"
+version = "v1"
+description = "Writes the release workflow, for a cask or a GitHub release."
+
+[[shared]]
+kind = "template"
+path = "components/swift-cli/files/CHANGELOG.md"
+version = "v1"
+description = "A new tool's CHANGELOG.md, in Keep a Changelog form."
+
+[[docs]]
+title = "Components"
+anchor = "bootstrap.md#components"
+
+[[docs]]
+title = "Secrets"
+anchor = "bootstrap.md#secrets"
+
+[[docs]]
+title = "CI"
+anchor = "builds.md#ci"
+
+[[docs]]
+title = "The release rule"
+anchor = "builds.md#release-rule"

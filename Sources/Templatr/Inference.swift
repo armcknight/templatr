@@ -15,10 +15,12 @@ struct ComponentFiles {
 }
 
 extension Detect {
-    /// Every rule in `all` matches and, when `any` has rules, at least one of
-    /// them does.
+    /// Every rule in `all` matches, when `any` has rules at least one of them
+    /// does, and no rule in `none` does.
     func matches(_ files: ComponentFiles) -> Bool {
-        (all ?? []).allSatisfy { $0.matches(files) } && (any.map { $0.contains { $0.matches(files) } } ?? true)
+        (all ?? []).allSatisfy { $0.matches(files) }
+            && (any.map { $0.contains { $0.matches(files) } } ?? true)
+            && !(none ?? []).contains { $0.matches(files) }
     }
 }
 

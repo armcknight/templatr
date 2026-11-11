@@ -1,0 +1,7 @@
+# The tools the swift-cli Makefile targets use. `make cli init` trusts the tap
+# and installs them. Add what the tool itself shells out to.
+#
+# armcknight/tools is a third-party tap: Homebrew loads nothing from it until
+# it is trusted, which `make cli init` does first.
+tap "armcknight/tools"
+cask "armcknight/tools/tools" # vrsn and prepare-release, for `make cli patch` and `make cli deploy`

@@ -168,18 +168,24 @@ public struct ManifestError: Error, CustomStringConvertible, Equatable, Sendable
 }
 
 /// How to know, from its files only, that a repository uses the component:
-/// every rule in `all` matches and, when `any` has rules, at least one of them.
+/// every rule in `all` matches, when `any` has rules at least one of them
+/// does, and no rule in `none` does.
 public struct Detect: Codable, Equatable, Sendable {
     public var all: [DetectRule]?
     public var any: [DetectRule]?
+    /// Files that a repository of another kind has, so that it is not taken
+    /// for one that uses the component, such as an app's Xcode project next to
+    /// a Swift package. It is not enough alone: `all` or `any` is required.
+    public var none: [DetectRule]?
 
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case all, any
+        case all, any, none
     }
 
-    public init(all: [DetectRule]?, any: [DetectRule]?) {
+    public init(all: [DetectRule]?, any: [DetectRule]?, none: [DetectRule]? = nil) {
         self.all = all
         self.any = any
+        self.none = none
     }
 
     public init(from decoder: Decoder) throws {
@@ -187,6 +193,7 @@ public struct Detect: Codable, Equatable, Sendable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         all = try container.someIfPresent(.all, DetectRule.self)
         any = try container.someIfPresent(.any, DetectRule.self)
+        none = try container.someIfPresent(.none, DetectRule.self)
         if all == nil && any == nil {
             throw DecodingError.dataCorrupted(DecodingError.Context(
                 codingPath: decoder.codingPath, debugDescription: "needs 'all' or 'any'"
