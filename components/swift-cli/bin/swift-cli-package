@@ -1,0 +1,129 @@
+#!/usr/bin/env perl
+# Usage: swift-cli-package <name | binaries | version-file | version-key | cask>
+#
+# Prints one fact about the Swift package in the current directory, the
+# repository's root, for the swift-cli component's inputs. It reads
+# Package.swift and the Swift files in Sources/ as text, so it does not run
+# the package's manifest. It prints nothing when the fact is not there.
+#
+#   name          The tool's executable: the executable product whose target
+#                 has the version, else that target when it is an executable
+#                 target, else the one executable, else the package's name, as
+#                 armcknight/tools, whose many executables share a version.
+#   binaries      The executables a release ships, separated by spaces: the
+#                 name when it is an executable, else every executable target.
+#   version-file  The Swift file with the version that vrsn bumps: a line such
+#                 as `static let version = "1.2.0"` or
+#                 `public let toolsVersion = "5.2.0"`. A package without one
+#                 gets Version.swift in its first executable target.
+#   version-key   The name on that line, which `vrsn -k` takes.
+#   cask          The cask-name of a workflow that calls swiftpm-cask-release,
+#                 else the name.
+
+use strict;
+use warnings;
+
+my $fact = shift // '';
+my %facts = map { $_ => 1 } qw(name binaries version-file version-key cask);
+unless ($facts{$fact}) {
+    print STDERR "Usage: swift-cli-package <name | binaries | version-file | version-key | cask>\n";
+    exit 2;
+}
+
+sub slurp {
+    my ($path) = @_;
+    open(my $file, '<', $path) or return undef;
+    local $/;
+    my $text = <$file>;
+    close($file);
+    return $text;
+}
+
+my $package = slurp('Package.swift') // '';
+# Comments can name targets that are not there.
+(my $code = $package) =~ s{//[^\n]*}{}g;
+
+# Each executable product, with the targets it builds.
+my @products;
+while ($code =~ /\.executable\(\s*name:\s*"([^"]+)"\s*,\s*targets:\s*\[([^\]]*)\]/g) {
+    my ($product, $targets) = ($1, $2);
+    push @products, { name => $product, targets => [$targets =~ /"([^"]+)"/g] };
+}
+# Each executable target's name and the directory of its sources.
+my @targets;
+while ($code =~ /\.executableTarget\(\s*name:\s*"([^"]+)"/g) {
+    my $target = $1;
+    # The arguments up to the next target, for its path.
+    my $rest = substr($code, pos($code));
+    $rest =~ s/\.(?:executableTarget|target|testTarget|plugin|macro|binaryTarget|systemLibrary)\(.*//s;
+    my $path = $rest =~ /\bpath:\s*"([^"]+)"/ ? $1 : "Sources/$target";
+    push @targets, { name => $target, path => $path };
+}
+my $package_name = $code =~ /Package\(\s*name:\s*"([^"]+)"/ ? $1 : undef;
+
+# The first Swift file under Sources/, in order, with a version line.
+my $version_pattern = qr/^\s*(?:(?:public|internal|package)\s+)?(?:static\s+)?let\s+(version|[A-Za-z_]\w*Version)\s*=\s*"[^"]*"/m;
+my ($version_file, $version_key);
+my @files = sort grep { !/\.generated\.swift$/ } split(/\n/, `find Sources -name '*.swift' -type f 2>/dev/null`);
+for my $path (@files) {
+    my $text = slurp($path) // next;
+    if ($text =~ $version_pattern) {
+        ($version_file, $version_key) = ($path, $1);
+        last;
+    }
+}
+
+# The target whose sources have the version.
+my $version_target;
+if (defined $version_file) {
+    for my $target (@targets) {
+        if (index($version_file, "$target->{path}/") == 0) {
+            $version_target = $target->{name};
+            last;
+        }
+    }
+}
+
+sub name {
+    if (defined $version_target) {
+        for my $product (@products) {
+            return $product->{name} if grep { $_ eq $version_target } @{ $product->{targets} };
+        }
+        return $version_target;
+    }
+    my %executables = map { $_->{name} => 1 } @products;
+    unless (@products) { %executables = map { $_->{name} => 1 } @targets; }
+    my @names = keys %executables;
+    return $names[0] if @names == 1;
+    return $package_name;
+}
+
+my $value;
+if ($fact eq 'name') {
+    $value = name();
+} elsif ($fact eq 'binaries') {
+    my $name = name();
+    my %executables = map { $_->{name} => 1 } (@products, @targets);
+    if (defined $name && $executables{$name}) {
+        $value = $name;
+    } elsif (@targets) {
+        $value = join(' ', map { $_->{name} } @targets);
+    }
+} elsif ($fact eq 'version-file') {
+    $value = $version_file // (@targets ? "$targets[0]{path}/Version.swift" : undef);
+} elsif ($fact eq 'version-key') {
+    $value = $version_key;
+} elsif ($fact eq 'cask') {
+    for my $path (sort glob('.github/workflows/*.yml .github/workflows/*.yaml')) {
+        my $text = slurp($path) // next;
+        next unless $text =~ m{swiftpm-cask-release\.yml};
+        if ($text =~ /^\s*cask-name:\s*["']?([A-Za-z0-9._-]+)/m) {
+            $value = $1;
+            last;
+        }
+    }
+    $value //= name();
+}
+
+print "$value\n" if defined $value && length $value;
+exit 0;

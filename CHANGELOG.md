@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `templatr bootstrap` and `check` read a manifest's `[detect]` `none` rules, and do not detect a component when one matches.
+
 ## [2.1.1] 2026-11-06
 
 ### Fixed

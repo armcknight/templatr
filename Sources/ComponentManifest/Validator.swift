@@ -107,7 +107,7 @@ public struct Validator: Sendable {
 
         // Without a directory, every rule already reads from the root.
         let rootMeansNothing = "root = true means nothing in a component without a directory"
-        for (group, rules) in [("all", manifest.detect?.all), ("any", manifest.detect?.any)] {
+        for (group, rules) in [("all", manifest.detect?.all), ("any", manifest.detect?.any), ("none", manifest.detect?.none)] {
             for (index, rule) in (rules ?? []).enumerated() {
                 if let contains = rule.contains {
                     problems += Self.regexProblems(at: "\(`where`): detect.\(group)[\(index)]", pattern: contains, needsGroup: false)
