@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The swift-cli component, for a SwiftPM command line tool: `make cli install`, `patch` and `deploy`, version and changelog files, CI, and a cask or GitHub release workflow.
+- A manifest's `[detect]` can have `none` rules, which no file may match; it needs the `templatr` command release that reads them, so release the command first.
+
 ## [v3.0.1] 2026-11-06
 
 ### Changed

@@ -174,6 +174,22 @@ struct DecodingTests {
         ))?.path == "detect/all")
     }
 
+    @Test func detectNone() throws {
+        let decoded = try Manifest(toml: manifest.replacingOccurrences(
+            of: "all = [{ glob = \"fly.toml\" }]", with: "all = [{ glob = \"fly.toml\" }]\nnone = [{ glob = \"*.xcodeproj\" }]"
+        ))
+        #expect(decoded.detect?.none == [DetectRule(glob: "*.xcodeproj", contains: nil, root: false)])
+        #expect(try Manifest(toml: decoded.toml()) == decoded)
+        // None alone matches every repository without the files.
+        #expect(error(decoding: manifest.replacingOccurrences(
+            of: "all = [{ glob = \"fly.toml\" }]\nany = [{ glob = \"Package.swift\", contains = \"vapor\" }]",
+            with: "none = [{ glob = \"*.xcodeproj\" }]"
+        ))?.path == "detect")
+        #expect(error(decoding: manifest.replacingOccurrences(
+            of: "all = [{ glob = \"fly.toml\" }]", with: "all = [{ glob = \"fly.toml\" }]\nnone = []"
+        ))?.path == "detect/none")
+    }
+
     @Test func docsNeedsAnElement() {
         let error = error(decoding: "docs = []\n" + manifest.replacingOccurrences(
             of: "[[docs]]\ntitle = \"Builds\"\nanchor = \"builds.md#ci\"", with: ""

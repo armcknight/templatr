@@ -1,0 +1,78 @@
+#!/bin/sh
+# Usage: new-version-files <version_file> <name>
+#
+# Writes a new tool's version files, in the current directory, which is the
+# repository's root: <version_file>, such as Sources/mytool/Version.swift, with
+# the version 0.1.0 that vrsn bumps, and BuildMetadata.swift next to it, whose
+# `ToolVersion.fullVersion` appends the build metadata that `make cli install`
+# writes in the gitignored BuildMetadata.generated.swift. It adds that file to
+# .gitignore. The root command's CommandConfiguration takes
+# `version: ToolVersion.fullVersion`.
+#
+# It changes no file that exists, and writes nothing when <version_file>
+# exists: a tool that has a version keeps its own files.
+
+if [ "$#" -ne 2 ]; then
+  echo "Usage: new-version-files <version_file> <name>" >&2
+  exit 2
+fi
+
+version_file="$1"
+name="$2"
+directory="$(dirname "$version_file")"
+metadata="$directory/BuildMetadata.swift"
+# The compilation condition that `make cli install` sets, such as
+# MYTOOL_DEV_BUILD for mytool, as the swift-cli Makefile fragment names it.
+flag="$(printf '%s' "$name" | tr 'a-z' 'A-Z' | tr -c 'A-Z0-9\n' '_')_DEV_BUILD"
+
+[ -e "$version_file" ] && exit 0
+
+# A target with no sources yet gets an entry point too, so that it builds.
+sources="$(find "$directory" -name '*.swift' -type f 2>/dev/null | head -n 1)"
+mkdir -p "$directory" || exit 1
+if [ -z "$sources" ]; then
+  cat > "$directory/main.swift" <<EOF
+// $name's entry point, until it has a root command. Give the root command's
+// CommandConfiguration \`version: ToolVersion.fullVersion\`.
+if CommandLine.arguments.dropFirst().contains("--version") {
+    print(ToolVersion.fullVersion)
+} else {
+    print("Usage: $name --version")
+}
+EOF
+fi
+
+cat > "$version_file" <<EOF
+/// The tool's version. \`make cli patch\`, \`minor\` and \`major\` bump it with
+/// vrsn, which finds the line by its name, and \`make cli deploy\` tags it.
+enum ToolVersion {
+    static let version = "0.1.0"
+}
+EOF
+
+if [ ! -e "$metadata" ]; then
+  cat > "$metadata" <<EOF
+extension ToolVersion {
+    /// The version with semver build metadata appended when there is any, so
+    /// a build of \`make cli install\` reads as \`0.1.0+d0a4bc2.dirty\`, and a
+    /// release as \`0.1.0\`.
+    static var fullVersion: String {
+        buildMetadata.map { "\\(version)+\\(\$0)" } ?? version
+    }
+}
+
+// \`make cli install\` compiles with $flag and writes
+// BuildMetadata.generated.swift, which defines \`buildMetadata\` from the
+// commit. Every other build, CI's and the release's included, gets none.
+#if !$flag
+let buildMetadata: String? = nil
+#endif
+EOF
+fi
+
+ignored="/$directory/BuildMetadata.generated.swift"
+if ! grep -qsxF "$ignored" .gitignore; then
+  # A last line without a newline would run into the new one.
+  [ -s .gitignore ] && [ -n "$(tail -c 1 .gitignore)" ] && echo >> .gitignore
+  printf '%s\n' "$ignored" >> .gitignore
+fi

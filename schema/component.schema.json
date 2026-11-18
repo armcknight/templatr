@@ -33,13 +33,19 @@
       "minLength": 1
     },
     "detect": {
-      "description": "Required unless `base` is true. How to know, from its files only, that a repository uses the component. The component is detected when every rule in `all` matches and, if `any` has rules, at least one of them matches.",
+      "description": "Required unless `base` is true. How to know, from its files only, that a repository uses the component. The component is detected when every rule in `all` matches, if `any` has rules at least one of them matches, and no rule in `none` matches. `none` alone is not enough: `all` or `any` is required.",
       "type": "object",
       "additionalProperties": false,
-      "minProperties": 1,
+      "anyOf": [{ "required": ["all"] }, { "required": ["any"] }],
       "properties": {
         "all": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/detectRule" } },
-        "any": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/detectRule" } }
+        "any": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/detectRule" } },
+        "none": {
+          "description": "Files that a repository of another kind has, so that it is not taken for one that uses the component, such as an app's Xcode project next to a Swift package.",
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/detectRule" }
+        }
       }
     },
     "inputs": {
