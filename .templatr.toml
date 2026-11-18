@@ -2,17 +2,37 @@
 # writes it; a change made by hand wins over detection.
 
 [components.base]
-tag = "v1"
+tag = "v3"
 
 [components.base.inputs]
 project_name = "templatr"
 
 [components.github-repo]
-tag = "v1"
+tag = "v3"
+
+[components.github-repo.inputs]
+private = "false"
 
 [components.linear-workspace]
-tag = "v1"
+tag = "v3"
 
 [components.linear-workspace.inputs]
 linear_initiatives = "false"
 linear_teams = ""
+linear_workspace = "templatr"
+
+[components.swift-cli]
+tag = "v3"
+
+[components.swift-cli.inputs]
+binaries = "templatr"
+bundle_id = "io.mcknight.templatr"
+cask = "templatr"
+default_branch = "main"
+distribution = "cask"
+match_git_url = "git@github.com:armcknight/fastlane-match.git"
+name = "templatr"
+sign = "true"
+team_id = "29274SF4VL"
+version_file = "Sources/TemplatrCLI/Version.swift"
+vrsn_key = "version"

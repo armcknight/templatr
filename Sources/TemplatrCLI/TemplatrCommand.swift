@@ -28,7 +28,7 @@ struct TemplatrCommand: AsyncParsableCommand {
     }
 
     static let templatesHelp = ArgumentHelp(
-        "A checkout of armcknight/templatr. By default, a build from a checkout (`swift run`, `make install`) uses that checkout, "
+        "A checkout of armcknight/templatr. By default, a build from a checkout (`swift run`, `make cli install`) uses that checkout, "
             + "and a release, such as the Homebrew cask, a clone it keeps in ~/Library/Application Support/templatr/templates, "
             + "fetched on each run and checked out at the newest alias.",
         valueName: "dir"

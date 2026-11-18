@@ -58,7 +58,7 @@ A compatible change, such as a fixed lane or a new optional input, is a minor or
 * `make templates-deploy` moves the `[Unreleased]` section of `components/CHANGELOG.md` into a section for the version, commits, tags the commit with the version and a `v`, such as `v1.1.0`, and pushes. [release.yml](.github/workflows/release.yml) then calls armcknight/workflows' [github-release.yml](https://github.com/armcknight/workflows/blob/main/.github/workflows/github-release.yml), which makes the GitHub release from that section, moves the alias `v1` to the tag when the tag is on `main` and is the newest of its major, and asks mcknight.io to refresh its projects page when the `SITE_DISPATCH_TOKEN` secret is set.
 * `make templates-deploy-beta` does the same for a release candidate, such as `v1.1.0-RC1`, which is a prerelease and does not move the alias. Pin one project to it, with `TEMPLATES_TAG` and `import_from_git`, to try a lane or a fragment before every project gets it.
 
-The `templatr` command has releases of its own, with three-part tags without the `v`, such as `0.1.0`, and its changes are in [CHANGELOG.md](CHANGELOG.md). `make patch`, `make minor` or `make major` bumps the version in `Sources/TemplatrCLI/Version.swift` and commits it. `make deploy` moves the changelog's `[Unreleased]` section into a section for the version, tags the commit, pushes, and makes a GitHub release; `make deploy-beta` does the same for a release candidate, such as `0.1.0-RC1`. A component is never pinned to one of these tags, as `templatr` reads only the `v*` tags.
+The `templatr` command has releases of its own, with three-part tags without the `v`, such as `0.1.0`, and its changes are in [CHANGELOG.md](CHANGELOG.md). Its targets come from the swift-cli component, with which this repository is bootstrapped: `make cli patch`, `make cli minor` or `make cli major` bumps the version in `Sources/TemplatrCLI/Version.swift` and commits it. `make cli deploy` moves the changelog's `[Unreleased]` section into a section for the version, tags the commit, pushes, and makes a GitHub release; `make cli deploy-beta` does the same for a release candidate, such as `0.1.0-RC1`. The tag starts [release.yml](.github/workflows/release.yml), which builds, signs and notarizes the binary and ships it to the templatr cask in armcknight/homebrew-tools. A component is never pinned to one of these tags, as `templatr` reads only the `v*` tags.
 
 `make help` lists both families of targets. vrsn and prepare-release come from the armcknight/tools cask.
 
@@ -252,23 +252,48 @@ GitHub Actions expressions, `${{ … }}`, are not placeholders.
 The base component's `scaffold/README.md`, the project's root README.md, has a section between these markers:
 
 ```
+<!-- templatr:begin swift-cli -->
+[cli/](cli/README.md): The command line tool, `templatr`. `make cli install` builds it with its commit in `--version`, `make cli test` runs its tests, and the owner releases it with `make cli patch` and `make cli deploy`.
+<!-- templatr:end -->
+
 <!-- templatr:begin how-this-is-built -->
 <!-- templatr bootstrap writes this section from the components' manifests. Do not edit it. -->
 ## How this project is built
 
 This project uses these components from [armcknight/templatr](https://github.com/armcknight/templatr):
 
-* [base](https://github.com/armcknight/templatr/tree/v1/components/base) at `v1`: The project's root files, which every project has with its other components: the Makefile that includes each component's targets, and the README.md that links to each component's README.
-* [github-repo](https://github.com/armcknight/templatr/tree/v1/components/github-repo) at `v1`: A repository on GitHub whose pull requests are squashed when they merge, and whose default branch cannot be deleted or force-pushed except by the owner.
-* [linear-workspace](https://github.com/armcknight/templatr/tree/v1/components/linear-workspace) at `v1`: A Linear workspace that superlinear works from: each team has an In Review state, a Todo state, Triage and superlinear's labels, the owner has a view of the pending proposals, and no onboarding issue is open.
+* [base](https://github.com/armcknight/templatr/tree/v3/components/base) at `v3`: The project's root files, which every project has with its other components: the Makefile that includes each component's targets, and the README.md that links to each component's README.
+* [github-repo](https://github.com/armcknight/templatr/tree/v3/components/github-repo) at `v3`: A repository on GitHub whose pull requests are squashed when they merge, and whose default branch cannot be deleted or force-pushed except by the owner.
+* [linear-workspace](https://github.com/armcknight/templatr/tree/v3/components/linear-workspace) at `v3`: A Linear workspace that superlinear works from: each team has an In Review state, a Todo state, Triage and superlinear's labels, the owner has a view of the pending proposals, and no onboarding issue is open.
+* [swift-cli](https://github.com/armcknight/templatr/tree/v3/components/swift-cli) at `v3`, in `cli/`: A command line tool built with the Swift Package Manager: a version that vrsn bumps and that a local build prints with its commit, a Keep a Changelog CHANGELOG.md, CI on each pull request, and a release on each version tag, as a Homebrew cask in armcknight/homebrew-tools or as a GitHub release.
 
 ### Shared pieces
 
-* [components/github-repo/bin/check-merge-options](https://github.com/armcknight/templatr/blob/v1/components/github-repo/bin/check-merge-options), script: Checks that pull requests merge only by squashing, titled with the pull request's title, that branches can be updated, and that they are deleted after a merge.
-* [components/github-repo/bin/check-rulesets-available](https://github.com/armcknight/templatr/blob/v1/components/github-repo/bin/check-rulesets-available), script: Checks that GitHub offers rulesets for the repository, which it does not for a private repository on the free plan.
-* [components/github-repo/bin/check-default-branch-protection](https://github.com/armcknight/templatr/blob/v1/components/github-repo/bin/check-default-branch-protection), script: Checks that a ruleset that the owner can bypass stops the default branch from being deleted or force-pushed, when GitHub offers rulesets for the repository.
-* [components/github-repo/bin/protect-default-branch](https://github.com/armcknight/templatr/blob/v1/components/github-repo/bin/protect-default-branch), script: Makes or updates the Default branch ruleset, which stops the default branch from being deleted or force-pushed, with a bypass for the repository's admins.
-* [components/linear-workspace/bin/linear-workspace](https://github.com/armcknight/templatr/blob/v1/components/linear-workspace/bin/linear-workspace), script: Checks, and sets up, a Linear workspace's teams' states, Triage and labels, the superlinear proposals view, the onboarding issues and the initiatives, with Linear's API and a key from the environment.
+* [components/github-repo/bin/check-merge-options](https://github.com/armcknight/templatr/blob/v3/components/github-repo/bin/check-merge-options), script: Checks that pull requests merge only by squashing, titled with the pull request's title, that branches can be updated, and that they are deleted after a merge.
+* [components/github-repo/bin/check-rulesets-available](https://github.com/armcknight/templatr/blob/v3/components/github-repo/bin/check-rulesets-available), script: Checks that GitHub offers rulesets for the repository, which it does not for a private repository on the free plan.
+* [components/github-repo/bin/check-default-branch-protection](https://github.com/armcknight/templatr/blob/v3/components/github-repo/bin/check-default-branch-protection), script: Checks that a ruleset that the owner can bypass stops the default branch from being deleted or force-pushed, when GitHub offers rulesets for the repository.
+* [components/github-repo/bin/protect-default-branch](https://github.com/armcknight/templatr/blob/v3/components/github-repo/bin/protect-default-branch), script: Makes or updates the Default branch ruleset, which stops the default branch from being deleted or force-pushed, with a bypass for the repository's admins.
+* [components/linear-workspace/bin/linear-workspace](https://github.com/armcknight/templatr/blob/v3/components/linear-workspace/bin/linear-workspace), script: Checks, and sets up, a Linear workspace's teams' states, Triage and labels, the superlinear proposals view, the onboarding issues and the initiatives, with Linear's API and a key from the environment, and prints the workspace's URL key.
+* [armcknight/workflows: .github/workflows/swift-package-ci.yml](https://github.com/armcknight/workflows/blob/4/.github/workflows/swift-package-ci.yml), workflow: Builds and tests the package on macOS on each pull request.
+* [armcknight/workflows: .github/workflows/swiftpm-cask-release.yml](https://github.com/armcknight/workflows/blob/4/.github/workflows/swiftpm-cask-release.yml), workflow: On a version tag, builds the binaries, checks the tag against the version, signs and notarizes them, and ships them to the cask in armcknight/homebrew-tools.
+* [armcknight/workflows: .github/workflows/github-release.yml](https://github.com/armcknight/workflows/blob/4/.github/workflows/github-release.yml), workflow: On a version tag, makes the GitHub release from the version's CHANGELOG.md section.
+* [make/swift-cli.mk](https://github.com/armcknight/templatr/blob/v3/make/swift-cli.mk), make: The swift-cli-init, swift-cli-build, swift-cli-test, swift-cli-install, swift-cli-uninstall, swift-cli-patch, swift-cli-minor, swift-cli-major, swift-cli-deploy and swift-cli-deploy-beta targets.
+* [components/swift-cli/scaffold/cli/Brewfile](https://github.com/armcknight/templatr/blob/v3/components/swift-cli/scaffold/cli/Brewfile), brewfile: The tools the Makefile targets use: vrsn and prepare-release.
+* [components/swift-cli/bin/swift-cli-package](https://github.com/armcknight/templatr/blob/v3/components/swift-cli/bin/swift-cli-package), script: Reads the tool's executables, version file and cask from Package.swift, Sources/ and the workflows.
+* [components/swift-cli/bin/new-version-files](https://github.com/armcknight/templatr/blob/v3/components/swift-cli/bin/new-version-files), script: Writes a new tool's Version.swift and BuildMetadata.swift, and gitignores the generated build metadata.
+* [components/swift-cli/bin/new-release-workflow](https://github.com/armcknight/templatr/blob/v3/components/swift-cli/bin/new-release-workflow), script: Writes the release workflow, for a cask or a GitHub release.
+* [components/swift-cli/files/CHANGELOG.md](https://github.com/armcknight/templatr/blob/v3/components/swift-cli/files/CHANGELOG.md), template: A new tool's CHANGELOG.md, in Keep a Changelog form.
+
+### Secrets
+
+Only their names are here, never their values.
+
+* `TAP_RELEASE_TOKEN` (team): A fine-grained personal access token with Contents read and write on armcknight/homebrew-tools only, with which the release uploads the binaries and updates the cask. From the Keychain item `templatr.homebrew-tools.release-token`. To get it: As armcknight, make a fine-grained personal access token at https://github.com/settings/personal-access-tokens/new: resource owner armcknight, only the repository armcknight/homebrew-tools, the repository permission Contents read and write and no other, and an expiry of one year. Store it in the Keychain item templatr.homebrew-tools.release-token, with `security add-generic-password -U -a templatr -s templatr.homebrew-tools.release-token -w`, which asks for the value so that it is not in the shell history. The token can change every cask in the tap, and nothing in another repository.
+* `MATCH_PASSWORD` (team): The passphrase that decrypts the fastlane match repository. From the Keychain item `templatr.match.password`.
+* `MATCH_DEPLOY_KEY` (team): The private half of a read-only deploy key on the fastlane match repository. Generated (ssh-key) and kept in the Keychain item `templatr.match-deploy-key`. To get it: Add the public half of the generated key (the Keychain item templatr.match-deploy-key.pub) to the fastlane match repository as a read-only deploy key.
+* `NOTARY_KEY` (team): The App Store Connect API key's .p8 file, base64 encoded, with which the release notarizes the binaries. From the Keychain item `templatr.asc.key-p8-base64`. To get it: In App Store Connect, Users and Access, Integrations, App Store Connect API, Team Keys: generate a key with the App Manager role. Store its key ID, its issuer ID and the downloaded .p8 file, base64 encoded, in the Keychain items templatr.asc.key-id, templatr.asc.issuer-id and templatr.asc.key-p8-base64, with `templatr store-secrets --asc-key <file> --asc-key-id <id> --asc-issuer-id <id>`. The .p8 file downloads only one time.
+* `NOTARY_KEY_ID` (team): The key ID of the App Store Connect API key that notarizes. From the Keychain item `templatr.asc.key-id`.
+* `NOTARY_ISSUER_ID` (team): The issuer ID of the App Store Connect API key that notarizes. From the Keychain item `templatr.asc.issuer-id`.
 
 ### Steps a person does
 
@@ -279,6 +304,10 @@ This project uses these components from [armcknight/templatr](https://github.com
 * LINEAR_API_KEY, else LINCTL_API_KEY, is set, Linear accepts it, and its user is an admin of each team. If not: As the owner of the Linear workspace, make a personal API key in Linear's settings (Security & access), and export it as LINCTL_API_KEY in the project's .envrc. Its user must be an admin of the workspace or of each team.
 * Each team has at least one state of type unstarted, such as Todo, which superlinear's ready mode starts issues from. If not: In each team's settings in Linear (Issue statuses & automations), add a status of the Todo type.
 * When the project's spec should be under an initiative (linear_initiatives is true), the workspace has initiatives. If not: Turn on initiatives in the Linear workspace's settings (Initiatives), and make the project's initiative. The API cannot turn them on.
+* The tool reads the build metadata that `make cli install` writes in the gitignored BuildMetadata.generated.swift, next to the version file. If not: Add BuildMetadata.swift next to Sources/TemplatrCLI/Version.swift, as `//components/swift-cli/bin/new-version-files` writes it for a new tool: a `fullVersion` that appends `+` and `buildMetadata` to the version when it is not nil, and `let buildMetadata: String? = nil` when the build is not a `make cli install` build. The root command's CommandConfiguration takes `version:` with `fullVersion`. Add BuildMetadata.generated.swift, in the same directory, to .gitignore.
+* cli/component.mk includes make/swift-cli.mk, with the cli commands, and adds the cli namespace. If not: Copy cli/component.mk from the swift-cli scaffold, with its SWIFT_CLI_* values, the include and the cli-* targets, and remove the root Makefile's build, test, install, uninstall, patch, minor, major, deploy and deploy-beta targets, which `make cli <command>` replaces. A tool whose build metadata is not a `let buildMetadata` sets SWIFT_CLI_METADATA_DECLARATION, as armcknight/tools sets `public let toolsBuildMetadata: String?`.
+* The repository calls armcknight/workflows' swift-package-ci.yml on each pull request. If not: Copy .github/workflows/swift-cli-ci.yml from the swift-cli scaffold, and remove the workflow that it replaces.
+* armcknight/homebrew-tools has the cask file, which each release updates. If not: Add Casks/templatr.rb to armcknight/homebrew-tools, as its other casks are, with a `binary` line for each of templatr. The release workflow updates its version, sha256 and binary lines, but never makes the file.
 
 ### Further reading
 
@@ -291,6 +320,9 @@ This project uses these components from [armcknight/templatr](https://github.com
 * [The merge](https://github.com/armcknight/superlinear/blob/main/docs/lifecycle.md#merge)
 * [A workspace's API key](https://github.com/armcknight/superlinear/blob/main/docs/configuration.md#api-key)
 * [A workspace's teams](https://github.com/armcknight/superlinear/blob/main/docs/configuration.md#team-ids)
+* [Secrets](https://github.com/armcknight/superlinear/blob/main/docs/bootstrap.md#secrets)
+* [The release rule](https://github.com/armcknight/superlinear/blob/main/docs/builds.md#release-rule)
+* [Linear workspace](https://linear.app/templatr)
 <!-- templatr:end -->
 ```
 
@@ -316,7 +348,7 @@ templatr check ~/Code/babysittr         # report what it still needs, and change
 
 The cask's `templatr` has no checkout of this repository, so it keeps a clone of its own in `~/Library/Application Support/templatr/templates`: made on first use, its tags fetched on each run, and checked out at the newest alias, such as `v3`, so the components it reads are a release's. Without a network it stays at the release it last fetched. `--templates DIR` uses a checkout of yours instead, and `--tag` another release.
 
-To work on templatr itself, run it from a checkout: `swift run templatr …` and `make install` use the checkout they are built from, at its working tree, whatever it pins. `make init` installs what the command and the Makefile targets shell out to, from the [Brewfile](Brewfile); `make install` puts a release build in `~/.local/bin`, which comes before Homebrew's bin in PATH and so runs in place of the cask's; its `--version` names the commit it was built from, such as `2.1.0+d0a4bc2`, with `.dirty` when the tree had changes. `make uninstall` removes it, and the cask's `templatr` runs again.
+To work on templatr itself, run it from a checkout: `swift run templatr …` and `make cli install` use the checkout they are built from, at its working tree, whatever it pins. `make init` installs what the command and the Makefile targets shell out to, from the [Brewfile](Brewfile); `make cli install` puts a release build in Homebrew's bin, over the cask's link, so that it runs in every shell; its `--version` names the commit it was built from, such as `2.1.0+d0a4bc2`, with `.dirty` when the tree had changes. `make cli uninstall` removes it and installs the cask again, so the cask's `templatr` runs. Both come from the swift-cli component's fragment, which `cli/component.mk` includes.
 
 ```sh
 git clone https://github.com/armcknight/templatr && cd templatr

@@ -6,9 +6,10 @@ extension TemplatrCommand {
     }
 }
 
-// `make install` compiles with TEMPLATR_DEV_BUILD and generates
-// BuildMetadata.generated.swift, which defines `buildMetadata` from the git
-// hash. Every other build, including CI's, gets none.
+// `make cli install` compiles with TEMPLATR_DEV_BUILD and generates
+// BuildMetadata.generated.swift, which defines a global `buildMetadata` from
+// the git hash; `fullVersion` finds it when this static member is absent.
+// Every other build, including CI's, gets none.
 #if !TEMPLATR_DEV_BUILD
 extension TemplatrCommand {
     static let buildMetadata: String? = nil

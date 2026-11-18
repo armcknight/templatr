@@ -10,8 +10,8 @@ name: release
 # and ask mcknight.io to refresh its projects page.
 #
 # The command's releases, `2.1.0`, with the shared swiftpm-cask-release.yml.
-# `make deploy` migrates CHANGELOG.md, tags, pushes and makes the GitHub
-# release from a workstation. This builds the binary, signs and notarizes it
+# `make cli deploy`, from the swift-cli component, migrates CHANGELOG.md, tags,
+# pushes and makes the GitHub release from a workstation. This builds the binary, signs and notarizes it
 # with the Developer ID certificate from the fastlane match repository, as
 # tools, workr and superlinear are, ships it to the templatr cask in
 # armcknight/homebrew-tools, and bumps the cask. It needs the MATCH_PASSWORD,

@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `templatr bootstrap` and `check` read a manifest's `[detect]` `none` rules, and do not detect a component when one matches.
 
+### Changed
+
+- The repository is bootstrapped with its own swift-cli component. `make cli build`, `test`, `install`, `uninstall`, `patch`, `minor`, `major`, `deploy` and `deploy-beta` replace the root Makefile's targets of those names, and `make cli install` puts the dev build in Homebrew's bin, over the cask's link, in place of `~/.local/bin`. The `--templates` help names `make cli install`.
+
 ## [2.1.1] 2026-11-06
 
 ### Fixed

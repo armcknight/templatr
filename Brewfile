@@ -9,9 +9,10 @@
 # from untrusted taps, and `brew bundle` aborts on the first one it meets
 # without installing anything at all — so `make init` trusts them before it runs.
 
-# vrsn, prepare-release and prepare-github-release: `make patch`, `make deploy`
-# and the templates-* targets. Needs 5.1.0 or later, for --tag-prefix; a cask
-# cannot pin a minimum, so `brew upgrade`.
+# vrsn, prepare-release and prepare-github-release: the templates-* targets, and
+# `make cli patch` and `make cli deploy`, whose own Brewfile, cli/Brewfile, has
+# the same cask. Needs 5.1.0 or later, for --tag-prefix; a cask cannot pin a
+# minimum, so `brew upgrade`.
 tap "armcknight/tools"
 cask "armcknight/tools/tools"
 
