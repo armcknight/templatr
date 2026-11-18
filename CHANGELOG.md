@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.0] 2026-11-17
+
 ### Added
 
 - `templatr bootstrap` and `check` read a manifest's `[detect]` `none` rules, and do not detect a component when one matches.
@@ -15,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 
 - The repository is bootstrapped with its own swift-cli component. `make cli build`, `test`, `install`, `uninstall`, `patch`, `minor`, `major`, `deploy` and `deploy-beta` replace the root Makefile's targets of those names, and `make cli install` puts the dev build in Homebrew's bin, over the cask's link, in place of `~/.local/bin`. The `--templates` help names `make cli install`.
+- `templatr bootstrap` sets the release workflow's `MATCH_PASSWORD`, `MATCH_DEPLOY_KEY`, `NOTARY_KEY`, `NOTARY_KEY_ID` and `NOTARY_ISSUER_ID` secrets from the owner's Keychain, as the swift-cli component declares them. 2.1.1 never reached the Homebrew cask: its release run failed before those secrets were set. This release is the first in the tap with a signed and notarized binary.
 
 ## [2.1.1] 2026-11-06
 
