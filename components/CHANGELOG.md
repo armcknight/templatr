@@ -12,6 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [v3.1.0] 2026-11-17
+
 ### Added
 
 - The swift-cli component, for a SwiftPM command line tool: `make cli install`, `patch` and `deploy`, version and changelog files, CI, and a cask or GitHub release workflow.
